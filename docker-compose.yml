@@ -1,0 +1,52 @@
+version: "3.8"
+
+volumes:
+  ew_node:
+    external: true
+  ew_postgresql:
+    external: true
+
+services:
+  # Ergo blockchain node
+  ergo-node:
+    image: ergoplatform/ergo:v4.0.12
+    command: --mainnet -c /etc/ergo.conf
+    volumes:
+      - ew_node:/home/ergo/.ergo
+      - ./node/ergo.conf:/etc/ergo.conf:ro
+    ports:
+      - "127.0.0.1:9053:9053"
+      - "9030:9030"
+    restart: unless-stopped
+
+  # Databases required by the Ergo explorer backends
+  ergo-postgresql:
+    build:
+      context: ./explorer-backend-db
+    environment:
+      POSTGRES_DB: ergo
+      POSTGRES_USER: ergo
+    env_file:
+      # Defines POSTGRES_PASSWORD
+      - ./explorer-backend-db/db.secret
+    volumes:
+      - ew_postgresql:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"
+    restart: unless-stopped
+  # ergo-redis:
+  #   image: redis:latest
+  #   expose:
+  #     - "6379"
+
+  ergo-chain-grabber:
+    build:
+      context: ./explorer-backend/8.1.0
+    volumes:
+      - ./explorer-backend/conf/explorer-backend.conf:/explorer-backend.conf:ro
+    command: /explorer-backend.conf
+    links:
+      - "ergo-node"
+      - "ergo-postgresql"
+      # - "ergo-redis"
+    restart: unless-stopped

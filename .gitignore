@@ -1,0 +1,4 @@
+*.secret
+.DS_Store
+*.sublime*
+explorer-backend/[0-9]*
