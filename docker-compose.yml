@@ -22,13 +22,13 @@ services:
   # Databases required by the Ergo explorer backends
   ergo-postgresql:
     build:
-      context: ./explorer-backend-db
+      context: ./explorer-backend/db
     environment:
       POSTGRES_DB: ergo
       POSTGRES_USER: ergo
     env_file:
       # Defines POSTGRES_PASSWORD
-      - ./explorer-backend-db/db.secret
+      - ./explorer-backend/db/db.secret
     volumes:
       - ew_postgresql:/var/lib/postgresql/data
     ports:
