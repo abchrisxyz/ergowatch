@@ -18,6 +18,10 @@ services:
       - "127.0.0.1:9053:9053"
       - "9030:9030"
     restart: unless-stopped
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Databases required by the Ergo explorer backends
   ergo-postgresql:
@@ -34,10 +38,18 @@ services:
     ports:
       - "127.0.0.1:5433:5432"
     restart: unless-stopped
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
   # ergo-redis:
   #   image: redis:latest
   #   expose:
   #     - "6379"
+  #   logging:
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
 
   ergo-chain-grabber:
     build:
@@ -51,3 +63,7 @@ services:
       - "ergo-postgresql"
       # - "ergo-redis"
     restart: unless-stopped
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
