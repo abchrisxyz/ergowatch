@@ -67,3 +67,19 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  api:
+    build:
+      context: ./api
+    env_file:
+      # Defines POSTGRES_PASSWORD
+      - ./explorer-backend/db/db.secret
+    links:
+      - "ergo-postgresql"
+    ports:
+      - "127.0.0.1:8000:80"
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
