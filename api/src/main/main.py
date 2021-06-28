@@ -1,6 +1,6 @@
 import os
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 try:
     import db
@@ -10,21 +10,6 @@ except ImportError:
 app = FastAPI()
 # app = FastAPI(openapi_prefix="/api")
 
-if "DEVMODE" in os.environ:
-    origins = [
-        "http://localhost",
-        "http://localhost:8000",
-        "http://localhost:3000",
-    ]
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
 
 @app.get("/height")
 async def get_height():
@@ -33,3 +18,9 @@ async def get_height():
     """
     h = await db.get_latest_block_height()
     return h
+
+
+@app.get("/oracle-pools/{pool_id}/commits")
+async def get_oracle_pool_commits(pool_id: int):
+    d = await db.get_oracle_pool_commits(pool_id)
+    return JSONResponse(content=d)
