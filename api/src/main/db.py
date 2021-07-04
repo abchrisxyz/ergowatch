@@ -2,14 +2,20 @@ import os
 import asyncpg
 import json
 
-DBSTR = f"postgresql://{os.environ['POSTGRES_PASSWORD']}:ergo@ergo-postgresql/ergo"
+
+
+CONNECTION_POOL = None
+
+async def init_connection_pool():
+    global CONNECTION_POOL
+    dbstr = f"postgresql://{os.environ['POSTGRES_PASSWORD']}:ergo@ergo-postgresql/ergo"
+    CONNECTION_POOL = await asyncpg.create_pool(dbstr)   
 
 
 async def get_latest_block_height():
     qry = "SELECT MAX(height) AS height FROM node_headers;"
-    conn = await asyncpg.connect(DBSTR)
-    row = await conn.fetchrow(qry)
-    await conn.close()
+    async with CONNECTION_POOL.acquire() as conn:
+        row = await conn.fetchrow(qry)
     return row['height']
 
 
@@ -30,9 +36,8 @@ async def get_oracle_pool_commits(oracle_pool_id):
         FROM counts cnt
         JOIN ew.oracle_pools_oracle_address_hashes ahs ON ahs.hash = cnt.oracle_address_hash
     """
-    conn = await asyncpg.connect(DBSTR)
-    rows = await conn.fetch(qry, oracle_pool_id)
-    await conn.close()
+    async with CONNECTION_POOL.acquire() as conn:
+        rows = await conn.fetch(qry, oracle_pool_id)
     return {r['address']: r['nb_of_commit_txs'] for r in rows}
 
 
@@ -49,7 +54,6 @@ async def get_oracle_pool_commit_stats_ergusd():
             , last_accepted
         FROM ew.oracle_pools_commit_stats_ergusd_mv;   
     """
-    conn = await asyncpg.connect(DBSTR)
-    rows = await conn.fetch(qry)
-    await conn.close()
+    async with CONNECTION_POOL.acquire() as conn:
+        rows = await conn.fetch(qry)
     return [dict(r) for r in rows]

@@ -1,8 +1,19 @@
-import os
+import asyncio
 import pytest
 
 
 from ..main import db
+
+
+@pytest.fixture(scope="module")
+def event_loop():
+    loop = asyncio.get_event_loop()
+    yield loop
+    loop.close()
+
+@pytest.fixture(scope="module", autouse=True)
+async def init_db_connection_pool():
+    await db.init_connection_pool()
 
 
 @pytest.mark.asyncio
