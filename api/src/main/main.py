@@ -10,6 +10,21 @@ except ImportError:
 app = FastAPI()
 # app = FastAPI(openapi_prefix="/api")
 
+if "DEVMODE" in os.environ:
+    print("DEVMODE - Setting CORS")
+    origins = [
+        "http://localhost",
+        "http://localhost:8000",
+        "http://localhost:3000",
+    ]
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 @app.get("/height")
 async def get_height():
