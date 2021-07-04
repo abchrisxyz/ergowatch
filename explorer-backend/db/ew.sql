@@ -106,6 +106,64 @@ INSERT INTO ew.oracle_pools_oracle_address_hashes (address, hash) VALUES
     ('9hD4D5rAcTyMuw7eVSENfRBmdCZiz3cwmW8xSnoEvZ1H64rFGMn', '036234820eb840b9246442f022ed1ef15ac80f2c5ac28314bcd8ff682c2703128f');
 
 
+/*
+    Dedicated mv for ERG/USD oracle pool commit stats.
+    Will move dedicated mv's into one big one when number of mv's increases.
+*/
+CREATE MATERIALIZED VIEW ew.oracle_pools_commit_stats_ergusd_mv AS
+    WITH commits_by_address_hash AS (
+        -- Committed (not necessarily accepted) datapoints by oracle
+        SELECT nos.additional_registers #>> '{R4,renderedValue}' AS oracle_address_hash
+            , COUNT(*) -1 nb_of_txs -- -1 to account for forging tx
+            , MIN(nos.timestamp) AS first_ts
+            , MAX(nos.timestamp) AS last_ts
+        FROM node_outputs nos
+        WHERE address = (SELECT datapoint_address FROM ew.oracle_pools WHERE id = 1)
+        GROUP BY 1
+    ), live_epoch_boxes AS (
+        -- Get live epoch boxes to help find epoch preparation txs
+        SELECT box_id
+        FROM node_outputs
+        WHERE main_chain
+            AND index = 0
+            AND address = (SELECT live_epoch_address FROM ew.oracle_pools WHERE id = 1)
+    ), prep_txs AS (
+        -- Epoch prep txs: all txs with a live box as input 0 and a prep box as output 0
+        SELECT os.tx_id
+        FROM node_outputs os
+        JOIN node_inputs ins ON ins.tx_id = os.tx_id
+        JOIN live_epoch_boxes lbs ON lbs.box_id = ins.box_id
+        WHERE os.main_chain AND ins.main_chain
+            AND os.index = 0
+            AND address = (SELECT epoch_prep_address FROM ew.oracle_pools WHERE id = 1)
+    ), datapoint_payouts_by_address_hash AS (
+        SELECT dos.additional_registers #>> '{R4,renderedValue}' AS oracle_hash
+            , COUNT(*) as nb_of_txs
+            , MIN(timestamp) AS first_ts
+            , MAX(timestamp) AS last_ts
+        FROM prep_txs pt
+        JOIN node_data_inputs di ON di.tx_id = pt.tx_id
+        JOIN node_outputs dos ON dos.box_id = di.box_id
+        WHERE di.main_chain AND dos.main_chain
+        GROUP BY 1
+    )
+    -- Combine and convert address hash to address
+    SELECT oah.address
+        , cbh.nb_of_txs AS commits
+        , dbh.nb_of_txs AS accepted_commits
+        , to_timestamp(cbh.first_ts / 1000) AS first_commit
+        , to_timestamp(dbh.first_ts / 1000) AS first_accepted
+        , to_timestamp(cbh.last_ts / 1000) AS last_commit
+        , to_timestamp(dbh.last_ts / 1000) AS last_accepted
+    FROM ew.oracle_pools_oracle_address_hashes oah
+    LEFT JOIN commits_by_address_hash cbh
+        ON cbh.oracle_address_hash = oah.hash
+    LEFT JOIN datapoint_payouts_by_address_hash dbh
+        ON dbh.oracle_hash = oah.hash
+    ORDER BY 1
+    WITH NO DATA;
+
+
 -------------------------------------------------------------------------------
 -- SigmaUSD
 -------------------------------------------------------------------------------
@@ -457,8 +515,9 @@ CREATE PROCEDURE ew.sigmausd_update_history()
 -------------------------------------------------------------------------------
 -- Initialize
 -------------------------------------------------------------------------------
--- CALL ew.sigmausd_update_bank_boxes();
 -- CALL ew.oracle_pools_update_prep_boxes();
+-- CALL ew.sigmausd_update_bank_boxes();
 -- CALL ew.sigmausd_update_history();
 
+-- REFRESH MATERIALIZED VIEW ew.oracle_pools_commit_stats_ergusd_mv
 COMMIT;

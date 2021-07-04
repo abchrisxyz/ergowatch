@@ -34,3 +34,22 @@ async def get_oracle_pool_commits(oracle_pool_id):
     rows = await conn.fetch(qry, oracle_pool_id)
     await conn.close()
     return {r['address']: r['nb_of_commit_txs'] for r in rows}
+
+
+async def get_oracle_pool_commit_stats_ergusd():
+    """
+    ERG/USD commit stats
+    """
+    qry = """
+        SELECT address
+            , commits
+            , accepted_commits
+            , first_commit
+            , last_commit
+            , last_accepted
+        FROM ew.oracle_pools_commit_stats_ergusd_mv;   
+    """
+    conn = await asyncpg.connect(DBSTR)
+    rows = await conn.fetch(qry)
+    await conn.close()
+    return [dict(r) for r in rows]

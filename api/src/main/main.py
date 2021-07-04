@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 try:
     import db
@@ -39,3 +40,8 @@ async def get_height():
 async def get_oracle_pool_commits(pool_id: int):
     d = await db.get_oracle_pool_commits(pool_id)
     return JSONResponse(content=d)
+
+
+@app.get("/oracle-pools/commit-stats/ergusd")
+async def get_oracle_pool_commit_stats_ergusd():
+    return await db.get_oracle_pool_commit_stats_ergusd()
