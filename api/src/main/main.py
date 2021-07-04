@@ -27,6 +27,7 @@ if "DEVMODE" in os.environ:
         allow_headers=["*"],
     )
 
+
 @app.on_event("startup")
 async def startup_event():
     await db.init_connection_pool()

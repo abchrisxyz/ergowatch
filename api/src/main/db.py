@@ -3,20 +3,20 @@ import asyncpg
 import json
 
 
-
 CONNECTION_POOL = None
+
 
 async def init_connection_pool():
     global CONNECTION_POOL
     dbstr = f"postgresql://{os.environ['POSTGRES_PASSWORD']}:ergo@ergo-postgresql/ergo"
-    CONNECTION_POOL = await asyncpg.create_pool(dbstr)   
+    CONNECTION_POOL = await asyncpg.create_pool(dbstr)
 
 
 async def get_latest_block_height():
     qry = "SELECT MAX(height) AS height FROM node_headers;"
     async with CONNECTION_POOL.acquire() as conn:
         row = await conn.fetchrow(qry)
-    return row['height']
+    return row["height"]
 
 
 async def get_oracle_pool_commits(oracle_pool_id):
@@ -38,7 +38,7 @@ async def get_oracle_pool_commits(oracle_pool_id):
     """
     async with CONNECTION_POOL.acquire() as conn:
         rows = await conn.fetch(qry, oracle_pool_id)
-    return {r['address']: r['nb_of_commit_txs'] for r in rows}
+    return {r["address"]: r["nb_of_commit_txs"] for r in rows}
 
 
 async def get_oracle_pool_commit_stats_ergusd():
