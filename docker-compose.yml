@@ -8,7 +8,7 @@ volumes:
 
 services:
   # Ergo blockchain node
-  ergo-node:
+  node:
     image: ergoplatform/ergo:v4.0.12
     command: --mainnet -c /etc/ergo.conf
     volumes:
@@ -23,8 +23,8 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Databases required by the Ergo explorer backends
-  ergo-postgresql:
+  # Postgresql database
+  db:
     build:
       context: ./explorer-backend/db
     environment:
@@ -42,16 +42,9 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-  # ergo-redis:
-  #   image: redis:latest
-  #   expose:
-  #     - "6379"
-  #   logging:
-  #     options:
-  #       max-size: "10m"
-  #       max-file: "3"
-
-  ergo-chain-grabber:
+ 
+  # Ergo explorer backend chain grabber 
+  grabber:
     build:
       context: ./explorer-backend/8.1.0
       dockerfile: chain-grabber.Dockerfile
@@ -59,9 +52,8 @@ services:
       - ./explorer-backend/conf/explorer-backend.conf:/explorer-backend.conf:ro
     command: /explorer-backend.conf
     links:
-      - "ergo-node"
-      - "ergo-postgresql"
-      # - "ergo-redis"
+      - "node"
+      - "db"
     restart: unless-stopped
     logging:
       options:
@@ -75,7 +67,7 @@ services:
       # Defines POSTGRES_PASSWORD
       - ./explorer-backend/db/db.secret
     links:
-      - "ergo-postgresql"
+      - "db"
     ports:
       - "127.0.0.1:8000:80"
     restart: unless-stopped
