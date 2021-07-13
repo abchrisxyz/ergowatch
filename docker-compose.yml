@@ -60,6 +60,26 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Syncer - triggers db updates when grabber add new block
+  syncer:
+    build:
+      context: ./syncer
+    environment:
+      DB_HOST: db
+      DB_NAME: ergo
+      DB_USER: ergo
+    env_file:
+      # Defines POSTGRES_PASSWORD
+      - ./explorer-backend/db/db.secret
+    links:
+      - "db"
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "1m"
+        max-file: "3"
+
+  # API server
   api:
     build:
       context: ./api
