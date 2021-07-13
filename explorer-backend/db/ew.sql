@@ -1,4 +1,4 @@
-BEGIN;
+-- BEGIN;
 
 DROP SCHEMA IF EXISTS ew CASCADE;
 CREATE SCHEMA ew;
@@ -21,12 +21,129 @@ CREATE TABLE ew.oracle_pools
 );
 
 
-CREATE TABLE ew.oracle_pools_prep_boxes
+CREATE TABLE ew.oracle_pools_oracles
 (
-    pool_id integer REFERENCES ew.oracle_pools(id),
-    box_id text,
-    PRIMARY KEY (pool_id, box_id)
+    pool_id integer NOT NULL REFERENCES ew.oracle_pools(id),
+    oracle_id integer NOT NULL,
+    address text UNIQUE NOT NULL,
+    address_hash text UNIQUE NOT NULL,
+    PRIMARY KEY(pool_id, oracle_id)
 );
+
+
+/*
+    Dedicated relations for ERG/USD oracle pool.
+    Can change when more oracles appear.
+*/
+CREATE TABLE ew.oracle_pools_ergusd_prep_txs(
+    tx_id text PRIMARY KEY,
+    inclusion_height integer NOT NULL,
+    datapoint integer NOT NULL,
+    collector_id integer NOT NULL
+);
+
+
+CREATE PROCEDURE ew.oracle_pools_ergusd_update_prep_txs() AS
+    $$
+    WITH live_epoch_boxes AS (
+        SELECT box_id
+            , additional_registers #>>  '{R5,renderedValue}' AS epoch_end_height
+        FROM node_outputs
+        WHERE main_chain
+            AND address = (SELECT live_epoch_address FROM ew.oracle_pools WHERE id = 1)
+            -- Limit to new boxes only
+            AND creation_height >= (SELECT COALESCE(MAX(inclusion_height), 0) FROM ew.oracle_pools_ergusd_prep_txs)
+    ), prep_txs AS (
+        SELECT os.tx_id
+            , os.settlement_height AS inclusion_height
+            , (os.additional_registers #>>  '{R4,renderedValue}')::integer AS datapoint
+        FROM live_epoch_boxes lep
+        JOIN node_inputs ins ON ins.box_id = lep.box_id
+        JOIN node_outputs os ON os.tx_id = ins.tx_id
+        WHERE ins.main_chain AND os.main_chain
+        -- Prep txs first output is the new prep box
+        AND os.address = (SELECT epoch_prep_address FROM ew.oracle_pools WHERE id = 1)
+        -- Prep txs have only 1 input box: the live epoch box
+        AND ins.index = 0
+    ), add_collector_hash AS (
+        -- Prep tx's second output's R4 is the index of the data input box
+        -- belonging to the collecting oracle.
+        -- Each datapoint box contains its oracle's address hash in R4.
+        SELECT prp.*
+            , (dos.additional_registers #>> '{R4,renderedValue}') AS collector_address_hash
+        FROM prep_txs prp
+        JOIN node_outputs os1 ON os1.tx_id = prp.tx_id AND os1.index = 1
+        JOIN node_data_inputs din
+            ON din.tx_id = prp.tx_id
+            AND din.index = (os1.additional_registers #>> '{R4,renderedValue}')::integer
+        JOIN node_outputs dos ON dos.box_id = din.box_id
+        WHERE os1.main_chain AND din.main_chain AND dos.main_chain
+    )
+    INSERT INTO ew.oracle_pools_ergusd_prep_txs (tx_id, inclusion_height, datapoint, collector_id)
+    SELECT ach.tx_id
+        , ach.inclusion_height
+        , ach.datapoint
+        , orc.oracle_id
+    FROM add_collector_hash ach
+    JOIN ew.oracle_pools_oracles orc
+        ON orc.address_hash = ach.collector_address_hash
+    ORDER BY inclusion_height;
+    $$ LANGUAGE SQL;
+
+
+CREATE MATERIALIZED VIEW ew.oracle_pools_ergusd_oracle_stats_mv AS
+    WITH datapoint_stats AS (
+        -- Committed (not necessarily accepted) datapoints by oracle
+        SELECT nos.additional_registers #>> '{R4,renderedValue}' AS oracle_address_hash
+            , COUNT(*) -1 nb_of_txs -- -1 to account for forging tx
+            , MIN(nos.timestamp) AS first_ts
+            , MAX(nos.timestamp) AS last_ts
+        FROM node_outputs nos
+        WHERE nos.main_chain
+            AND address = (SELECT datapoint_address FROM ew.oracle_pools WHERE id = 1)
+        GROUP BY 1
+    ), accepted_datapoint_stats AS (
+        SELECT os.additional_registers #>> '{R4,renderedValue}' AS oracle_address_hash
+            , COUNT(*) AS payouts
+            , MIN(os.timestamp) AS first_ts
+            , MAX(os.timestamp) AS last_ts
+        FROM ew.oracle_pools_ergusd_prep_txs prp
+        JOIN node_data_inputs din ON din.tx_id = prp.tx_id
+        JOIN node_outputs os ON os.box_id = din.box_id
+        WHERE din.main_chain AND os.main_chain
+        GROUP BY 1
+    ), collector_stats AS (
+        SELECT prp.collector_id
+            , COUNT(*) AS payouts
+            , MIN(txs.timestamp) AS first_ts
+            , MAX(txs.timestamp) AS last_ts
+        FROM ew.oracle_pools_ergusd_prep_txs prp
+        JOIN node_transactions txs ON txs.id = prp.tx_id
+        GROUP BY 1
+    )
+    -- Combine and convert address hash to address
+    SELECT orc.oracle_id 
+		, orc.address
+        , dat.nb_of_txs AS commits
+        , acc.payouts AS accepted_commits
+        , col.payouts AS collections
+        , to_timestamp(dat.first_ts / 1000) AS first_commit
+        , to_timestamp(acc.first_ts / 1000) AS first_accepted
+        , to_timestamp(col.first_ts / 1000) AS first_collection
+        , to_timestamp(dat.last_ts / 1000) AS last_commit
+        , to_timestamp(acc.last_ts / 1000) AS last_accepted
+        , to_timestamp(col.last_ts / 1000) AS last_collection
+    FROM ew.oracle_pools_oracles orc
+    LEFT JOIN datapoint_stats dat
+        ON dat.oracle_address_hash = orc.address_hash
+    LEFT JOIN accepted_datapoint_stats acc
+        ON acc.oracle_address_hash = orc.address_hash
+    LEFT JOIN collector_stats col
+        ON col.collector_id = orc.oracle_id
+    WHERE orc.pool_id = 1
+	ORDER BY orc.oracle_id
+    WITH NO DATA;
+
 
 INSERT INTO ew.oracle_pools
 (
@@ -55,113 +172,20 @@ VALUES
     4
 );
 
-CREATE FUNCTION ew.oracle_pools_get_prep_boxes(_epoch_prep_address text, _live_epoch_address text)
-    RETURNS TABLE (box_id text) AS
-    $$
-        WITH live_epoch_boxes AS (
-            SELECT box_id
-            FROM node_outputs
-            WHERE main_chain
-                AND address = _live_epoch_address
-        )
-        SELECT os.box_id
-        FROM node_outputs os
-        JOIN node_inputs ins ON ins.tx_id = os.tx_id
-        JOIN live_epoch_boxes lbs ON lbs.box_id = ins.box_id
-        WHERE os.main_chain AND ins.main_chain
-            AND os.address = _epoch_prep_address
-        ;
-    $$
-    LANGUAGE SQL IMMUTABLE;
 
-CREATE PROCEDURE ew.oracle_pools_update_prep_boxes()
-    LANGUAGE SQL
-    AS $$
-        INSERT INTO ew.oracle_pools_prep_boxes(pool_id, box_id)
-        SELECT ops.id, pbs.box_id
-        FROM ew.oracle_pools ops,
-        LATERAL ew.oracle_pools_get_prep_boxes(ops.epoch_prep_address, ops.live_epoch_address) pbs
-        ON CONFLICT DO NOTHING;
-    $$;
-
-
-CREATE TABLE ew.oracle_pools_oracle_address_hashes
-(
-    address text PRIMARY KEY,
-    hash text UNIQUE NOT NULL
-);
-
-INSERT INTO ew.oracle_pools_oracle_address_hashes (address, hash) VALUES
+INSERT INTO ew.oracle_pools_oracles (pool_id, oracle_id, address, address_hash) VALUES
     -- ERGUSD oracles
-    ('9eh9WDsRAsujyFx4x7YeSoxrLCqmhuQihDwgsWVqEuXte7QJRCU', '0216e6cca588bed47a7630cba9d662a4be8a2e1991a45ed54ba64093e03dcd9013'),
-    ('9em1ShUCkTa43fALGgzwKQ5znuXY2dMnnfHqq4bX3wSWytH11t7', '021fab219a58d2e1e8edfd3e2ad7cf09a35687246c084477db0bce5412f43acdbe'),
-    ('9fckoJSnYpR38EkCzintbJoKaDwWN86wCmNdByiWyeQ22Hq5Sbj', '0290a0538b85768adb3dfc1fe6e4162adf43c6ae313ada0d1a7b71275de2b87364'),
-    ('9fPRvaMYzBPotu6NGvZn4A6N4J2jDmRGs4Zwc9UhFFeSXgRJ8pS', '02725e8878d5198ca7f5853dddf35560ddab05ab0a26adae7e664b84162c9962e5'),
-    ('9fQHnth8J6BgVNs9BQjxj5s4e5JGCjiH4fYTBA52ZWrMh6hz2si', '0274524ee849e4e45f58c46164ac609902bb374fc9375f097ee1af2ef1152ab9bf'),
-    ('9fzRcctiWfzoJyqGtPWqoXPuxSmFw6zpnjtsQ1B6jSN514XqH4q', '02c1d434dac8765fc1269af82958d8aa350da53907096b35f7747cc372a7e6e69d'),
-    ('9g4Kek6iWspXPAURU3zxT4RGoKvFdvqgxgkANisNFbvDwK1KoxW', '02caad8ef6771ad15ebb0a2aa9b7e84b9c48962976061d1af3e73767203d2f2bb1'),
-    ('9gqhrGQN3eQmTFAW9J6KNX8ffUhe8BmTesE45b9nBmL7VJohhtY', '0331b99a9fcc7bceb0a238446cdab944402dd4b2e79f9dcab898ec3b46aea285c8'),
-    ('9gXPZWxQZQpKsBCW2QCiBjJbhtghxEFtA9Ba6WygnKmrD4g2e8B', '03082348fd5d0c27d7aa89cd460a58fea2932f12147a04985e500bd9ad64695d58'),
-    ('9eY1GWpJ7qwMkfVtnt8gZDnSvNW9VPqt15vePUmRrcr2zCRpGQ4', '020224bd8e95bb60ec042b5172d3cc9dd79f74f99700934010cda16642a50bd7af'),
-    ('9hD4D5rAcTyMuw7eVSENfRBmdCZiz3cwmW8xSnoEvZ1H64rFGMn', '036234820eb840b9246442f022ed1ef15ac80f2c5ac28314bcd8ff682c2703128f');
-
-
-/*
-    Dedicated mv for ERG/USD oracle pool commit stats.
-    Will move dedicated mv's into one big one when number of mv's increases.
-*/
-CREATE MATERIALIZED VIEW ew.oracle_pools_commit_stats_ergusd_mv AS
-    WITH commits_by_address_hash AS (
-        -- Committed (not necessarily accepted) datapoints by oracle
-        SELECT nos.additional_registers #>> '{R4,renderedValue}' AS oracle_address_hash
-            , COUNT(*) -1 nb_of_txs -- -1 to account for forging tx
-            , MIN(nos.timestamp) AS first_ts
-            , MAX(nos.timestamp) AS last_ts
-        FROM node_outputs nos
-        WHERE address = (SELECT datapoint_address FROM ew.oracle_pools WHERE id = 1)
-        GROUP BY 1
-    ), live_epoch_boxes AS (
-        -- Get live epoch boxes to help find epoch preparation txs
-        SELECT box_id
-        FROM node_outputs
-        WHERE main_chain
-            AND index = 0
-            AND address = (SELECT live_epoch_address FROM ew.oracle_pools WHERE id = 1)
-    ), prep_txs AS (
-        -- Epoch prep txs: all txs with a live box as input 0 and a prep box as output 0
-        SELECT os.tx_id
-        FROM node_outputs os
-        JOIN node_inputs ins ON ins.tx_id = os.tx_id
-        JOIN live_epoch_boxes lbs ON lbs.box_id = ins.box_id
-        WHERE os.main_chain AND ins.main_chain
-            AND os.index = 0
-            AND address = (SELECT epoch_prep_address FROM ew.oracle_pools WHERE id = 1)
-    ), datapoint_payouts_by_address_hash AS (
-        SELECT dos.additional_registers #>> '{R4,renderedValue}' AS oracle_hash
-            , COUNT(*) as nb_of_txs
-            , MIN(timestamp) AS first_ts
-            , MAX(timestamp) AS last_ts
-        FROM prep_txs pt
-        JOIN node_data_inputs di ON di.tx_id = pt.tx_id
-        JOIN node_outputs dos ON dos.box_id = di.box_id
-        WHERE di.main_chain AND dos.main_chain
-        GROUP BY 1
-    )
-    -- Combine and convert address hash to address
-    SELECT oah.address
-        , cbh.nb_of_txs AS commits
-        , dbh.nb_of_txs AS accepted_commits
-        , to_timestamp(cbh.first_ts / 1000) AS first_commit
-        , to_timestamp(dbh.first_ts / 1000) AS first_accepted
-        , to_timestamp(cbh.last_ts / 1000) AS last_commit
-        , to_timestamp(dbh.last_ts / 1000) AS last_accepted
-    FROM ew.oracle_pools_oracle_address_hashes oah
-    LEFT JOIN commits_by_address_hash cbh
-        ON cbh.oracle_address_hash = oah.hash
-    LEFT JOIN datapoint_payouts_by_address_hash dbh
-        ON dbh.oracle_hash = oah.hash
-    ORDER BY 1
-    WITH NO DATA;
+    (1,  1, '9fPRvaMYzBPotu6NGvZn4A6N4J2jDmRGs4Zwc9UhFFeSXgRJ8pS', '02725e8878d5198ca7f5853dddf35560ddab05ab0a26adae7e664b84162c9962e5'),
+    (1,  2, '9fQHnth8J6BgVNs9BQjxj5s4e5JGCjiH4fYTBA52ZWrMh6hz2si', '0274524ee849e4e45f58c46164ac609902bb374fc9375f097ee1af2ef1152ab9bf'),
+    (1,  3, '9hD4D5rAcTyMuw7eVSENfRBmdCZiz3cwmW8xSnoEvZ1H64rFGMn', '036234820eb840b9246442f022ed1ef15ac80f2c5ac28314bcd8ff682c2703128f'),
+    (1,  4, '9fckoJSnYpR38EkCzintbJoKaDwWN86wCmNdByiWyeQ22Hq5Sbj', '0290a0538b85768adb3dfc1fe6e4162adf43c6ae313ada0d1a7b71275de2b87364'),
+    (1,  5, '9fzRcctiWfzoJyqGtPWqoXPuxSmFw6zpnjtsQ1B6jSN514XqH4q', '02c1d434dac8765fc1269af82958d8aa350da53907096b35f7747cc372a7e6e69d'),
+	(1,  6, '9eh9WDsRAsujyFx4x7YeSoxrLCqmhuQihDwgsWVqEuXte7QJRCU', '0216e6cca588bed47a7630cba9d662a4be8a2e1991a45ed54ba64093e03dcd9013'),
+    (1,  7, '9gXPZWxQZQpKsBCW2QCiBjJbhtghxEFtA9Ba6WygnKmrD4g2e8B', '03082348fd5d0c27d7aa89cd460a58fea2932f12147a04985e500bd9ad64695d58'),
+    (1,  8, '9g4Kek6iWspXPAURU3zxT4RGoKvFdvqgxgkANisNFbvDwK1KoxW', '02caad8ef6771ad15ebb0a2aa9b7e84b9c48962976061d1af3e73767203d2f2bb1'),
+    (1,  9, '9eY1GWpJ7qwMkfVtnt8gZDnSvNW9VPqt15vePUmRrcr2zCRpGQ4', '020224bd8e95bb60ec042b5172d3cc9dd79f74f99700934010cda16642a50bd7af'),
+    (1, 10, '9em1ShUCkTa43fALGgzwKQ5znuXY2dMnnfHqq4bX3wSWytH11t7', '021fab219a58d2e1e8edfd3e2ad7cf09a35687246c084477db0bce5412f43acdbe'),
+    (1, 11, '9gqhrGQN3eQmTFAW9J6KNX8ffUhe8BmTesE45b9nBmL7VJohhtY', '0331b99a9fcc7bceb0a238446cdab944402dd4b2e79f9dcab898ec3b46aea285c8');
 
 
 -------------------------------------------------------------------------------
@@ -293,10 +317,9 @@ CREATE PROCEDURE ew.sigmausd_update_history()
             -- Retrieve oracle price postings (prep boxes).
             SELECT nos.settlement_height
                 , 1 / (nos.additional_registers #>> '{R4,renderedValue}')::numeric * 1000000000 AS price
-            FROM ew.oracle_pools_prep_boxes bxs
-            JOIN node_outputs nos ON nos.box_id = bxs.box_id
-            WHERE nos.main_chain
-                AND pool_id = 1 -- TODO: Avoid hard coded values.
+            FROM ew.oracle_pools_ergusd_prep_txs prp
+            JOIN node_outputs nos ON nos.tx_id = prp.tx_id
+            WHERE nos.main_chain AND nos.index = 0
                 -- Oldest oracle box that we need is the one that existed when
                 -- the oldest bank box was created.
                 AND nos.settlement_height >= (SELECT MIN(creation_height) FROM bank_boxes)
@@ -456,10 +479,9 @@ CREATE PROCEDURE ew.sigmausd_update_history()
             -- Retrieve oracle price postings (prep boxes).
             SELECT nos.settlement_height AS height
                 , 1 / (nos.additional_registers #>> '{R4,renderedValue}')::numeric * 1000000000 AS price
-            FROM ew.oracle_pools_prep_boxes bxs
-            JOIN node_outputs nos ON nos.box_id = bxs.box_id
-            WHERE nos.main_chain
-                AND pool_id = 1 -- TODO: Avoid hard coded values.
+            FROM ew.oracle_pools_ergusd_prep_txs prp
+            JOIN node_outputs nos ON nos.tx_id = prp.tx_id
+            WHERE nos.main_chain AND nos.index = 0
                 -- Oldest oracle box that we need is the one that existed when
                 -- the oldest bank box was created.
                 AND nos.settlement_height >= (SELECT COALESCE(MAX(height), -1) FROM ew.sigmausd_history_ratios)
@@ -511,13 +533,39 @@ CREATE PROCEDURE ew.sigmausd_update_history()
 
     $$
     LANGUAGE SQL;
-
+	
+	
 -------------------------------------------------------------------------------
--- Initialize
+-- Sync
 -------------------------------------------------------------------------------
--- CALL ew.oracle_pools_update_prep_boxes();
--- CALL ew.sigmausd_update_bank_boxes();
--- CALL ew.sigmausd_update_history();
+CREATE FUNCTION ew.notify_new_header() RETURNS TRIGGER AS
+	$$
+	BEGIN
+	PERFORM pg_notify('ergowatch', (SELECT height::text FROM new_table));
+	RETURN NULL;
+	END;
+	$$ LANGUAGE PLPGSQL;
+	
+CREATE TRIGGER notify_node_headers_insert
+    AFTER INSERT ON node_headers
+    REFERENCING NEW TABLE AS new_table
+    FOR EACH STATEMENT
+    EXECUTE FUNCTION ew.notify_new_header();
 
--- REFRESH MATERIALIZED VIEW ew.oracle_pools_commit_stats_ergusd_mv
-COMMIT;
+CREATE PROCEDURE ew.sync(IN height integer) AS
+	$$
+	BEGIN
+	
+	-- Oracle Pools
+	CALL ew.oracle_pools_ergusd_update_prep_txs();
+	REFRESH MATERIALIZED VIEW ew.oracle_pools_ergusd_oracle_stats_mv;
+	
+	-- SigmaUSD
+	CALL ew.sigmausd_update_bank_boxes();
+-- 	CALL ew.sigmausd_update_history();
+
+	END;
+	$$ LANGUAGE plpgsql;
+
+
+-- COMMIT;
