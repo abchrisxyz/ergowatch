@@ -5,3 +5,4 @@ explorer-backend/[0-9]*
 **/__pycache__/*
 **/.pytest_cache/*
 .stignore
+*.code-workspace
