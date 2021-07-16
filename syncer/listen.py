@@ -26,22 +26,42 @@ except KeyError as e:
 
 DBSTR = f"postgresql://{DB_PASS}:{DB_USER}@{DB_HOST}/{DB_NAME}"
 
+# Node heights queue
+Q = asyncio.Queue()
+
+# Using a queue as some sort of mutex for our single db connection
+C = asyncio.Queue()
+
 
 def handle_notification(conn, pid, channel, payload):
     logger.info(f"Received notificatoin with payload: {payload}")
+    Q.put_nowait(payload)
+    logger.info(f"Queue size is now: {Q.qsize()}")
+
+
+def process_queue():
+    while Q.qsize() > 1:
+        height = Q.get_nowait()
+        logger.info(f"Skipping height: {height} - more recent one available")
+
+    height = Q.get_nowait()
+    conn = C.get_nowait()
 
     # Wait some to ensure chain-grabber is done
     time.sleep(2)
 
     async def refresh():
         try:
-            await conn.execute("CALL ew.sync($1);", int(payload))
-            logger.info(f"Task for {payload} completed")
+            await conn.execute("CALL ew.sync($1);", int(height))
+            logger.info(f"Task for {height} completed")
         except asyncpg.InterfaceError as e:
             logger.warning(e)
-            logger.warning(f"Aborting task for {payload}")
+            logger.warning(f"Aborting task for {height}")
+        finally:
+            # "release" connection by putting it back in the queue
+            C.put_nowait(conn)
 
-    logger.info(f"Submitting task for {payload}")
+    logger.info(f"Submitting task for {height}")
     asyncio.create_task(refresh())
 
 
@@ -53,8 +73,14 @@ async def main():
     logger.info(f"Adding listener on channel '{channel}'")
     await conn.add_listener(channel, handle_notification)
 
+    C.put_nowait(conn)
+
     while True:
-        await asyncio.sleep(5)
+        if not Q.empty() and not C.empty():
+            # There is at least one new height to process
+            # and db is done processing previous ones.
+            process_queue()
+        await asyncio.sleep(10)
 
     logger.info("Closing db connection")
     await conn.close()
