@@ -19,6 +19,13 @@ async def get_latest_block_height():
     return row["height"]
 
 
+async def get_latest_sync_height():
+    qry = "select last_sync_height as height from ew.sync_status;"
+    async with CONNECTION_POOL.acquire() as conn:
+        row = await conn.fetchrow(qry)
+    return row["height"]
+
+
 async def get_oracle_pools_ergusd_oracle_stats():
     """
     ERG/USD oracle stats

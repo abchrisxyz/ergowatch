@@ -538,6 +538,11 @@ CREATE PROCEDURE ew.sigmausd_update_history()
 -------------------------------------------------------------------------------
 -- Sync
 -------------------------------------------------------------------------------
+create table ew.sync_status (
+	last_sync_height integer
+);
+insert into ew.sync_status (last_sync_height) values (0);
+
 CREATE FUNCTION ew.notify_new_header() RETURNS TRIGGER AS
 	$$
 	BEGIN
@@ -552,7 +557,8 @@ CREATE TRIGGER notify_node_headers_insert
     FOR EACH STATEMENT
     EXECUTE FUNCTION ew.notify_new_header();
 
-CREATE PROCEDURE ew.sync(IN height integer) AS
+-- drop procedure if exists ew.sync;
+CREATE PROCEDURE ew.sync(IN _height integer) AS
 	$$
 	BEGIN
 	
@@ -563,6 +569,9 @@ CREATE PROCEDURE ew.sync(IN height integer) AS
 	-- SigmaUSD
 	CALL ew.sigmausd_update_bank_boxes();
 -- 	CALL ew.sigmausd_update_history();
+
+	update ew.sync_status
+	set last_sync_height = _height;
 
 	END;
 	$$ LANGUAGE plpgsql;
