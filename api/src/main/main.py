@@ -51,6 +51,11 @@ async def get_db_height():
     return h
 
 
+@app.get("/oracle-pools/ergusd/latest")
+async def get_oracle_pools_ergusd_latest():
+    return await db.get_oracle_pools_ergusd_latest()
+
+
 @app.get("/oracle-pools/ergusd/oracle-stats")
 async def get_oracle_pools_ergusd_oracle_stats():
     return await db.get_oracle_pools_ergusd_oracle_stats()

@@ -26,6 +26,21 @@ async def get_latest_sync_height():
     return row["height"]
 
 
+async def get_oracle_pools_ergusd_latest():
+    """
+    Latest ERG/USD oracle pool posting
+    """
+    qry = """
+        select height
+            , price
+            , datapoints
+        from ew.oracle_pools_ergusd_latest_posting_mv;
+    """
+    async with CONNECTION_POOL.acquire() as conn:
+        row = await conn.fetchrow(qry)
+    return dict(row)
+
+
 async def get_oracle_pools_ergusd_oracle_stats():
     """
     ERG/USD oracle stats

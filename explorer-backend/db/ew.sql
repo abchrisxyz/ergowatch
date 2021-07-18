@@ -143,6 +143,19 @@ CREATE MATERIALIZED VIEW ew.oracle_pools_ergusd_oracle_stats_mv AS
     WHERE orc.pool_id = 1
 	ORDER BY orc.oracle_id
     WITH NO DATA;
+	
+
+create materialized view ew.oracle_pools_ergusd_latest_posting_mv as
+	select inclusion_height as height
+		, round(1. / prp.datapoint  * 1000000000, 2) as price
+		, count(din.*) as datapoints
+	from ew.oracle_pools_ergusd_prep_txs prp
+	join node_data_inputs din on din.tx_id = prp.tx_id
+	where din.main_chain
+	group by 1, 2
+	order by prp.inclusion_height desc
+	limit 1
+	with no data;
 
 
 INSERT INTO ew.oracle_pools
@@ -558,23 +571,25 @@ CREATE TRIGGER notify_node_headers_insert
     EXECUTE FUNCTION ew.notify_new_header();
 
 -- drop procedure if exists ew.sync;
-CREATE PROCEDURE ew.sync(IN _height integer) AS
+create procedure ew.sync(in _height integer) as
 	$$
-	BEGIN
+	begin
 	
 	-- Oracle Pools
-	CALL ew.oracle_pools_ergusd_update_prep_txs();
-	REFRESH MATERIALIZED VIEW ew.oracle_pools_ergusd_oracle_stats_mv;
+	call ew.oracle_pools_ergusd_update_prep_txs();
+	refresh materialized view ew.oracle_pools_ergusd_latest_posting_mv;
+	refresh materialized view ew.oracle_pools_ergusd_oracle_stats_mv;
+	
 	
 	-- SigmaUSD
-	CALL ew.sigmausd_update_bank_boxes();
--- 	CALL ew.sigmausd_update_history();
+	call ew.sigmausd_update_bank_boxes();
+-- 	call ew.sigmausd_update_history();
 
 	update ew.sync_status
 	set last_sync_height = _height;
 
-	END;
-	$$ LANGUAGE plpgsql;
+	end;
+	$$ language plpgsql;
 
 
--- COMMIT;
+-- commit;
