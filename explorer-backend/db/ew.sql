@@ -156,6 +156,7 @@ create materialized view ew.oracle_pools_ergusd_latest_posting_mv as
 	order by prp.inclusion_height desc
 	limit 1
 	with no data;
+	
 
 -- Number of blocks between successive price postings.
 -- Only for recent epochs.
@@ -173,6 +174,12 @@ create materialized view ew.oracle_pools_ergusd_recent_epoch_durations_mv as
 	order by 1 desc
 	limit 100
 	with no data;
+	
+
+-- To enable concurrent refreshes
+create unique index on ew.oracle_pools_ergusd_oracle_stats_mv(oracle_id);
+create unique index on ew.oracle_pools_ergusd_latest_posting_mv(height);
+create unique index on ew.oracle_pools_ergusd_recent_epoch_durations_mv(height);
 
 
 INSERT INTO ew.oracle_pools
@@ -590,24 +597,23 @@ CREATE TRIGGER notify_node_headers_insert
 -- drop procedure if exists ew.sync;
 create procedure ew.sync(in _height integer) as
 	$$
-	begin
 	
 	-- Oracle Pools
 	call ew.oracle_pools_ergusd_update_prep_txs();
-	refresh materialized view ew.oracle_pools_ergusd_latest_posting_mv;
-	refresh materialized view ew.oracle_pools_ergusd_recent_epoch_durations_mv;
-	refresh materialized view ew.oracle_pools_ergusd_oracle_stats_mv;
+	refresh materialized view concurrently ew.oracle_pools_ergusd_latest_posting_mv;
+	refresh materialized view concurrently ew.oracle_pools_ergusd_recent_epoch_durations_mv;
+	refresh materialized view concurrently ew.oracle_pools_ergusd_oracle_stats_mv;
 	
 	
 	-- SigmaUSD
 	call ew.sigmausd_update_bank_boxes();
--- 	call ew.sigmausd_update_history();
-
+	call ew.sigmausd_update_history();
+	
+	-- Sync Status
 	update ew.sync_status
 	set last_sync_height = _height;
 
-	end;
-	$$ language plpgsql;
+	$$ language sql;
 
 
 -- commit;
