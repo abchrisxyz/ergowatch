@@ -33,6 +33,14 @@ async def test_get_oracle_pools_ergusd_latest_posting():
 
 
 @pytest.mark.asyncio
+async def test_get_oracle_pools_ergusd_recent_epoch_durations():
+    d = await db.get_oracle_pools_ergusd_recent_epoch_durations()
+    assert len(d) == 100
+    assert d[0]["h"] > 530000
+    assert d[0]["n"] > 0
+
+
+@pytest.mark.asyncio
 async def test_get_oracle_pools_ergusd_oracle_stats():
     data = await db.get_oracle_pools_ergusd_oracle_stats()
     assert len(data) == 11

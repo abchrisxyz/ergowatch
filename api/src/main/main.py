@@ -56,6 +56,11 @@ async def get_oracle_pools_ergusd_latest():
     return await db.get_oracle_pools_ergusd_latest()
 
 
+@app.get("/oracle-pools/ergusd/recent-epoch-durations")
+async def get_oracle_pools_ergusd_recent_epoch_durations():
+    return await db.get_oracle_pools_ergusd_recent_epoch_durations()
+
+
 @app.get("/oracle-pools/ergusd/oracle-stats")
 async def get_oracle_pools_ergusd_oracle_stats():
     return await db.get_oracle_pools_ergusd_oracle_stats()

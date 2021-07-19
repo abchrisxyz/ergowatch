@@ -41,6 +41,16 @@ async def get_oracle_pools_ergusd_latest():
     return dict(row)
 
 
+async def get_oracle_pools_ergusd_recent_epoch_durations():
+    qry = """
+        select height as h
+            , blocks as n
+        from ew.oracle_pools_ergusd_recent_epoch_durations_mv;
+    """
+    async with CONNECTION_POOL.acquire() as conn:
+        rows = await conn.fetch(qry)
+    return [dict(r) for r in rows]
+
 async def get_oracle_pools_ergusd_oracle_stats():
     """
     ERG/USD oracle stats
