@@ -126,7 +126,7 @@ CREATE MATERIALIZED VIEW ew.oracle_pools_ergusd_oracle_stats_mv AS
 		, orc.address
         , dat.nb_of_txs AS commits
         , acc.payouts AS accepted_commits
-        , col.payouts AS collections
+        , coalesce(col.payouts, 0) AS collections
         , to_timestamp(dat.first_ts / 1000) AS first_commit
         , to_timestamp(acc.first_ts / 1000) AS first_accepted
         , to_timestamp(col.first_ts / 1000) AS first_collection
