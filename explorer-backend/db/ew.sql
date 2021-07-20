@@ -91,17 +91,19 @@ CREATE PROCEDURE ew.oracle_pools_ergusd_update_prep_txs() AS
     $$ LANGUAGE SQL;
 
 
-CREATE MATERIALIZED VIEW ew.oracle_pools_ergusd_oracle_stats_mv AS
+create materialized view ew.oracle_pools_ergusd_oracle_stats_mv as
     WITH datapoint_stats AS (
         -- Committed (not necessarily accepted) datapoints by oracle
         SELECT nos.additional_registers #>> '{R4,renderedValue}' AS oracle_address_hash
-            , COUNT(*) -1 nb_of_txs -- -1 to account for forging tx
+            , COUNT(*) -1 nb_of_txs -- -1 to account for oracle creation tx
             , MIN(nos.timestamp) AS first_ts
             , MAX(nos.timestamp) AS last_ts
         FROM node_outputs nos
         WHERE nos.main_chain
             AND address = (SELECT datapoint_address FROM ew.oracle_pools WHERE id = 1)
         GROUP BY 1
+		-- Discard oracles with only 1 tx, meaning they where created but never did anything.
+		having count(*) > 1
     ), accepted_datapoint_stats AS (
         SELECT os.additional_registers #>> '{R4,renderedValue}' AS oracle_address_hash
             , COUNT(*) AS payouts
@@ -124,7 +126,7 @@ CREATE MATERIALIZED VIEW ew.oracle_pools_ergusd_oracle_stats_mv AS
     -- Combine and convert address hash to address
     SELECT orc.oracle_id 
 		, orc.address
-        , dat.nb_of_txs AS commits
+        , coalesce(dat.nb_of_txs, 0) AS commits
         , acc.payouts AS accepted_commits
         , coalesce(col.payouts, 0) AS collections
         , to_timestamp(dat.first_ts / 1000) AS first_commit
@@ -603,7 +605,6 @@ create procedure ew.sync(in _height integer) as
 	refresh materialized view concurrently ew.oracle_pools_ergusd_latest_posting_mv;
 	refresh materialized view concurrently ew.oracle_pools_ergusd_recent_epoch_durations_mv;
 	refresh materialized view concurrently ew.oracle_pools_ergusd_oracle_stats_mv;
-	
 	
 	-- SigmaUSD
 	call ew.sigmausd_update_bank_boxes();
