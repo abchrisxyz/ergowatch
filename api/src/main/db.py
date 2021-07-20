@@ -45,7 +45,8 @@ async def get_oracle_pools_ergusd_recent_epoch_durations():
     qry = """
         select height as h
             , blocks as n
-        from ew.oracle_pools_ergusd_recent_epoch_durations_mv;
+        from ew.oracle_pools_ergusd_recent_epoch_durations_mv
+        order by 1;
     """
     async with CONNECTION_POOL.acquire() as conn:
         rows = await conn.fetch(qry)
