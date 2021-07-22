@@ -291,7 +291,7 @@ Tx and cumulative tx history is split across two tables for easier updates.
 Ratio history only includes heights where:
     a) oracle price is posted, or
     b) one or more bank txs are mined
-Ration history has only 1 record per height (only the last tx matters).
+Ratio history has only 1 record per height (only the last tx matters).
 */
 
 -- SigmaUSD bank transactions
@@ -433,7 +433,7 @@ create procedure ew.sigmausd_update_history()
             , fee
         from add_fee
         -- Ignore first idx as already processed
-        order by idx OFFSET 1;
+        order by idx offset 1;
 
         -------------------------------------------
         -- 2. Update cumulative transaction history
@@ -441,18 +441,18 @@ create procedure ew.sigmausd_update_history()
         with cumsum_for_new_boxes as (
             select th.bank_box_idx
                 , reserves
-                , SUM(fee * (d_usd <> 0)::int) OVER w as cum_usd_fee
-                , SUM(fee * (d_rsv <> 0)::int) OVER w as cum_rsv_fee
+                , sum(fee * (d_usd <> 0)::int) over w as cum_usd_fee
+                , sum(fee * (d_rsv <> 0)::int) over w as cum_rsv_fee
 
-                , SUM(GREATEST(0,d_erg) * (d_usd > 0)::int) OVER w as cum_usd_erg_in
-                , SUM(GREATEST(0,-d_erg) * (d_usd < 0)::int) OVER w as cum_usd_erg_out
+                , sum(greatest(0,d_erg) * (d_usd > 0)::int) over w as cum_usd_erg_in
+                , sum(greatest(0,-d_erg) * (d_usd < 0)::int) over w as cum_usd_erg_out
 
-                , SUM(GREATEST(0,d_erg) * (d_rsv > 0)::int) OVER w as cum_rsv_erg_in
-                , SUM(GREATEST(0,-d_erg) * (d_rsv < 0)::int) OVER w as cum_rsv_erg_out
+                , sum(greatest(0,d_erg) * (d_rsv > 0)::int) over w as cum_rsv_erg_in
+                , sum(greatest(0,-d_erg) * (d_rsv < 0)::int) over w as cum_rsv_erg_out
             from ew.sigmausd_history_transactions th
             left join ew.sigmausd_history_transactions_cumulative ch on ch.bank_box_idx = th.bank_box_idx
-            where ch.bank_box_idx IS NULL
-            WINDOW w as (order by th.bank_box_idx)
+            where ch.bank_box_idx is null
+            window w as (order by th.bank_box_idx)
         ), adjusted_cumsums as (
             -- Add cumsum form last record.
             -- coalesce to 0 for initial run.
@@ -469,8 +469,8 @@ create procedure ew.sigmausd_update_history()
             left join (select * from ew.sigmausd_history_transactions_cumulative order by bank_box_idx DESC LIMIT 1) lcr on TRUE
         ), add_reserve_fractions as (
             select *
-                , GREATEST(0, cum_usd_erg_in - cum_usd_erg_out - cum_usd_fee) / reserves as f_usd
-                , (cum_rsv_erg_in - cum_rsv_erg_out - cum_rsv_fee + 0.001 + LEAST(0, cum_usd_erg_in - cum_usd_erg_out - cum_usd_fee)) / reserves as f_rsv
+                , greatest(0, cum_usd_erg_in - cum_usd_erg_out - cum_usd_fee) / reserves as f_usd
+                , (cum_rsv_erg_in - cum_rsv_erg_out - cum_rsv_fee + 0.001 + least(0, cum_usd_erg_in - cum_usd_erg_out - cum_usd_fee)) / reserves as f_rsv
                 , (cum_usd_fee + cum_rsv_fee) / reserves as f_fee
             from adjusted_cumsums
         )
@@ -562,11 +562,11 @@ create procedure ew.sigmausd_update_history()
 					group by 1
 				)
 				-- Limit to bank txs that we need.
-				-- Oldest bank txs needed were in last block of tx history prior to last update.
+				-- Oldest bank txs needed were in last block of tx history prior to last tx history update.
 				-- To find it we intersect the (now updated) tx history with the (not yet updated)
 				-- ratio history to find the latest common block.
 				and htx.height >= (
-					select coalesce(t.height, 0)
+					select t.height
 					from ew.sigmausd_history_transactions t
 					join ew.sigmausd_history_ratios r on r.height = t.height
 					-- add 0 in case ratio history is empty
