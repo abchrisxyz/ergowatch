@@ -1,33 +1,33 @@
--- BEGIN;
+-- begin;
 
-DROP SCHEMA IF EXISTS ew CASCADE;
-CREATE SCHEMA ew;
+drop schema if exists ew cascade;
+create schema ew;
 
 -------------------------------------------------------------------------------
 -- Oracle Pools
 -------------------------------------------------------------------------------
-CREATE TABLE ew.oracle_pools
+create table ew.oracle_pools
 (
-    id integer PRIMARY KEY,
+    id integer primary key,
     name text,
-    datapoint_address text NOT NULL,
-    epoch_prep_address text NOT NULL,
-    live_epoch_address text NOT NULL,
-    deposits_address text NOT NULL,
-    pool_nft_id text NOT NULL,
-    participant_token_id text NOT NULL,
-    deviation_range integer NOT NULL,
-    consensus_number integer NOT NULL
+    datapoint_address text not null,
+    epoch_prep_address text not null,
+    live_epoch_address text not null,
+    deposits_address text not null,
+    pool_nft_id text not null,
+    participant_token_id text not null,
+    deviation_range integer not null,
+    consensus_number integer not null
 );
 
 
-CREATE TABLE ew.oracle_pools_oracles
+create table ew.oracle_pools_oracles
 (
-    pool_id integer NOT NULL REFERENCES ew.oracle_pools(id),
-    oracle_id integer NOT NULL,
-    address text UNIQUE NOT NULL,
-    address_hash text UNIQUE NOT NULL,
-    PRIMARY KEY(pool_id, oracle_id)
+    pool_id integer not null references ew.oracle_pools(id),
+    oracle_id integer not null,
+    address text unique not null,
+    address_hash text unique not null,
+    primary key(pool_id, oracle_id)
 );
 
 
@@ -35,116 +35,116 @@ CREATE TABLE ew.oracle_pools_oracles
     Dedicated relations for ERG/USD oracle pool.
     Can change when more oracles appear.
 */
-CREATE TABLE ew.oracle_pools_ergusd_prep_txs(
-    tx_id text PRIMARY KEY,
-    inclusion_height integer NOT NULL,
-    datapoint integer NOT NULL,
-    collector_id integer NOT NULL
+create table ew.oracle_pools_ergusd_prep_txs(
+    tx_id text primary key,
+    inclusion_height integer not null,
+    datapoint integer not null,
+    collector_id integer not null
 );
 
 
-CREATE PROCEDURE ew.oracle_pools_ergusd_update_prep_txs() AS
+create procedure ew.oracle_pools_ergusd_update_prep_txs() AS
     $$
-    WITH live_epoch_boxes AS (
-        SELECT box_id
-            , additional_registers #>>  '{R5,renderedValue}' AS epoch_end_height
-        FROM node_outputs
-        WHERE main_chain
-            AND address = (SELECT live_epoch_address FROM ew.oracle_pools WHERE id = 1)
+    with live_epoch_boxes as (
+        select box_id
+            , additional_registers #>>  '{R5,renderedValue}' as epoch_end_height
+        from node_outputs
+        where main_chain
+            and address = (select live_epoch_address from ew.oracle_pools where id = 1)
             -- Limit to new boxes only
-            AND creation_height >= (SELECT COALESCE(MAX(inclusion_height), 0) FROM ew.oracle_pools_ergusd_prep_txs)
-    ), prep_txs AS (
-        SELECT os.tx_id
-            , os.settlement_height AS inclusion_height
-            , (os.additional_registers #>>  '{R4,renderedValue}')::integer AS datapoint
-        FROM live_epoch_boxes lep
-        JOIN node_inputs ins ON ins.box_id = lep.box_id
-        JOIN node_outputs os ON os.tx_id = ins.tx_id
-        WHERE ins.main_chain AND os.main_chain
+            and creation_height >= (select coalesce(max(inclusion_height), 0) from ew.oracle_pools_ergusd_prep_txs)
+    ), prep_txs as (
+        select os.tx_id
+            , os.settlement_height as inclusion_height
+            , (os.additional_registers #>>  '{R4,renderedValue}')::integer as datapoint
+        from live_epoch_boxes lep
+        join node_inputs ins on ins.box_id = lep.box_id
+        join node_outputs os on os.tx_id = ins.tx_id
+        where ins.main_chain and os.main_chain
         -- Prep txs first output is the new prep box
-        AND os.address = (SELECT epoch_prep_address FROM ew.oracle_pools WHERE id = 1)
+        and os.address = (select epoch_prep_address from ew.oracle_pools where id = 1)
         -- Prep txs have only 1 input box: the live epoch box
-        AND ins.index = 0
-    ), add_collector_hash AS (
+        and ins.index = 0
+    ), add_collector_hash as (
         -- Prep tx's second output's R4 is the index of the data input box
         -- belonging to the collecting oracle.
         -- Each datapoint box contains its oracle's address hash in R4.
-        SELECT prp.*
-            , (dos.additional_registers #>> '{R4,renderedValue}') AS collector_address_hash
-        FROM prep_txs prp
-        JOIN node_outputs os1 ON os1.tx_id = prp.tx_id AND os1.index = 1
-        JOIN node_data_inputs din
-            ON din.tx_id = prp.tx_id
-            AND din.index = (os1.additional_registers #>> '{R4,renderedValue}')::integer
-        JOIN node_outputs dos ON dos.box_id = din.box_id
-        WHERE os1.main_chain AND din.main_chain AND dos.main_chain
+        select prp.*
+            , (dos.additional_registers #>> '{R4,renderedValue}') as collector_address_hash
+        from prep_txs prp
+        join node_outputs os1 on os1.tx_id = prp.tx_id and os1.index = 1
+        join node_data_inputs din
+            on din.tx_id = prp.tx_id
+            and din.index = (os1.additional_registers #>> '{R4,renderedValue}')::integer
+        join node_outputs dos on dos.box_id = din.box_id
+        where os1.main_chain and din.main_chain and dos.main_chain
     )
-    INSERT INTO ew.oracle_pools_ergusd_prep_txs (tx_id, inclusion_height, datapoint, collector_id)
-    SELECT ach.tx_id
+    insert into ew.oracle_pools_ergusd_prep_txs (tx_id, inclusion_height, datapoint, collector_id)
+    select ach.tx_id
         , ach.inclusion_height
         , ach.datapoint
         , orc.oracle_id
-    FROM add_collector_hash ach
-    JOIN ew.oracle_pools_oracles orc
-        ON orc.address_hash = ach.collector_address_hash
-    ORDER BY inclusion_height;
-    $$ LANGUAGE SQL;
+    from add_collector_hash ach
+    join ew.oracle_pools_oracles orc
+        on orc.address_hash = ach.collector_address_hash
+    order by inclusion_height;
+    $$ language sql;
 
 
 create materialized view ew.oracle_pools_ergusd_oracle_stats_mv as
-    WITH datapoint_stats AS (
-        -- Committed (not necessarily accepted) datapoints by oracle
-        SELECT nos.additional_registers #>> '{R4,renderedValue}' AS oracle_address_hash
-            , COUNT(*) -1 nb_of_txs -- -1 to account for oracle creation tx
-            , MIN(nos.timestamp) AS first_ts
-            , MAX(nos.timestamp) AS last_ts
-        FROM node_outputs nos
-        WHERE nos.main_chain
-            AND address = (SELECT datapoint_address FROM ew.oracle_pools WHERE id = 1)
-        GROUP BY 1
+    with datapoint_stats as (
+        -- committed (not necessarily accepted) datapoints by oracle
+        select nos.additional_registers #>> '{R4,renderedValue}' as oracle_address_hash
+            , count(*) -1 nb_of_txs -- -1 to account for oracle creation tx
+            , min(nos.timestamp) as first_ts
+            , max(nos.timestamp) as last_ts
+        from node_outputs nos
+        where nos.main_chain
+            and address = (select datapoint_address from ew.oracle_pools where id = 1)
+        group by 1
 		-- Discard oracles with only 1 tx, meaning they where created but never did anything.
 		having count(*) > 1
-    ), accepted_datapoint_stats AS (
-        SELECT os.additional_registers #>> '{R4,renderedValue}' AS oracle_address_hash
-            , COUNT(*) AS payouts
-            , MIN(os.timestamp) AS first_ts
-            , MAX(os.timestamp) AS last_ts
-        FROM ew.oracle_pools_ergusd_prep_txs prp
-        JOIN node_data_inputs din ON din.tx_id = prp.tx_id
-        JOIN node_outputs os ON os.box_id = din.box_id
-        WHERE din.main_chain AND os.main_chain
-        GROUP BY 1
-    ), collector_stats AS (
-        SELECT prp.collector_id
-            , COUNT(*) AS payouts
-            , MIN(txs.timestamp) AS first_ts
-            , MAX(txs.timestamp) AS last_ts
-        FROM ew.oracle_pools_ergusd_prep_txs prp
-        JOIN node_transactions txs ON txs.id = prp.tx_id
-        GROUP BY 1
+    ), accepted_datapoint_stats as (
+        select os.additional_registers #>> '{R4,renderedValue}' as oracle_address_hash
+            , count(*) as payouts
+            , min(os.timestamp) as first_ts
+            , max(os.timestamp) as last_ts
+        from ew.oracle_pools_ergusd_prep_txs prp
+        join node_data_inputs din on din.tx_id = prp.tx_id
+        join node_outputs os on os.box_id = din.box_id
+        where din.main_chain and os.main_chain
+        group by 1
+    ), collector_stats as (
+        select prp.collector_id
+            , count(*) as payouts
+            , min(txs.timestamp) as first_ts
+            , max(txs.timestamp) as last_ts
+        from ew.oracle_pools_ergusd_prep_txs prp
+        join node_transactions txs on txs.id = prp.tx_id
+        group by 1
     )
     -- Combine and convert address hash to address
-    SELECT orc.oracle_id 
+    select orc.oracle_id
 		, orc.address
-        , coalesce(dat.nb_of_txs, 0) AS commits
-        , acc.payouts AS accepted_commits
-        , coalesce(col.payouts, 0) AS collections
-        , to_timestamp(dat.first_ts / 1000) AS first_commit
-        , to_timestamp(acc.first_ts / 1000) AS first_accepted
-        , to_timestamp(col.first_ts / 1000) AS first_collection
-        , to_timestamp(dat.last_ts / 1000) AS last_commit
-        , to_timestamp(acc.last_ts / 1000) AS last_accepted
-        , to_timestamp(col.last_ts / 1000) AS last_collection
-    FROM ew.oracle_pools_oracles orc
-    LEFT JOIN datapoint_stats dat
-        ON dat.oracle_address_hash = orc.address_hash
-    LEFT JOIN accepted_datapoint_stats acc
-        ON acc.oracle_address_hash = orc.address_hash
-    LEFT JOIN collector_stats col
-        ON col.collector_id = orc.oracle_id
-    WHERE orc.pool_id = 1
-	ORDER BY orc.oracle_id
-    WITH NO DATA;
+        , coalesce(dat.nb_of_txs, 0) as commits
+        , acc.payouts as accepted_commits
+        , coalesce(col.payouts, 0) as collections
+        , to_timestamp(dat.first_ts / 1000) as first_commit
+        , to_timestamp(acc.first_ts / 1000) as first_accepted
+        , to_timestamp(col.first_ts / 1000) as first_collection
+        , to_timestamp(dat.last_ts / 1000) as last_commit
+        , to_timestamp(acc.last_ts / 1000) as last_accepted
+        , to_timestamp(col.last_ts / 1000) as last_collection
+    from ew.oracle_pools_oracles orc
+    left join datapoint_stats dat
+        on dat.oracle_address_hash = orc.address_hash
+    left join accepted_datapoint_stats acc
+        on acc.oracle_address_hash = orc.address_hash
+    left join collector_stats col
+        on col.collector_id = orc.oracle_id
+    where orc.pool_id = 1
+	order by orc.oracle_id
+    with no data;
 	
 
 create materialized view ew.oracle_pools_ergusd_latest_posting_mv as
@@ -160,7 +160,7 @@ create materialized view ew.oracle_pools_ergusd_latest_posting_mv as
 	with no data;
 	
 
--- Number of blocks between successive price postings.
+-- number of blocks between successive price postings.
 -- Only for recent epochs.
 create materialized view ew.oracle_pools_ergusd_recent_epoch_durations_mv as
 	with indexed as (
@@ -178,13 +178,13 @@ create materialized view ew.oracle_pools_ergusd_recent_epoch_durations_mv as
 	with no data;
 	
 
--- To enable concurrent refreshes
+-- to enable concurrent refreshes
 create unique index on ew.oracle_pools_ergusd_oracle_stats_mv(oracle_id);
 create unique index on ew.oracle_pools_ergusd_latest_posting_mv(height);
 create unique index on ew.oracle_pools_ergusd_recent_epoch_durations_mv(height);
 
 
-INSERT INTO ew.oracle_pools
+insert into ew.oracle_pools
 (
     id,
     name,
@@ -197,7 +197,7 @@ INSERT INTO ew.oracle_pools
     deviation_range,
     consensus_number
 )
-VALUES
+values
 (
     1,
     'ERGUSD',
@@ -212,7 +212,7 @@ VALUES
 );
 
 
-INSERT INTO ew.oracle_pools_oracles (pool_id, oracle_id, address, address_hash) VALUES
+insert into ew.oracle_pools_oracles (pool_id, oracle_id, address, address_hash) values
     -- ERGUSD oracles
     (1,  1, '9fPRvaMYzBPotu6NGvZn4A6N4J2jDmRGs4Zwc9UhFFeSXgRJ8pS', '02725e8878d5198ca7f5853dddf35560ddab05ab0a26adae7e664b84162c9962e5'),
     (1,  2, '9fQHnth8J6BgVNs9BQjxj5s4e5JGCjiH4fYTBA52ZWrMh6hz2si', '0274524ee849e4e45f58c46164ac609902bb374fc9375f097ee1af2ef1152ab9bf'),
@@ -230,41 +230,41 @@ INSERT INTO ew.oracle_pools_oracles (pool_id, oracle_id, address, address_hash) 
 -------------------------------------------------------------------------------
 -- SigmaUSD
 -------------------------------------------------------------------------------
-CREATE TABLE ew.sigmausd_bank_boxes
+create table ew.sigmausd_bank_boxes
 (
-    idx integer PRIMARY KEY,
-    box_id text UNIQUE NOT NULL
+    idx integer primary key,
+    box_id text unique not null
 );
 
-CREATE PROCEDURE ew.sigmausd_update_bank_boxes()
-    LANGUAGE SQL
-    AS $$
-        INSERT INTO ew.sigmausd_bank_boxes (idx, box_id)
-            WITH RECURSIVE box_series(idx, box_id) AS (
-                -- Start from latest known bank box
-                SELECT idx, box_id
-                FROM (
-                    SELECT idx, box_id FROM ew.sigmausd_bank_boxes bbs
-                    ORDER BY idx DESC
+create procedure ew.sigmausd_update_bank_boxes()
+    language sql
+    as $$
+        insert into ew.sigmausd_bank_boxes (idx, box_id)
+            with recursive box_series(idx, box_id) as (
+                -- start from latest known bank box
+                select idx, box_id
+                from (
+                    select idx, box_id from ew.sigmausd_bank_boxes bbs
+                    order by idx DESC
                     LIMIT 1
                 ) last_bank_box
 
-                UNION
+                union
 
-                SELECT idx+1 AS idx
+                select idx+1 as idx
                     , os.box_id
-                FROM box_series bxs
-                JOIN node_inputs i ON i.box_id = bxs.box_id
-                JOIN node_outputs os ON os.tx_id = i.tx_id AND os.address = 'MUbV38YgqHy7XbsoXWF5z7EZm524Ybdwe5p9WDrbhruZRtehkRPT92imXer2eTkjwPDfboa1pR3zb3deVKVq3H7Xt98qcTqLuSBSbHb7izzo5jphEpcnqyKJ2xhmpNPVvmtbdJNdvdopPrHHDBbAGGeW7XYTQwEeoRfosXzcDtiGgw97b2aqjTsNFmZk7khBEQywjYfmoDc9nUCJMZ3vbSspnYo3LarLe55mh2Np8MNJqUN9APA6XkhZCrTTDRZb1B4krgFY1sVMswg2ceqguZRvC9pqt3tUUxmSnB24N6dowfVJKhLXwHPbrkHViBv1AKAJTmEaQW2DN1fRmD9ypXxZk8GXmYtxTtrj3BiunQ4qzUCu1eGzxSREjpkFSi2ATLSSDqUwxtRz639sHM6Lav4axoJNPCHbY8pvuBKUxgnGRex8LEGM8DeEJwaJCaoy8dBw9Lz49nq5mSsXLeoC4xpTUmp47Bh7GAZtwkaNreCu74m9rcZ8Di4w1cmdsiK1NWuDh9pJ2Bv7u3EfcurHFVqCkT3P86JUbKnXeNxCypfrWsFuYNKYqmjsix82g9vWcGMmAcu5nagxD4iET86iE2tMMfZZ5vqZNvntQswJyQqv2Wc6MTh4jQx1q2qJZCQe4QdEK63meTGbZNNKMctHQbp3gRkZYNrBtxQyVtNLR8xEY8zGp85GeQKbb37vqLXxRpGiigAdMe3XZA4hhYPmAAU5hpSMYaRAjtvvMT3bNiHRACGrfjvSsEG9G2zY5in2YWz5X9zXQLGTYRsQ4uNFkYoQRCBdjNxGv6R58Xq74zCgt19TxYZ87gPWxkXpWwTaHogG1eps8WXt8QzwJ9rVx6Vu9a5GjtcGsQxHovWmYixgBU8X9fPNJ9UQhYyAWbjtRSuVBtDAmoV1gCBEPwnYVP5GCGhCocbwoYhZkZjFZy6ws4uxVLid3FxuvhWvQrVEDYp7WRvGXbNdCbcSXnbeTrPMey1WPaXX'
+                from box_series bxs
+                join node_inputs i on i.box_id = bxs.box_id
+                join node_outputs os on os.tx_id = i.tx_id and os.address = 'MUbV38YgqHy7XbsoXWF5z7EZm524Ybdwe5p9WDrbhruZRtehkRPT92imXer2eTkjwPDfboa1pR3zb3deVKVq3H7Xt98qcTqLuSBSbHb7izzo5jphEpcnqyKJ2xhmpNPVvmtbdJNdvdopPrHHDBbAGGeW7XYTQwEeoRfosXzcDtiGgw97b2aqjTsNFmZk7khBEQywjYfmoDc9nUCJMZ3vbSspnYo3LarLe55mh2Np8MNJqUN9APA6XkhZCrTTDRZb1B4krgFY1sVMswg2ceqguZRvC9pqt3tUUxmSnB24N6dowfVJKhLXwHPbrkHViBv1AKAJTmEaQW2DN1fRmD9ypXxZk8GXmYtxTtrj3BiunQ4qzUCu1eGzxSREjpkFSi2ATLSSDqUwxtRz639sHM6Lav4axoJNPCHbY8pvuBKUxgnGRex8LEGM8DeEJwaJCaoy8dBw9Lz49nq5mSsXLeoC4xpTUmp47Bh7GAZtwkaNreCu74m9rcZ8Di4w1cmdsiK1NWuDh9pJ2Bv7u3EfcurHFVqCkT3P86JUbKnXeNxCypfrWsFuYNKYqmjsix82g9vWcGMmAcu5nagxD4iET86iE2tMMfZZ5vqZNvntQswJyQqv2Wc6MTh4jQx1q2qJZCQe4QdEK63meTGbZNNKMctHQbp3gRkZYNrBtxQyVtNLR8xEY8zGp85GeQKbb37vqLXxRpGiigAdMe3XZA4hhYPmAAU5hpSMYaRAjtvvMT3bNiHRACGrfjvSsEG9G2zY5in2YWz5X9zXQLGTYRsQ4uNFkYoQRCBdjNxGv6R58Xq74zCgt19TxYZ87gPWxkXpWwTaHogG1eps8WXt8QzwJ9rVx6Vu9a5GjtcGsQxHovWmYixgBU8X9fPNJ9UQhYyAWbjtRSuVBtDAmoV1gCBEPwnYVP5GCGhCocbwoYhZkZjFZy6ws4uxVLid3FxuvhWvQrVEDYp7WRvGXbNdCbcSXnbeTrPMey1WPaXX'
             )
-            SELECT idx, box_id
-            FROM box_series
-            ON CONFLICT DO NOTHING;
+            select idx, box_id
+            from box_series
+            on conflict do nothing;
     $$;
 
 -- First SigmaUSD bank box
-INSERT INTO ew.sigmausd_bank_boxes(idx, box_id)
-VALUES (0, '96dec7ca2812ee8bb6c0e1969aef383f2ee4f79510c587e83f3ac59a0aff1678');
+insert into ew.sigmausd_bank_boxes(idx, box_id)
+values (0, '96dec7ca2812ee8bb6c0e1969aef383f2ee4f79510c587e83f3ac59a0aff1678');
 
 /*
 SigmaUSD history
@@ -274,7 +274,7 @@ The history is split across three tables:
     - Bank tx history (reserves, circulating supplies, accumulated feed)
       Changes with bank txs only.
 
-    - Cumulative bank tx history (total fees, ...)
+    - cumulative bank tx history (total fees, ...)
 
     - Bank ratio's history (liabilities, equity, SigUSD and SigRSV prices)
       Change with bank txs and oracle postings.
@@ -290,8 +290,8 @@ Ration history has only 1 record per height (only the last tx matters).
 */
 
 -- SigmaUSD bank transactions
-CREATE TABLE ew.sigmausd_history_transactions (
-    bank_box_idx integer PRIMARY KEY REFERENCES ew.sigmausd_bank_boxes(idx),
+create table ew.sigmausd_history_transactions (
+    bank_box_idx integer primary key references ew.sigmausd_bank_boxes(idx),
     height integer,
     reserves numeric,
     circ_sigusd numeric,
@@ -305,8 +305,8 @@ CREATE TABLE ew.sigmausd_history_transactions (
 
 
 -- SigmaUSD bank cumulative stats
-CREATE TABLE ew.sigmausd_history_transactions_cumulative (
-    bank_box_idx integer PRIMARY KEY REFERENCES ew.sigmausd_bank_boxes(idx),
+create table ew.sigmausd_history_transactions_cumulative (
+    bank_box_idx integer primary key references ew.sigmausd_bank_boxes(idx),
     cum_usd_fee numeric,
     cum_rsv_fee numeric,
     cum_usd_erg_in numeric,
@@ -319,8 +319,8 @@ CREATE TABLE ew.sigmausd_history_transactions_cumulative (
 );
 
 
-CREATE TABLE ew.sigmausd_history_ratios (
-    height integer PRIMARY KEY,
+create table ew.sigmausd_history_ratios (
+    height integer primary key,
     oracle_price numeric,
     rsv_price numeric,
     liabs numeric,
@@ -328,84 +328,84 @@ CREATE TABLE ew.sigmausd_history_ratios (
 );
 
 -- Inserts new records in sigmausd history tables
-CREATE PROCEDURE ew.sigmausd_update_history()
-    AS $$
+create procedure ew.sigmausd_update_history()
+    as $$
         --------------------------------
         -- 1. Update transaction history
         --------------------------------
-        WITH last_processed_bank_box AS (
-            -- Limit to new boxes only,
+        with last_processed_bank_box as (
+            -- limit to new boxes only,
             -- but include last processed box so we can derive
             -- changes for first new box as well.
-            SELECT COALESCE(MAX(bank_box_idx), -1) AS idx
-            FROM ew.sigmausd_history_transactions
-        ), bank_boxes AS (
-            SELECT bbs.idx
+            select coalesce(max(bank_box_idx), -1) as idx
+            from ew.sigmausd_history_transactions
+        ), bank_boxes as (
+            select bbs.idx
                 , nos.creation_height
                 , nos.settlement_height
-                , ROUND(nos.value / 1000000000., 9) AS reserves
-                , ROUND((nos.additional_registers #>> '{R4,renderedValue}')::numeric / 100, 2) AS circ_sigusd
-                , (nos.additional_registers #>> '{R5,renderedValue}')::bigint AS circ_sigrsv
-            FROM ew.sigmausd_bank_boxes bbs
-            JOIN node_outputs nos ON nos.box_id = bbs.box_id AND nos.main_chain
+                , ROUND(nos.value / 1000000000., 9) as reserves
+                , ROUND((nos.additional_registers #>> '{R4,renderedValue}')::numeric / 100, 2) as circ_sigusd
+                , (nos.additional_registers #>> '{R5,renderedValue}')::bigint as circ_sigrsv
+            from ew.sigmausd_bank_boxes bbs
+            join node_outputs nos on nos.box_id = bbs.box_id and nos.main_chain
             -- Limit to new boxes only,
             -- but include last processed box so we can derive
             -- changes for first new box as well.
-            WHERE bbs.idx >= (SELECT idx FROM last_processed_bank_box)
-        ), ergusd_oracle_pool_price_boxes AS (
+            where bbs.idx >= (select idx from last_processed_bank_box)
+        ), ergusd_oracle_pool_price_boxes as (
             -- Retrieve oracle price postings (prep boxes).
-            SELECT nos.settlement_height
-                , 1 / (nos.additional_registers #>> '{R4,renderedValue}')::numeric * 1000000000 AS price
-            FROM ew.oracle_pools_ergusd_prep_txs prp
-            JOIN node_outputs nos ON nos.tx_id = prp.tx_id
-            WHERE nos.main_chain AND nos.index = 0
+            select nos.settlement_height
+                , 1 / (nos.additional_registers #>> '{R4,renderedValue}')::numeric * 1000000000 as price
+            from ew.oracle_pools_ergusd_prep_txs prp
+            join node_outputs nos on nos.tx_id = prp.tx_id
+            where nos.main_chain and nos.index = 0
                 -- Oldest oracle box that we need is the one that existed when
                 -- the oldest bank box was created.
-                AND nos.settlement_height >= (SELECT MIN(creation_height) FROM bank_boxes)
-        ), combined_bank_boxes_and_oracle_prices AS (
-            SELECT bbs.*
+                and nos.settlement_height >= (select min(creation_height) from bank_boxes)
+        ), combined_bank_boxes_and_oracle_prices as (
+            select bbs.*
                 -- Highest oracle height under or at bank tx creation height
                 , (
-                    SELECT settlement_height
-                    FROM ergusd_oracle_pool_price_boxes
-                    WHERE settlement_height <= bbs.creation_height
-                    ORDER BY settlement_height DESC LIMIT 1
-                ) AS oracle_height
+                    select settlement_height
+                    from ergusd_oracle_pool_price_boxes
+                    where settlement_height <= bbs.creation_height
+                    order by settlement_height DESC LIMIT 1
+                ) as oracle_height
                 , (
-                    SELECT price
-                    FROM ergusd_oracle_pool_price_boxes
-                    WHERE settlement_height <= bbs.creation_height
-                    ORDER BY settlement_height DESC LIMIT 1
-                ) AS oracle_price
-            FROM bank_boxes bbs
-        ), add_diffs AS (
-            SELECT a.*
-                , a.reserves - b.reserves AS d_erg
-                , a.circ_sigusd - b.circ_sigusd AS d_usd
-                , a.circ_sigrsv - b.circ_sigrsv AS d_rsv
-            FROM combined_bank_boxes_and_oracle_prices a
-            LEFT JOIN combined_bank_boxes_and_oracle_prices b ON b.idx = a.idx - 1
-        ), add_liabs AS (
-            SELECT *
-                , (circ_sigusd - d_usd) / oracle_price AS old_liabs
-                , circ_sigusd / oracle_price AS liabs
-            FROM add_diffs
-        ), add_equity AS (
-            SELECT *
-                , (reserves - d_erg) - old_liabs AS old_equity
-                , reserves - liabs AS equity
-            FROM add_liabs
-        ), add_rsv_price AS (
-            SELECT *
-                , CASE WHEN (circ_sigrsv - d_rsv) > 0 THEN old_equity / (circ_sigrsv - d_rsv) ELSE 0.001 END AS old_rsv_price
-                , CASE WHEN circ_sigrsv > 0 THEN equity / circ_sigrsv ELSE 0.001 END AS rsv_price
-            FROM add_equity
-        ), add_fee AS (
-            SELECT *
-                , d_erg - (d_usd / oracle_price) - (d_rsv * old_rsv_price)  AS fee
-            FROM add_rsv_price
+                    select price
+                    from ergusd_oracle_pool_price_boxes
+                    where settlement_height <= bbs.creation_height
+                    order by settlement_height DESC LIMIT 1
+                ) as oracle_price
+            from bank_boxes bbs
+        ), add_diffs as (
+            select a.*
+                , a.reserves - b.reserves as d_erg
+                , a.circ_sigusd - b.circ_sigusd as d_usd
+                , a.circ_sigrsv - b.circ_sigrsv as d_rsv
+            from combined_bank_boxes_and_oracle_prices a
+            left join combined_bank_boxes_and_oracle_prices b on b.idx = a.idx - 1
+        ), add_liabs as (
+            select *
+                , (circ_sigusd - d_usd) / oracle_price as old_liabs
+                , circ_sigusd / oracle_price as liabs
+            from add_diffs
+        ), add_equity as (
+            select *
+                , (reserves - d_erg) - old_liabs as old_equity
+                , reserves - liabs as equity
+            from add_liabs
+        ), add_rsv_price as (
+            select *
+                , case when (circ_sigrsv - d_rsv) > 0 then old_equity / (circ_sigrsv - d_rsv) else 0.001 end as old_rsv_price
+                , case when circ_sigrsv > 0 then equity / circ_sigrsv else 0.001 end as rsv_price
+            from add_equity
+        ), add_fee as (
+            select *
+                , d_erg - (d_usd / oracle_price) - (d_rsv * old_rsv_price)  as fee
+            from add_rsv_price
         )
-        INSERT INTO ew.sigmausd_history_transactions
+        insert into ew.sigmausd_history_transactions
         (
             bank_box_idx,
             height,
@@ -417,7 +417,7 @@ CREATE PROCEDURE ew.sigmausd_update_history()
             d_rsv,
             fee
         )
-        SELECT idx
+        select idx
             , settlement_height
             , reserves
             , circ_sigusd
@@ -426,50 +426,50 @@ CREATE PROCEDURE ew.sigmausd_update_history()
             , d_usd
             , d_rsv
             , fee
-        FROM add_fee
+        from add_fee
         -- Ignore first idx as already processed
-        ORDER BY idx OFFSET 1;
+        order by idx OFFSET 1;
 
         -------------------------------------------
         -- 2. Update cumulative transaction history
         -------------------------------------------
-        WITH cumsum_for_new_boxes AS (
-            SELECT th.bank_box_idx
+        with cumsum_for_new_boxes as (
+            select th.bank_box_idx
                 , reserves
-                , SUM(fee * (d_usd <> 0)::int) OVER w AS cum_usd_fee
-                , SUM(fee * (d_rsv <> 0)::int) OVER w AS cum_rsv_fee
+                , SUM(fee * (d_usd <> 0)::int) OVER w as cum_usd_fee
+                , SUM(fee * (d_rsv <> 0)::int) OVER w as cum_rsv_fee
 
-                , SUM(GREATEST(0,d_erg) * (d_usd > 0)::int) OVER w AS cum_usd_erg_in
-                , SUM(GREATEST(0,-d_erg) * (d_usd < 0)::int) OVER w AS cum_usd_erg_out
+                , SUM(GREATEST(0,d_erg) * (d_usd > 0)::int) OVER w as cum_usd_erg_in
+                , SUM(GREATEST(0,-d_erg) * (d_usd < 0)::int) OVER w as cum_usd_erg_out
 
-                , SUM(GREATEST(0,d_erg) * (d_rsv > 0)::int) OVER w AS cum_rsv_erg_in
-                , SUM(GREATEST(0,-d_erg) * (d_rsv < 0)::int) OVER w AS cum_rsv_erg_out
-            FROM ew.sigmausd_history_transactions th
-            LEFT JOIN ew.sigmausd_history_transactions_cumulative ch ON ch.bank_box_idx = th.bank_box_idx
-            WHERE ch.bank_box_idx IS NULL
-            WINDOW w AS (ORDER BY th.bank_box_idx)
-        ), adjusted_cumsums AS (
+                , SUM(GREATEST(0,d_erg) * (d_rsv > 0)::int) OVER w as cum_rsv_erg_in
+                , SUM(GREATEST(0,-d_erg) * (d_rsv < 0)::int) OVER w as cum_rsv_erg_out
+            from ew.sigmausd_history_transactions th
+            left join ew.sigmausd_history_transactions_cumulative ch on ch.bank_box_idx = th.bank_box_idx
+            where ch.bank_box_idx IS NULL
+            WINDOW w as (order by th.bank_box_idx)
+        ), adjusted_cumsums as (
             -- Add cumsum form last record.
-            -- Coalesce to 0 for initial run.
-            SELECT nbs.bank_box_idx
+            -- coalesce to 0 for initial run.
+            select nbs.bank_box_idx
                 , nbs.reserves
-                , nbs.cum_usd_fee + COALESCE(lcr.cum_usd_fee, 0) AS cum_usd_fee
-                , nbs.cum_rsv_fee + COALESCE(lcr.cum_rsv_fee, 0) AS cum_rsv_fee
-                , nbs.cum_usd_erg_in + COALESCE(lcr.cum_usd_erg_in, 0) AS cum_usd_erg_in
-                , nbs.cum_usd_erg_out + COALESCE(lcr.cum_usd_erg_out, 0) AS cum_usd_erg_out
-                , nbs.cum_rsv_erg_in + COALESCE(lcr.cum_rsv_erg_in, 0) AS cum_rsv_erg_in
-                , nbs.cum_rsv_erg_out + COALESCE(lcr.cum_rsv_erg_out, 0) AS cum_rsv_erg_out
-            FROM cumsum_for_new_boxes nbs
+                , nbs.cum_usd_fee + coalesce(lcr.cum_usd_fee, 0) as cum_usd_fee
+                , nbs.cum_rsv_fee + coalesce(lcr.cum_rsv_fee, 0) as cum_rsv_fee
+                , nbs.cum_usd_erg_in + coalesce(lcr.cum_usd_erg_in, 0) as cum_usd_erg_in
+                , nbs.cum_usd_erg_out + coalesce(lcr.cum_usd_erg_out, 0) as cum_usd_erg_out
+                , nbs.cum_rsv_erg_in + coalesce(lcr.cum_rsv_erg_in, 0) as cum_rsv_erg_in
+                , nbs.cum_rsv_erg_out + coalesce(lcr.cum_rsv_erg_out, 0) as cum_rsv_erg_out
+            from cumsum_for_new_boxes nbs
             -- Last cumulative record
-            LEFT JOIN (SELECT * FROM ew.sigmausd_history_transactions_cumulative ORDER BY bank_box_idx DESC LIMIT 1) lcr ON TRUE
-        ), add_reserve_fractions AS (
-            SELECT *
-                , GREATEST(0, cum_usd_erg_in - cum_usd_erg_out - cum_usd_fee) / reserves AS f_usd
-                , (cum_rsv_erg_in - cum_rsv_erg_out - cum_rsv_fee + 0.001 + LEAST(0, cum_usd_erg_in - cum_usd_erg_out - cum_usd_fee)) / reserves AS f_rsv
-                , (cum_usd_fee + cum_rsv_fee) / reserves AS f_fee
-            FROM adjusted_cumsums
+            left join (select * from ew.sigmausd_history_transactions_cumulative order by bank_box_idx DESC LIMIT 1) lcr on TRUE
+        ), add_reserve_fractions as (
+            select *
+                , GREATEST(0, cum_usd_erg_in - cum_usd_erg_out - cum_usd_fee) / reserves as f_usd
+                , (cum_rsv_erg_in - cum_rsv_erg_out - cum_rsv_fee + 0.001 + LEAST(0, cum_usd_erg_in - cum_usd_erg_out - cum_usd_fee)) / reserves as f_rsv
+                , (cum_usd_fee + cum_rsv_fee) / reserves as f_fee
+            from adjusted_cumsums
         )
-        INSERT INTO ew.sigmausd_history_transactions_cumulative
+        insert into ew.sigmausd_history_transactions_cumulative
         (
             bank_box_idx,
             cum_usd_fee,
@@ -482,7 +482,7 @@ CREATE PROCEDURE ew.sigmausd_update_history()
             f_rsv,
             f_fee
         )
-        SELECT bank_box_idx
+        select bank_box_idx
             , cum_usd_fee
             , cum_rsv_fee
             , cum_usd_erg_in
@@ -492,69 +492,69 @@ CREATE PROCEDURE ew.sigmausd_update_history()
             , f_usd
             , f_rsv
             , f_fee
-        FROM add_reserve_fractions
-        ORDER BY bank_box_idx;
+        from add_reserve_fractions
+        order by bank_box_idx;
 
         ----------------------------
         -- 3. Update ratio's history
         ----------------------------
-        WITH new_bank_transactions AS (
-            SELECT bank_box_idx,
+        with new_bank_transactions as (
+            select bank_box_idx,
                 height,
                 reserves,
                 circ_sigusd,
                 circ_sigrsv
-            FROM ew.sigmausd_history_transactions
+            from ew.sigmausd_history_transactions
             -- Limit to new heights only,
-            WHERE height > (SELECT COALESCE(MAX(height), -1) FROM ew.sigmausd_history_ratios)
+            where height > (select coalesce(max(height), -1) from ew.sigmausd_history_ratios)
                 -- Only keep last box within each block (txs within a block have same timestamp)
-                AND (height, bank_box_idx) IN (
-                        SELECT height, MAX(bank_box_idx)
-                        FROM ew.sigmausd_history_transactions
-                        WHERE height > (SELECT COALESCE(MAX(height), -1) FROM ew.sigmausd_history_ratios)
-                        GROUP BY 1
+                and (height, bank_box_idx) in (
+                        select height, max(bank_box_idx)
+                        from ew.sigmausd_history_transactions
+                        where height > (select coalesce(max(height), -1) from ew.sigmausd_history_ratios)
+                        group by 1
                     )
-        ), ergusd_oracle_pool_price_boxes AS (
+        ), ergusd_oracle_pool_price_boxes as (
             -- Retrieve oracle price postings (prep boxes).
-            SELECT nos.settlement_height AS height
-                , 1 / (nos.additional_registers #>> '{R4,renderedValue}')::numeric * 1000000000 AS price
-            FROM ew.oracle_pools_ergusd_prep_txs prp
-            JOIN node_outputs nos ON nos.tx_id = prp.tx_id
-            WHERE nos.main_chain AND nos.index = 0
+            select nos.settlement_height as height
+                , 1 / (nos.additional_registers #>> '{R4,renderedValue}')::numeric * 1000000000 as price
+            from ew.oracle_pools_ergusd_prep_txs prp
+            join node_outputs nos on nos.tx_id = prp.tx_id
+            where nos.main_chain and nos.index = 0
                 -- Oldest oracle box that we need is the one that existed when
                 -- the oldest bank box was created.
-                AND nos.settlement_height >= (SELECT COALESCE(MAX(height), -1) FROM ew.sigmausd_history_ratios)
-        ), combined_oracle_prices_and_bank_transactions AS (
-            SELECT op.height
-                , op.price AS oracle_price
+                and nos.settlement_height >= (select coalesce(max(height), -1) from ew.sigmausd_history_ratios)
+        ), combined_oracle_prices_and_bank_transactions as (
+            select op.height
+                , op.price as oracle_price
                 , bt.reserves
                 , bt.circ_sigusd
                 , bt.circ_sigrsv
-            FROM ergusd_oracle_pool_price_boxes op
-            -- Join each oracle box to latest bank tx at time of oracle box.
+            from ergusd_oracle_pool_price_boxes op
+            -- join each oracle box to latest bank tx at time of oracle box.
             -- This will also discard oracle bank boxes prior to first bank tx.
-            JOIN new_bank_transactions bt ON bt.height <= op.height
-            WHERE (op.height, bt.height) IN (
-                SELECT op.height
-                    , MAX(bt.height)
-                FROM ergusd_oracle_pool_price_boxes op
-                LEFT JOIN new_bank_transactions bt ON bt.height <= op.height
-                GROUP BY 1
+            join new_bank_transactions bt on bt.height <= op.height
+            where (op.height, bt.height) in (
+                select op.height
+                    , max(bt.height)
+                from ergusd_oracle_pool_price_boxes op
+                left join new_bank_transactions bt on bt.height <= op.height
+                group by 1
             )
-        ), add_liabs AS (
-            SELECT *
-                , circ_sigusd / oracle_price AS liabs
-            FROM combined_oracle_prices_and_bank_transactions
-        ), add_equity AS (
-            SELECT *
-                , reserves - liabs AS equity
-            FROM add_liabs
-        ), add_rsv_price AS (
-            SELECT *
-                , CASE WHEN circ_sigrsv > 0 THEN equity / circ_sigrsv ELSE 0.001 END AS rsv_price
-            FROM add_equity
+        ), add_liabs as (
+            select *
+                , circ_sigusd / oracle_price as liabs
+            from combined_oracle_prices_and_bank_transactions
+        ), add_equity as (
+            select *
+                , reserves - liabs as equity
+            from add_liabs
+        ), add_rsv_price as (
+            select *
+                , case when circ_sigrsv > 0 then equity / circ_sigrsv else 0.001 end as rsv_price
+            from add_equity
         )
-        INSERT INTO ew.sigmausd_history_ratios
+        insert into ew.sigmausd_history_ratios
         (
             height,
             oracle_price,
@@ -562,16 +562,16 @@ CREATE PROCEDURE ew.sigmausd_update_history()
             liabs,
             equity
         )
-        SELECT height
+        select height
             , oracle_price
             , rsv_price
             , liabs
             , equity
-        FROM add_rsv_price
-        ORDER BY height;
+        from add_rsv_price
+        order by height;
 
     $$
-    LANGUAGE SQL;
+    language sql;
 	
 	
 -------------------------------------------------------------------------------
@@ -582,17 +582,17 @@ create table ew.sync_status (
 );
 insert into ew.sync_status (last_sync_height) values (0);
 
-CREATE FUNCTION ew.notify_new_header() RETURNS TRIGGER AS
+create function ew.notify_new_header() returns trigger as
 	$$
-	BEGIN
-	PERFORM pg_notify('ergowatch', (SELECT height::text FROM new_table));
-	RETURN NULL;
-	END;
-	$$ LANGUAGE PLPGSQL;
+	begin
+	perform pg_notify('ergowatch', (select height::text from new_table));
+	return null;
+	end;
+	$$ language plpgsql;
 	
-CREATE TRIGGER notify_node_headers_insert
-    AFTER INSERT ON node_headers
-    REFERENCING NEW TABLE AS new_table
+create trigger notify_node_headers_insert
+    AFTER INSERT on node_headers
+    REFERENCING NEW TABLE as new_table
     FOR EACH STATEMENT
     EXECUTE FUNCTION ew.notify_new_header();
 
