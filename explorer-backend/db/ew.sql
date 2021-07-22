@@ -178,10 +178,15 @@ create materialized view ew.oracle_pools_ergusd_recent_epoch_durations_mv as
 	with no data;
 	
 
--- to enable concurrent refreshes
+-- Enable concurrent refreshes
 create unique index on ew.oracle_pools_ergusd_oracle_stats_mv(oracle_id);
 create unique index on ew.oracle_pools_ergusd_latest_posting_mv(height);
 create unique index on ew.oracle_pools_ergusd_recent_epoch_durations_mv(height);
+
+-- Initialize concurrent mv's (first call cannot be concurrentlty)
+refresh materialized view ew.oracle_pools_ergusd_latest_posting_mv;
+refresh materialized view ew.oracle_pools_ergusd_recent_epoch_durations_mv;
+refresh materialized view ew.oracle_pools_ergusd_oracle_stats_mv;
 
 
 insert into ew.oracle_pools
@@ -498,78 +503,111 @@ create procedure ew.sigmausd_update_history()
         ----------------------------
         -- 3. Update ratio's history
         ----------------------------
+        -- For this one we first need to collect all new oracle price heights as
+        -- well as any new bank tx heights.
+        -- Then add oracle price and bank state for each new height.
         with new_bank_transactions as (
-            select bank_box_idx,
-                height,
-                reserves,
-                circ_sigusd,
-                circ_sigrsv
-            from ew.sigmausd_history_transactions
-            -- Limit to new heights only,
-            where height > (select coalesce(max(height), -1) from ew.sigmausd_history_ratios)
-                -- Only keep last box within each block (txs within a block have same timestamp)
-                and (height, bank_box_idx) in (
-                        select height, max(bank_box_idx)
-                        from ew.sigmausd_history_transactions
-                        where height > (select coalesce(max(height), -1) from ew.sigmausd_history_ratios)
-                        group by 1
-                    )
-        ), ergusd_oracle_pool_price_boxes as (
-            -- Retrieve oracle price postings (prep boxes).
-            select nos.settlement_height as height
-                , 1 / (nos.additional_registers #>> '{R4,renderedValue}')::numeric * 1000000000 as price
-            from ew.oracle_pools_ergusd_prep_txs prp
-            join node_outputs nos on nos.tx_id = prp.tx_id
-            where nos.main_chain and nos.index = 0
-                -- Oldest oracle box that we need is the one that existed when
-                -- the oldest bank box was created.
-                and nos.settlement_height >= (select coalesce(max(height), -1) from ew.sigmausd_history_ratios)
-        ), combined_oracle_prices_and_bank_transactions as (
-            select op.height
-                , op.price as oracle_price
-                , bt.reserves
-                , bt.circ_sigusd
-                , bt.circ_sigrsv
-            from ergusd_oracle_pool_price_boxes op
-            -- join each oracle box to latest bank tx at time of oracle box.
-            -- This will also discard oracle bank boxes prior to first bank tx.
-            join new_bank_transactions bt on bt.height <= op.height
-            where (op.height, bt.height) in (
-                select op.height
-                    , max(bt.height)
-                from ergusd_oracle_pool_price_boxes op
-                left join new_bank_transactions bt on bt.height <= op.height
-                group by 1
-            )
-        ), add_liabs as (
-            select *
-                , circ_sigusd / oracle_price as liabs
-            from combined_oracle_prices_and_bank_transactions
-        ), add_equity as (
-            select *
-                , reserves - liabs as equity
-            from add_liabs
-        ), add_rsv_price as (
-            select *
-                , case when circ_sigrsv > 0 then equity / circ_sigrsv else 0.001 end as rsv_price
-            from add_equity
-        )
-        insert into ew.sigmausd_history_ratios
-        (
-            height,
-            oracle_price,
-            rsv_price,
-            liabs,
-            equity
-        )
-        select height
-            , oracle_price
-            , rsv_price
-            , liabs
-            , equity
-        from add_rsv_price
-        order by height;
-
+			select bank_box_idx
+				, height
+			from ew.sigmausd_history_transactions
+			-- Limit to new heights only,
+			where height > (select coalesce(max(height), -1) from ew.sigmausd_history_ratios)
+				-- Only keep last box within each block (txs within a block have same timestamp)
+				and (height, bank_box_idx) in (
+						select height, max(bank_box_idx)
+						from ew.sigmausd_history_transactions
+						where height > (select coalesce(max(height), -1) from ew.sigmausd_history_ratios)
+						group by 1
+					)
+		), new_ergusd_oracle_pool_price_boxes as (
+			-- Retrieve oracle price postings (prep boxes).
+			select inclusion_height as height
+			from ew.oracle_pools_ergusd_prep_txs
+			-- Limit to new heights only
+			where inclusion_height > (select coalesce(max(height), -1) from ew.sigmausd_history_ratios)
+		), new_heights_combined as (
+			select coalesce(op.height, bt.height) as height
+			from new_ergusd_oracle_pool_price_boxes op
+			full outer join new_bank_transactions bt on bt.height = op.height
+		), add_oracle_prices as (
+			-- For each height, get the price posted at that height,
+			-- or the first one before that.
+			select hs.height
+				, 1. / op.datapoint * 1000000000 as oracle_price
+		     	-- , op.inclusion_height
+			from new_heights_combined hs
+			left join ew.oracle_pools_ergusd_prep_txs op on op.inclusion_height <= hs.height
+			where (hs.height, op.inclusion_height) in (
+					select hs.height
+						, max(op.inclusion_height)
+					from new_heights_combined hs
+					left join ew.oracle_pools_ergusd_prep_txs op on op.inclusion_height <= hs.height
+					group by 1
+				)		
+		), add_bank_state as (
+			-- For each height, get the bank state from bank tx at that height,
+			-- or the first one before that.
+			select wrk.height
+				, wrk.oracle_price
+				, htx.reserves
+				, htx.circ_sigusd
+				, htx.circ_sigrsv
+		     	-- , wrk.inclusion_height, htx.height, htx.bank_box_idx
+			from add_oracle_prices wrk
+			left join ew.sigmausd_history_transactions htx on htx.height <= wrk.height
+			where (wrk.height, htx.height) in (
+					select wrk.height, max(htx.height)
+					from add_oracle_prices wrk
+					left join ew.sigmausd_history_transactions htx on htx.height <= wrk.height
+					group by 1
+				)
+				-- Limit to bank txs that we need.
+				-- Oldest bank txs needed were in last block of tx history prior to last update.
+				-- To find it we intersect the (now updated) tx history with the (not yet updated)
+				-- ratio history to find the latest common block.
+				and htx.height >= (
+					select coalesce(t.height, 0)
+					from ew.sigmausd_history_transactions t
+					join ew.sigmausd_history_ratios r on r.height = t.height
+					-- add 0 in case ratio history is empty
+					union select 0 as height
+					order by 1 desc
+					limit 1
+				)
+				-- Only keep last box within each block (txs within a block have same timestamp)
+				and (htx.height, htx.bank_box_idx) in (
+					select height, max(bank_box_idx)
+					from ew.sigmausd_history_transactions
+					group by 1
+				)
+		), add_liabs as (
+			select *
+				, circ_sigusd / oracle_price as liabs
+			from add_bank_state
+		), add_equity as (
+			select *
+				, reserves - liabs as equity
+			from add_liabs
+		), add_rsv_price as (
+			select *
+				, case when circ_sigrsv > 0 then equity / circ_sigrsv else 0.001 end as rsv_price
+			from add_equity
+		)
+		insert into ew.sigmausd_history_ratios
+		(
+			height,
+			oracle_price,
+			rsv_price,
+			liabs,
+			equity
+		)
+		select height
+			, oracle_price
+			, rsv_price
+			, liabs
+			, equity
+		from add_rsv_price
+		order by height;
     $$
     language sql;
 	
@@ -595,6 +633,7 @@ create trigger notify_node_headers_insert
     REFERENCING NEW TABLE as new_table
     FOR EACH STATEMENT
     EXECUTE FUNCTION ew.notify_new_header();
+
 
 -- drop procedure if exists ew.sync;
 create procedure ew.sync(in _height integer) as
