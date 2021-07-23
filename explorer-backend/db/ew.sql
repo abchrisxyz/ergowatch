@@ -305,8 +305,9 @@ create table ew.sigmausd_history_transactions (
     d_usd numeric,
     d_rsv bigint,
     fee numeric,
-    CHECK(fee >= 0)
+    check(fee >= 0)
 );
+create index on ew.sigmausd_history_transactions(height);
 
 
 -- SigmaUSD bank cumulative stats
