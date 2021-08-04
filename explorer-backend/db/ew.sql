@@ -361,10 +361,11 @@ create procedure ew.sigmausd_update_history()
                 , 1 / (nos.additional_registers #>> '{R4,renderedValue}')::numeric * 1000000000 as price
             from ew.oracle_pools_ergusd_prep_txs prp
             join node_outputs nos on nos.tx_id = prp.tx_id
-            where nos.main_chain and nos.index = 0
+			join node_transactions nts on nts.id = prp.tx_id
+            where nos.main_chain and nts.main_chain and nos.index = 0
                 -- Oldest oracle box that we need is the one that existed when
                 -- the oldest bank box was created.
-                and nos.settlement_height >= (select min(creation_height) from bank_boxes)
+                and nts.inclusion_height >= (select min(creation_height) from bank_boxes)
         ), combined_bank_boxes_and_oracle_prices as (
             select bbs.*
                 -- Highest oracle height under or at bank tx creation height
