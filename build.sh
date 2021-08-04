@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-EXPLORER_VERSION=8.1.0
+EXPLORER_VERSION=9.3.3-HF
 
 
 echo "Fetching explorer $EXPLORER_VERSION source"
