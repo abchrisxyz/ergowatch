@@ -340,9 +340,6 @@ create procedure ew.sigmausd_update_history()
         -- 1. Update transaction history
         --------------------------------
         with last_processed_bank_box as (
-            -- limit to new boxes only,
-            -- but include last processed box so we can derive
-            -- changes for first new box as well.
             select coalesce(max(bank_box_idx), -1) as idx
             from ew.sigmausd_history_transactions
         ), bank_boxes as (
@@ -433,7 +430,7 @@ create procedure ew.sigmausd_update_history()
             , d_rsv
             , fee
         from add_fee
-        -- Ignore first idx as already processed
+        -- Ignore first idx as already processed or initial bank box
         order by idx offset 1;
 
         -------------------------------------------
