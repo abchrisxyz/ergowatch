@@ -1,5 +1,6 @@
 import asyncio
 import pytest
+import datetime
 
 
 from ..main import db
@@ -52,3 +53,32 @@ async def test_get_oracle_pools_ergusd_oracle_stats():
     assert "last_commit" in data[0]
     assert "last_accepted" in data[0]
     assert "last_collection" in data[0]
+
+
+@pytest.mark.asyncio
+async def test_get_sigmausd_state():
+    d = await db.get_sigmausd_state()
+    assert len(d) == 4
+    assert d["reserves"] > 0
+    assert d["circ_sigusd"] > 0
+    assert d["circ_sigrsv"] > 0
+    assert d["peg_rate_nano"] > 0
+
+
+@pytest.mark.asyncio
+async def test_get_sigmausd_sigrsv_ohlc_d():
+    data = await db.get_sigmausd_sigrsv_ohlc_d()
+    assert len(data) > 125
+    assert data[0]["time"] == datetime.date(2021, 3, 26)
+    assert data[0]["open"] > 0
+    assert data[0]["high"] > 0
+    assert data[0]["low"] > 0
+    assert data[0]["close"] > 0
+
+
+@pytest.mark.asyncio
+async def test_get_sigmausd_net_sigusd_flow():
+    data = await db.get_sigmausd_net_sigusd_flow()
+    assert len(data) > 700
+    assert data[0]["t"] == 1616753733769
+    assert data[0]["v"] == 0

@@ -64,3 +64,27 @@ async def get_oracle_pools_ergusd_recent_epoch_durations():
 @app.get("/oracle-pools/ergusd/oracle-stats")
 async def get_oracle_pools_ergusd_oracle_stats():
     return await db.get_oracle_pools_ergusd_oracle_stats()
+
+
+@app.get("/sigmausd/state")
+async def get_sigmausd_state():
+    return await db.get_sigmausd_state()
+
+
+@app.get("/sigmausd/ohlc/sigrsv/1d")
+async def get_sigmausd_sigrsv_ohlc_d():
+    return await db.get_sigmausd_sigrsv_ohlc_d()
+
+@app.get("/sigmausd/net-sigusd-flow")
+async def get_sigmausd_net_sigusd_flow():
+    return await db.get_sigmausd_net_sigusd_flow()
+
+
+@app.get("/sigmausd/net-sigrsv-flow")
+async def get_sigmausd_net_sigrsv_flow():
+    return await db.get_sigmausd_net_sigrsv_flow()
+
+
+@app.get("/sigmausd/liabilities")
+async def get_sigmausd_liabilities():
+    return await db.get_sigmausd_liabilities()
