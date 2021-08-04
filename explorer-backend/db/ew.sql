@@ -466,7 +466,7 @@ create procedure ew.sigmausd_update_history()
             from cumsum_for_new_boxes nbs
             -- Last cumulative record
             left join (select * from ew.sigmausd_history_transactions_cumulative order by bank_box_idx DESC LIMIT 1) lcr on TRUE
-        ), add_reserve_fractions as (
+		), add_reserve_fractions as (
             select *
                 , greatest(0, cum_usd_erg_in - cum_usd_erg_out - cum_usd_fee) / reserves as f_usd
                 , (cum_rsv_erg_in - cum_rsv_erg_out - cum_rsv_fee + 0.001 + least(0, cum_usd_erg_in - cum_usd_erg_out - cum_usd_fee)) / reserves as f_rsv
@@ -610,6 +610,111 @@ create procedure ew.sigmausd_update_history()
     $$
     language sql;
 	
+
+create materialized view ew.sigmausd_sigusd_net_flow_mv as
+	with net_sigusd_changes as (
+		select a.bank_box_idx
+			, a.cum_usd_erg_in - a.cum_usd_erg_out as net_usd_erg
+		from ew.sigmausd_history_transactions_cumulative a
+		left join ew.sigmausd_history_transactions_cumulative b
+			on a.bank_box_idx = b.bank_box_idx + 1
+		-- limit to bank boxes whith sigusd changes
+		where a.cum_usd_erg_in <> b.cum_usd_erg_in
+			or a.cum_usd_erg_out <> b.cum_usd_erg_out
+			or b.bank_box_idx is null
+		order by 1 desc
+	)
+	select ch.bank_box_idx as idx
+		, nh.timestamp
+		, ch.net_usd_erg
+	from net_sigusd_changes ch 
+	join ew.sigmausd_history_transactions tx on tx.bank_box_idx = ch.bank_box_idx
+	join node_headers nh on nh.height = tx.height
+	where nh.main_chain
+	order by tx.height
+	with no data;
+
+
+-- drop materialized view ew.sigmausd_sigrsv_net_flow_mv;
+create materialized view ew.sigmausd_sigrsv_net_flow_mv as
+	with net_sigrsv_changes as (
+		select a.bank_box_idx
+			, a.cum_rsv_erg_in - a.cum_rsv_erg_out as net_rsv_erg
+		from ew.sigmausd_history_transactions_cumulative a
+		left join ew.sigmausd_history_transactions_cumulative b
+			on a.bank_box_idx = b.bank_box_idx + 1
+		-- limit to bank boxes whith sigusd changes
+		where a.cum_rsv_erg_in <> b.cum_rsv_erg_in
+			or a.cum_rsv_erg_out <> b.cum_rsv_erg_out
+			or b.bank_box_idx is null
+		order by 1 desc
+	)
+	select ch.bank_box_idx as idx
+		, nh.timestamp
+		, ch.net_rsv_erg
+	from net_sigrsv_changes ch 
+	join ew.sigmausd_history_transactions tx on tx.bank_box_idx = ch.bank_box_idx
+	join node_headers nh on nh.height = tx.height
+	where nh.main_chain
+	order by tx.height
+	with no data;
+	
+	
+create materialized view ew.sigmausd_liabs_mv as
+	with sequenced as (
+		select row_number() over(order by height) as idx
+			, height
+			, liabs
+		from ew.sigmausd_history_ratios
+	), changes as (
+		select a.height
+			, a.liabs
+		from sequenced a
+		left join sequenced b
+			on a.idx = b.idx + 1
+		where a.liabs <> b.liabs
+			or b.liabs is null
+	)
+	select nh.timestamp
+		, ch.liabs
+	from changes ch
+	join node_headers nh on nh.height = ch.height
+	order by 1
+	with no data;
+	
+	
+create materialized view ew.sigmausd_sigrsv_ohlc_d_mv as
+	select date
+		, max(open) as o
+		, max(rsv_price) as h
+		, min(rsv_price) as l
+		, max(close) as c
+	from (
+		select to_timestamp(tx.timestamp / 1000)::date as date
+			, hr.rsv_price
+			, first_value(hr.rsv_price) over (partition by to_timestamp(tx.timestamp / 1000)::date order by tx.timestamp) as open
+			, first_value(hr.rsv_price) over (partition by to_timestamp(tx.timestamp / 1000)::date order by tx.timestamp desc) as close
+		from ew.sigmausd_history_ratios hr
+		join node_transactions tx on tx.inclusion_height = hr.height
+	) sq
+	group by 1
+	order by 1
+	with no data;
+
+
+-- Enable concurrent refreshes
+create unique index on ew.sigmausd_sigusd_net_flow_mv(idx);
+create unique index on ew.sigmausd_sigrsv_net_flow_mv(idx);
+create unique index on ew.sigmausd_liabs_mv(timestamp);
+create unique index on ew.sigmausd_sigrsv_ohlc_d_mv(date);
+
+
+-- Initialize concurrent mv's (first call cannot be concurrentlty)
+refresh materialized view ew.sigmausd_sigusd_net_flow_mv;
+refresh materialized view ew.sigmausd_sigrsv_net_flow_mv;
+refresh materialized view ew.sigmausd_liabs_mv;
+refresh materialized view ew.sigmausd_sigrsv_ohlc_d_mv;
+
 	
 -------------------------------------------------------------------------------
 -- Sync
@@ -647,6 +752,10 @@ create procedure ew.sync(in _height integer) as
 	-- SigmaUSD
 	call ew.sigmausd_update_bank_boxes();
 	call ew.sigmausd_update_history();
+	refresh materialized view concurrently ew.sigmausd_sigusd_net_flow_mv;
+	refresh materialized view concurrently ew.sigmausd_sigrsv_net_flow_mv;
+	refresh materialized view concurrently ew.sigmausd_liabs_mv;
+	refresh materialized view concurrently ew.sigmausd_sigrsv_ohlc_d_mv;
 	
 	-- Sync Status
 	update ew.sync_status
