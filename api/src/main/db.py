@@ -80,24 +80,23 @@ async def get_sigmausd_state():
     Latest SigmaUSD bank state
     """
     qry = """
-        with oracle as (
-            select datapoint as peg_rate_nano
-            from ew.oracle_pools_ergusd_prep_txs
-            order by inclusion_height desc
-            limit 1
-        ), bank as (
-            select nos.value as reserves
-                , (nos.additional_registers #>> '{R4,renderedValue}')::numeric as circ_sigusd
-                , (nos.additional_registers #>> '{R5,renderedValue}')::bigint as circ_sigrsv
-            from ew.sigmausd_bank_boxes bbx
-            join node_outputs nos on nos.box_id = bbx.box_id
-            order by bbx.idx desc limit 1
+        with state as (
+            select  (1 / oracle_price * 1000000000)::integer as peg_rate_nano
+                , (reserves * 1000000000)::bigint as reserves
+                , (circ_sigusd * 100)::integer as circ_sigusd
+                , circ_sigrsv
+                , net_sc_erg
+                , net_rc_erg
+            from ew.sigmausd_series_history_mv
+            order by timestamp desc limit 1
+        ), cumulative as (
+            select cum_usd_erg_in as cum_sc_erg_in
+                , cum_rsv_erg_in as cum_rc_erg_in
+            from ew.sigmausd_history_transactions_cumulative
+            order by bank_box_idx desc limit 1
         )
-        select reserves
-            , circ_sigusd
-            , circ_sigrsv
-            , peg_rate_nano
-        from bank, oracle;
+        select *
+        from state, cumulative;
     """
     async with CONNECTION_POOL.acquire() as conn:
         row = await conn.fetchrow(qry)
@@ -122,40 +121,36 @@ async def get_sigmausd_sigrsv_ohlc_d():
     return [dict(r) for r in rows]
 
 
-async def get_sigmausd_net_sigusd_flow():
+async def get_sigmausd_history(days: int):
     """
-    Net ERG flow resulting from SigUSD transactions
+    Last *days* of bank history.
     """
-    qry = """
-        select timestamp as t, net_usd_erg as v
-        from ew.sigmausd_sigusd_net_flow_mv;
-    """
-    async with CONNECTION_POOL.acquire() as conn:
-        rows = await conn.fetch(qry)
-    return [dict(r) for r in rows]
-
-
-async def get_sigmausd_net_sigrsv_flow():
-    """
-    Net ERG flow resulting from SigRSV transactions
-    """
-    qry = """
-        select timestamp as t, net_rsv_erg as v
-        from ew.sigmausd_sigrsv_net_flow_mv;
+    qry = f"""
+        select array_agg(timestamp order by timestamp) as timestamps
+            , array_agg(oracle_price order by timestamp) as oracle_prices
+            , array_agg(reserves order by timestamp) as reserves
+            , array_agg(circ_sigusd order by timestamp) as circ_sigusd
+            , array_agg(circ_sigrsv order by timestamp) as circ_sigrsv
+        from ew.sigmausd_series_history_mv
+        where timestamp >= (extract(epoch from now() - '{days} days'::interval))::bigint;
     """
     async with CONNECTION_POOL.acquire() as conn:
-        rows = await conn.fetch(qry)
-    return [dict(r) for r in rows]
+        row = await conn.fetchrow(qry)
+    return dict(row)
 
 
-async def get_sigmausd_liabilities():
+async def get_sigmausd_history_full():
     """
-    SigmaUSD liabilities over time.
+    Full bank history.
     """
-    qry = """
-        select timestamp as t, liabs as v
-        from ew.sigmausd_liabs_mv;
+    qry = f"""
+        select array_agg(timestamp order by timestamp) as timestamps
+            , array_agg(oracle_price order by timestamp) as oracle_prices
+            , array_agg(reserves order by timestamp) as reserves
+            , array_agg(circ_sigusd order by timestamp) as circ_sigusd
+            , array_agg(circ_sigrsv order by timestamp) as circ_sigrsv
+        from ew.sigmausd_series_history_mv;
     """
     async with CONNECTION_POOL.acquire() as conn:
-        rows = await conn.fetch(qry)
-    return [dict(r) for r in rows]
+        row = await conn.fetchrow(qry)
+    return dict(row)

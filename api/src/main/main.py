@@ -14,9 +14,8 @@ app = FastAPI()
 if "DEVMODE" in os.environ:
     print("DEVMODE - Setting CORS")
     origins = [
-        "http://localhost",
-        "http://localhost:8000",
         "http://localhost:3000",
+        "http://192.168.1.26:3000",
     ]
 
     app.add_middleware(
@@ -75,16 +74,27 @@ async def get_sigmausd_state():
 async def get_sigmausd_sigrsv_ohlc_d():
     return await db.get_sigmausd_sigrsv_ohlc_d()
 
-@app.get("/sigmausd/net-sigusd-flow")
-async def get_sigmausd_net_sigusd_flow():
-    return await db.get_sigmausd_net_sigusd_flow()
+
+@app.get("/sigmausd/history/1d")
+async def get_sigmausd_series_liabs_1d():
+    return await db.get_sigmausd_history(1)
 
 
-@app.get("/sigmausd/net-sigrsv-flow")
-async def get_sigmausd_net_sigrsv_flow():
-    return await db.get_sigmausd_net_sigrsv_flow()
+@app.get("/sigmausd/history/5d")
+async def get_sigmausd_series_liabs_5d():
+    return await db.get_sigmausd_history(5)
 
 
-@app.get("/sigmausd/liabilities")
-async def get_sigmausd_liabilities():
-    return await db.get_sigmausd_liabilities()
+@app.get("/sigmausd/history/30d")
+async def get_sigmausd_history_30d():
+    return await db.get_sigmausd_history(30)
+
+
+@app.get("/sigmausd/history/90d")
+async def get_sigmausd_history_90d():
+    return await db.get_sigmausd_history(90)
+
+
+@app.get("/sigmausd/history/all")
+async def get_sigmausd_history_all():
+    return await db.get_sigmausd_history_full()

@@ -77,8 +77,8 @@ async def test_get_sigmausd_sigrsv_ohlc_d():
 
 
 @pytest.mark.asyncio
-async def test_get_sigmausd_net_sigusd_flow():
-    data = await db.get_sigmausd_net_sigusd_flow()
-    assert len(data) > 700
-    assert data[0]["t"] == 1616753733769
-    assert data[0]["v"] == 0
+async def test_get_sigmausd_history_5d():
+    data = await db.get_sigmausd_history(days=5)
+    assert len(data) == 5
+    assert data["timestamps"][0] >= 1628393682
+
