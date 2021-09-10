@@ -31,6 +31,7 @@ Q = asyncio.Queue()
 
 # Using a queue as some sort of mutex for our single db connection
 C = asyncio.Queue()
+DB_LOCK = asyncio.Lock()
 
 
 def handle_notification(conn, pid, channel, payload):
@@ -65,21 +66,44 @@ def process_queue():
     asyncio.create_task(refresh())
 
 
+async def make_connection():
+    async with DB_LOCK:
+        assert C.empty()
+        logger.info(f"Connecting to database: {DB_USER}@{DB_HOST}/{DB_NAME}")
+        conn = await asyncpg.connect(DBSTR)
+        channel = "ergowatch"
+        logger.info(f"Adding listener for channel '{channel}'")
+        await conn.add_listener(channel, handle_notification)
+        C.put_nowait(conn)
+
+
+async def reset_connection():
+    async with DB_LOCK:
+        logger.info("Resetting db connection")
+        assert not C.empty()
+        conn = C.get_nowait()
+        await conn.close()
+    await make_connection()
+
+
 async def main():
-    logger.info(f"Connecting to database: {DB_USER}@{DB_HOST}/{DB_NAME}")
-    conn = await asyncpg.connect(DBSTR)
-
-    channel = "ergowatch"
-    logger.info(f"Adding listener on channel '{channel}'")
-    await conn.add_listener(channel, handle_notification)
-
-    C.put_nowait(conn)
-
+    await make_connection()
+    connection_usage_counter = 0
     while True:
+        # There is at least one new height to process
+        # and db is done processing previous ones.
         if not Q.empty() and not C.empty():
-            # There is at least one new height to process
-            # and db is done processing previous ones.
-            process_queue()
+            # Using same connection forever seems to leak memory.
+            # Reset connection after x process_queue calls.
+            connection_usage_counter += 1
+            if connection_usage_counter >= 100:
+                await reset_connection()
+                connection_usage_counter = 0
+
+            # Process only once connection reset is completed
+            async with DB_LOCK:
+                process_queue()
+
         await asyncio.sleep(10)
 
     logger.info("Closing db connection")
