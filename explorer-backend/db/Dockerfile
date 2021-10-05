@@ -1,6 +1,6 @@
 FROM postgres:13
 
-ARG SCHEMA=https://raw.githubusercontent.com/ergoplatform/explorer-backend/9.3.3-HF/modules/explorer-core/src/main/resources/db/V9__Schema.sql
+ARG SCHEMA=https://raw.githubusercontent.com/ergoplatform/explorer-backend/9.4.3/modules/explorer-core/src/main/resources/db/V9__Schema.sql
 
 ENV POSTGRES_DB ergo
 ENV POSTGRES_USER ergo

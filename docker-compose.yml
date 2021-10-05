@@ -46,7 +46,7 @@ services:
   # Ergo explorer backend chain grabber 
   grabber:
     build:
-      context: ./explorer-backend/9.3.3-HF
+      context: ./explorer-backend/9.4.3
       dockerfile: chain-grabber.Dockerfile
     volumes:
       - ./explorer-backend/conf/explorer-backend.conf:/explorer-backend.conf:ro
