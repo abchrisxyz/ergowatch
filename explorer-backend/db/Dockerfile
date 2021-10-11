@@ -1,4 +1,4 @@
-FROM postgres:13
+FROM postgres:14
 
 ARG SCHEMA=https://raw.githubusercontent.com/ergoplatform/explorer-backend/9.4.3/modules/explorer-core/src/main/resources/db/V9__Schema.sql
 

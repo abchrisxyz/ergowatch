@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  # Temporary postgres container to initialise the new cluster
+  # before running pg_upgrade
+  db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ergo
+    env_file:
+      # Defines POSTGRES_PASSWORD
+      - ./explorer-backend/db/db.secret
+    volumes:
+      - /var/lib/ergowatch_pg/14/data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5434:5432"
+    

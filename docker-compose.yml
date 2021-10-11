@@ -3,8 +3,6 @@ version: "3.8"
 volumes:
   ew_node:
     external: true
-  ew_postgresql:
-    external: true
 
 services:
   # Ergo blockchain node
@@ -34,7 +32,7 @@ services:
       # Defines POSTGRES_PASSWORD
       - ./explorer-backend/db/db.secret
     volumes:
-      - ew_postgresql:/var/lib/postgresql/data
+      - /var/lib/ergowatch_pg/14/data:/var/lib/postgresql/data
     ports:
       - "127.0.0.1:5433:5432"
     restart: unless-stopped
