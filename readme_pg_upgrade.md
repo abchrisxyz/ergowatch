@@ -34,12 +34,12 @@ Failure, exiting.
 
 Start the db service defined in `docker-compose-pg-upgrade.yml` and then stop it again.
 
-This is just to ensure the new db has been initialized with whatever users where using.
+This is just to ensure the new db has been initialized with whatever users we're using.
 
 ```
 docker-compose -f docker-compose-pg-upgrade.yml up -d --build
 docker-compose -f docker-compose-pg-upgrade.yml stop db
-docker-compose -f docker-compose-pg-upgrade.yml stop down
+docker-compose -f docker-compose-pg-upgrade.yml down
 ```
 
 #### 4. Run pg_upgrade
