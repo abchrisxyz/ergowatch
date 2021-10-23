@@ -34,7 +34,7 @@ async def get_oracle_pools_ergusd_latest():
         select height
             , price
             , datapoints
-        from ew.oracle_pools_ergusd_latest_posting_mv;
+        from orp.ergusd_latest_posting_mv;
     """
     async with CONNECTION_POOL.acquire() as conn:
         row = await conn.fetchrow(qry)
@@ -45,7 +45,7 @@ async def get_oracle_pools_ergusd_recent_epoch_durations():
     qry = """
         select height as h
             , blocks as n
-        from ew.oracle_pools_ergusd_recent_epoch_durations_mv
+        from orp.ergusd_recent_epoch_durations_mv
         order by 1;
     """
     async with CONNECTION_POOL.acquire() as conn:
@@ -67,7 +67,7 @@ async def get_oracle_pools_ergusd_oracle_stats():
             , last_commit
             , last_accepted
             , last_collection
-        from ew.oracle_pools_ergusd_oracle_stats_mv
+        from orp.ergusd_oracle_stats_mv
         order by 1;
     """
     async with CONNECTION_POOL.acquire() as conn:
@@ -87,15 +87,22 @@ async def get_sigmausd_state():
                 , circ_sigrsv
                 , net_sc_erg
                 , net_rc_erg
-            from ew.sigmausd_series_history_mv
+            from sig.series_history_mv
             order by timestamp desc limit 1
         ), cumulative as (
             select cum_usd_erg_in as cum_sc_erg_in
                 , cum_rsv_erg_in as cum_rc_erg_in
-            from ew.sigmausd_history_transactions_cumulative
+            from sig.history_transactions_cumulative
             order by bank_box_idx desc limit 1
         )
-        select *
+        select peg_rate_nano
+            , reserves
+            , circ_sigusd
+            , circ_sigrsv
+            , net_sc_erg
+            , net_rc_erg
+            , cum_sc_erg_in
+            , cum_rc_erg_in
         from state, cumulative;
     """
     async with CONNECTION_POOL.acquire() as conn:
@@ -113,7 +120,7 @@ async def get_sigmausd_sigrsv_ohlc_d():
             , h as high
             , l as low
             , c as close
-        from ew.sigmausd_sigrsv_ohlc_d_mv
+        from sig.sigrsv_ohlc_d_mv
         order by 1;
     """
     async with CONNECTION_POOL.acquire() as conn:
@@ -131,7 +138,7 @@ async def get_sigmausd_history(days: int):
             , array_agg(reserves order by timestamp) as reserves
             , array_agg(circ_sigusd order by timestamp) as circ_sigusd
             , array_agg(circ_sigrsv order by timestamp) as circ_sigrsv
-        from ew.sigmausd_series_history_mv
+        from sig.series_history_mv
         where timestamp >= (extract(epoch from now() - '{days} days'::interval))::bigint;
     """
     async with CONNECTION_POOL.acquire() as conn:
@@ -149,7 +156,7 @@ async def get_sigmausd_history_full():
             , array_agg(reserves order by timestamp) as reserves
             , array_agg(circ_sigusd order by timestamp) as circ_sigusd
             , array_agg(circ_sigrsv order by timestamp) as circ_sigrsv
-        from ew.sigmausd_series_history_mv;
+        from sig.series_history_mv;
     """
     async with CONNECTION_POOL.acquire() as conn:
         row = await conn.fetchrow(qry)
