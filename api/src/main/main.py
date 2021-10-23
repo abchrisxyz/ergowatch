@@ -13,14 +13,10 @@ app = FastAPI()
 
 if "DEVMODE" in os.environ:
     print("DEVMODE - Setting CORS")
-    origins = [
-        "http://localhost:3000",
-        "http://192.168.1.26:3000",
-    ]
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=origins,
+        allow_origins=["*"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
