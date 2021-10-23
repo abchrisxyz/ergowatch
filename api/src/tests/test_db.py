@@ -58,11 +58,15 @@ async def test_get_oracle_pools_ergusd_oracle_stats():
 @pytest.mark.asyncio
 async def test_get_sigmausd_state():
     d = await db.get_sigmausd_state()
-    assert len(d) == 4
+    assert len(d) == 8
     assert d["reserves"] > 0
     assert d["circ_sigusd"] > 0
     assert d["circ_sigrsv"] > 0
     assert d["peg_rate_nano"] > 0
+    assert abs(d["net_sc_erg"]) >= 0
+    assert abs(d["net_rc_erg"]) >= 0
+    assert d["cum_sc_erg_in"] > 0
+    assert d["cum_rc_erg_in"] > 0
 
 
 @pytest.mark.asyncio
