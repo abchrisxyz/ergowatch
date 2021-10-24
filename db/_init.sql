@@ -7,4 +7,6 @@
 */
 \i './oracle-pools.sql'
 \i './sigmausd.sql'
+\i './age.sql'
+\i './distribution.sql'
 \i './sync.sql'

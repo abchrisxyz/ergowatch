@@ -43,6 +43,12 @@ create procedure ew.sync(in _height integer) as
 	-- SigmaUSD (relies on ERG/USD oracle pool)
 	call sig.sync(_height);
 
+	-- Age
+	call age.sync();
+
+	-- Distribution
+	call dis.sync();
+
 	update ew.sync_status
 	set last_sync_height = _height;
 
