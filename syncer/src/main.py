@@ -4,6 +4,8 @@ import asyncpg
 import time
 import logging
 
+import coingecko
+
 
 # Logger
 logger = logging.getLogger()
@@ -53,6 +55,7 @@ def process_queue():
 
     async def refresh():
         try:
+            await coingecko.sync(conn)
             await conn.execute("CALL ew.sync($1);", int(height))
             logger.info(f"Task for {height} completed")
         except asyncpg.InterfaceError as e:
