@@ -1,8 +1,14 @@
 import requests
 from datetime import datetime
+import asyncio
+import logging
 
 import asyncpg as pg
-import asyncio
+
+from utils import prep_logger
+
+logger = logging.getLogger("coingecko")
+prep_logger(logger)
 
 
 API_ROOT = "https://api.coingecko.com/api/v3"
@@ -30,8 +36,10 @@ async def sync(conn: pg.Connection):
     Price is retrieved for all timestamps of first-of-day blocks
     that don't have a datapoint yet.
     """
+    logger.info("Syncing started")
     row = await conn.fetchrow("select cgo.get_new_first_of_day_blocks();")
     ergo_timestamps = row[0] if row[0] is not None else []
+    logger.info(f"Number of timestamps to process: {len(ergo_timestamps)}")
 
     while ergo_timestamps:
         ts = ergo_timestamps.pop(0)
@@ -57,10 +65,11 @@ async def sync(conn: pg.Connection):
         if ergo_timestamps:
             await asyncio.sleep(1)
 
+    logger.info("Syncing completed")
 
 async def main():
     """
-    Convenience wrappet to call the coingecko sync method on it's own.
+    Convenience wrapper to call sync() on it's own.
 
     Usefull when boostrapping the db.
     """

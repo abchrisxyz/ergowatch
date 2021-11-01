@@ -4,17 +4,15 @@ import asyncpg
 import time
 import logging
 
+from utils import prep_logger
 import coingecko
-
+import age
+import distribution
 
 # Logger
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-ch.setFormatter(formatter)
-logger.addHandler(ch)
+logger = logging.getLogger("main")
+prep_logger(logger, level=logging.INFO)
+
 
 logger.info("Retrieving DB settings from environment")
 try:
@@ -55,12 +53,35 @@ def process_queue():
 
     async def refresh():
         try:
-            await coingecko.sync(conn)
-            await conn.execute("CALL ew.sync($1);", int(height))
+            try:
+                await coingecko.sync(conn)
+            except Exception as e:
+                logger.error("Error while calling coingecko.sync()")
+                logger.error(e)
+
+            try:
+                await conn.execute("CALL ew.sync($1);", int(height))
+            except Exception as e:
+                logger.error("Error while calling ew.sync()")
+                logger.error(e)
+
+            try:
+                await age.sync(conn)
+            except Exception as e:
+                logger.error("Error while calling age.sync()")
+                logger.error(e)
+
+            try:
+                await distribution.sync(conn)
+            except Exception as e:
+                logger.error("Error while calling distribution.sync()")
+                logger.error(e)
+
             logger.info(f"Task for {height} completed")
-        except asyncpg.InterfaceError as e:
+
+        except Exception as e:
             logger.warning(e)
-            logger.warning(f"Aborting task for {height}")
+
         finally:
             # "release" connection by putting it back in the queue
             C.put_nowait(conn)
