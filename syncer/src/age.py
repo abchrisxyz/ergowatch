@@ -253,15 +253,12 @@ async def sync(conn: pg.Connection):
     last_processed = await qry_last_processed_block(conn)
     current_height = await qry_current_block(conn)
 
-    # Any stats derived for blocks less than 10 confirmations away
-    # from current height should be reprocessed.
+    # Rollback last 10 blocks to have been processed.
     # This is to account for any changes that may have occured in
     # low confirmation blocks.
-    # Anything older than 10 confirmations assumed ok here.
     min_confirmations = 10
-    if current_height - last_processed < min_confirmations:
-        last_processed = current_height - min_confirmations
-        await rollback_to_height(conn, last_processed)
+    last_processed = max(1, last_processed - min_confirmations)
+    await rollback_to_height(conn, last_processed)
 
     heights_to_process = range(last_processed + 1, current_height + 1)
     logger.info(f"Number of blocks to process: {len(heights_to_process)}")
