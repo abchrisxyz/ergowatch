@@ -311,6 +311,15 @@ async def drop_snapshots(conn: pg.Connection):
     await conn.execute("drop table dis.address_balances_snapshot;")
 
 
+async def qry_current_block(conn: pg.Connection) -> int:
+    """
+    Returns height of latest block
+    """
+    return (
+        await conn.fetchrow("select height from node_headers order by 1 desc limit 1;")
+    )[0]
+
+
 async def sync(conn: pg.Connection):
     """
     Main sync function.
@@ -319,6 +328,12 @@ async def sync(conn: pg.Connection):
 
     heights = await qry_unprocessed_first_of_day_block_heights(conn)
     logger.info(f"Number of blocks to process: {len(heights)}")
+
+    # Filter out any fresh blocks.
+    # Just to make sure we process blocks once they have enough confirmations.
+    min_confirmations = 10
+    current_height = await qry_current_block(conn)
+    heights = [h for h in heights if current_height - h >= min_confirmations]
 
     for h in heights:
         async with conn.transaction():

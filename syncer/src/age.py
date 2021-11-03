@@ -231,6 +231,20 @@ async def insert_block_state(conn: pg.Connection, bs: BlockStats):
     await conn.execute(qry, h, cs, tv, age)
 
 
+async def rollback_to_height(conn: pg.Connection, height: int):
+    """
+    Delete block stats for blocks above given height.
+    """
+    logger.info(f"Rolling back to height: {height}")
+    qry = dedent(
+        f"""
+        delete from age.block_stats
+        where height > {height};
+        """
+    )
+    await conn.execute(qry)
+
+
 async def sync(conn: pg.Connection):
     """
     Main sync function.
@@ -239,10 +253,20 @@ async def sync(conn: pg.Connection):
     last_processed = await qry_last_processed_block(conn)
     current_height = await qry_current_block(conn)
 
-    heights = range(last_processed + 1, current_height + 1)
-    logger.info(f"Number of blocks to process: {len(heights)}")
+    # Any stats derived for blocks less than 10 confirmations away
+    # from current height should be reprocessed.
+    # This is to account for any changes that may have occured in
+    # low confirmation blocks.
+    # Anything older than 10 confirmations assumed ok here.
+    min_confirmations = 10
+    if current_height - last_processed < min_confirmations:
+        last_processed = current_height - min_confirmations
+        await rollback_to_height(conn, last_processed)
 
-    for h in heights:
+    heights_to_process = range(last_processed + 1, current_height + 1)
+    logger.info(f"Number of blocks to process: {len(heights_to_process)}")
+
+    for h in heights_to_process:
         stats = await qry_block_stats(conn, h)
         await insert_block_state(conn, stats)
 
