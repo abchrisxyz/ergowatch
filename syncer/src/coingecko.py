@@ -59,7 +59,7 @@ async def sync(conn: pg.Connection):
 
         # Show progress when processing many dates
         if len(ergo_timestamps) > 30:
-            print(dt, price_usd)
+            log.info(f"{dt} - {price_usd}")
 
         # Be nice with the gecko
         if ergo_timestamps:
