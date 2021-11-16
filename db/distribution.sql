@@ -71,3 +71,14 @@ create table dis.address_counts_by_minimal_balance (
 	m_100k bigint not null,
 	m_1m bigint not null
 );
+
+
+-- Preview of latest entry
+create table dis.preview (
+	singleton integer primary key default 1,
+	timestamp bigint not null,
+	total_addresses bigint not null,
+	top100_supply_fraction numeric not null,
+	boxes bigint not null,  
+	check(singleton = 1)
+);

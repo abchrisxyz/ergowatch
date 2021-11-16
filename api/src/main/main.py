@@ -94,3 +94,8 @@ async def get_sigmausd_history_90d():
 @app.get("/sigmausd/history/all")
 async def get_sigmausd_history_all():
     return await db.get_sigmausd_history_full()
+
+
+@app.get("/metrics/preview")
+async def get_metrics_preview():
+    return await db.get_metrics_preview()

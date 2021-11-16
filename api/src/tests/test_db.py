@@ -86,3 +86,13 @@ async def test_get_sigmausd_history_5d():
     assert len(data) == 5
     assert data["timestamps"][0] >= 1628393682
 
+
+@pytest.mark.asyncio
+async def test_get_metrics_preview():
+    data = await db.get_metrics_preview()
+    assert len(data) == 4
+    assert data["total_addresses"] > 0
+    assert data["top100_supply_fraction"] >= 0.
+    assert data["top100_supply_fraction"] < 1.
+    assert data["mean_age"] > 0
+    assert data["utxos"] > 0

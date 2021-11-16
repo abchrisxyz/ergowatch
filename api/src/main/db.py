@@ -161,3 +161,27 @@ async def get_sigmausd_history_full():
     async with CONNECTION_POOL.acquire() as conn:
         row = await conn.fetchrow(qry)
     return dict(row)
+
+
+async def get_metrics_preview():
+    """
+    Summary stats for metrics landing page.
+    """
+    qry = """
+        select total_addresses
+            , top100_supply_fraction,
+            (
+                select mean_age_ms / 1000. / 86400. as days
+                from age.block_stats
+                order by height desc limit 1
+            ) as mean_age,
+            (
+                select boxes
+                from dis.unspent_boxes
+                order by timestamp desc limit 1
+            ) as utxos
+        from dis.preview;
+    """
+    async with CONNECTION_POOL.acquire() as conn:
+        row = await conn.fetchrow(qry)
+    return dict(row)

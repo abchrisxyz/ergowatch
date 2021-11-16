@@ -11,6 +11,7 @@ import asyncpg as pg
 
 from utils import prep_logger
 import addresses
+from ergo import circ_supply
 
 logger = logging.getLogger("dis")
 prep_logger(logger, level=logging.INFO)
@@ -320,6 +321,38 @@ async def qry_current_block(conn: pg.Connection) -> int:
     )[0]
 
 
+async def update_preview(conn: pg.Connection, timestamp: int, height: int):
+    logger.info(f"Updating preview")
+    await conn.execute("truncate dis.preview;")
+
+    cs = circ_supply(height)
+
+    qry = dedent(
+        f"""
+        insert into dis.preview(timestamp, total_addresses, top100_supply_fraction, boxes)
+            select
+                {timestamp},
+                (
+                    select total
+                    from dis.address_counts_by_minimal_balance
+                    order by timestamp desc limit 1
+                ) as total_addresses,
+                (
+                    select top100 / {cs}::numeric
+                    from dis.top_addresses_supply
+                    order by timestamp desc limit 1
+                ) as top100,
+                (
+                    select boxes
+                    from dis.unspent_boxes
+                    order by timestamp desc limit 1
+                ) as utxos
+        ;
+        """
+    )
+    await conn.execute(qry)
+
+
 async def sync(conn: pg.Connection):
     """
     Main sync function.
@@ -327,13 +360,14 @@ async def sync(conn: pg.Connection):
     logger.info("Syncing started")
 
     heights = await qry_unprocessed_first_of_day_block_heights(conn)
-    logger.info(f"Number of blocks to process: {len(heights)}")
 
     # Filter out any fresh blocks.
     # Just to make sure we process blocks once they have enough confirmations.
     min_confirmations = 10
     current_height = await qry_current_block(conn)
     heights = [h for h in heights if current_height - h >= min_confirmations]
+
+    logger.info(f"Number of blocks to process: {len(heights)}")
 
     for h in heights:
         async with conn.transaction():
@@ -350,6 +384,7 @@ async def sync(conn: pg.Connection):
             await update_unspent_boxes_count(conn, timestamp)
             await update_top_addresses_supply(conn, timestamp)
             await update_address_counts_by_minimal_balance(conn, timestamp)
+            await update_preview(conn, timestamp, h)
 
             await drop_snapshots(conn)
 
@@ -369,4 +404,5 @@ async def main():
 
 if __name__ == "__main__":
     from local import DBSTR
+
     asyncio.get_event_loop().run_until_complete(main())
