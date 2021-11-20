@@ -99,3 +99,44 @@ async def get_sigmausd_history_all():
 @app.get("/metrics/preview")
 async def get_metrics_preview():
     return await db.get_metrics_preview()
+
+
+@app.get("/metrics/addresses/series/30d")
+async def get_metrics_addresses_series_30d():
+    return await db.get_metrics_addresses_series(30)
+
+
+@app.get("/metrics/addresses/series/90d")
+async def get_metrics_addresses_series_90d():
+    return await db.get_metrics_addresses_series(90)
+
+
+@app.get("/metrics/addresses/series/1y")
+async def get_metrics_addresses_series_1y():
+    return await db.get_metrics_addresses_series(365)
+
+
+@app.get("/metrics/addresses/series/all")
+async def get_metrics_addresses_series_all():
+    return await db.get_metrics_addresses_series_full()
+
+
+@app.get("/metrics/distribution/series/30d")
+async def get_metrics_distribution_series_30d():
+    return await db.get_metrics_distribution_series(30)
+
+
+@app.get("/metrics/distribution/series/90d")
+async def get_metrics_distribution_series_90d():
+    return await db.get_metrics_distribution_series(90)
+
+
+@app.get("/metrics/distribution/series/1y")
+async def get_metrics_distribution_series_1y():
+    return await db.get_metrics_distribution_series(365)
+
+
+@app.get("/metrics/distribution/series/all")
+async def get_metrics_distribution_series_all():
+    return await db.get_metrics_distribution_series_full()
+
