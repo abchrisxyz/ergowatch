@@ -22,7 +22,7 @@ class BlockStats(NamedTuple):
     height: int
     circ_supply: int  # nano
     transferred_value: int  # nano
-    age: int # milliseconds
+    age: int  # milliseconds
 
 
 def emission(height: int) -> int:
@@ -41,8 +41,9 @@ def emission(height: int) -> int:
     return em * 10 ** 9
 
 
-
-async def qry_milliseconds_since_previous_block(conn: pg.Connection, height: int) -> int:
+async def qry_milliseconds_since_previous_block(
+    conn: pg.Connection, height: int
+) -> int:
     """
     Query returning seconds between timestamps of given and previous blocks.
     """
@@ -160,10 +161,7 @@ async def qry_block_stats(conn: pg.Connection, height: int) -> BlockStats:
     prev_age_ms = await qry_mean_age_at_block(conn, height - 1)
     ms_since_prev_block = await qry_milliseconds_since_previous_block(conn, height)
 
-    age_ms = (
-        (prev_cs - transferred_value) * (prev_age_ms + ms_since_prev_block)
-    ) / cs
-
+    age_ms = ((prev_cs - transferred_value) * (prev_age_ms + ms_since_prev_block)) / cs
 
     return BlockStats(height, cs, transferred_value, age_ms)
 
@@ -255,6 +253,7 @@ async def main():
 
 if __name__ == "__main__":
     from local import DBSTR
+
     asyncio.get_event_loop().run_until_complete(main())
 
     # TODO turn this into tests
