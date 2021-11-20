@@ -82,3 +82,14 @@ create table dis.preview (
 	boxes bigint not null,  
 	check(singleton = 1)
 );
+
+-- Summary of address counts
+create table dis.address_counts_summary (
+	label text primary key,
+	latest bigint,
+	diff_1d bigint,
+	diff_1w bigint,
+	diff_4w bigint,
+	diff_6m bigint,
+	diff_1y bigint
+);

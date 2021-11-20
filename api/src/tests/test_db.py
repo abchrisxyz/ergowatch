@@ -98,6 +98,14 @@ async def test_get_metrics_preview():
     assert data["utxos"] > 0
 
 
+@pytest.mark.asyncio
+async def test_get_metrics_address_counts_summary():
+    data = await db.get_metrics_address_counts_summary()
+    assert len(data) == 11
+    assert len(data[0]) == 7
+    assert data[0]["label"] == "total"
+    assert data[0]["latest"] > 0
+
 
 @pytest.mark.asyncio
 async def test_get_metrics_addresses_series_30d():

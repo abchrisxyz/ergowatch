@@ -101,6 +101,11 @@ async def get_metrics_preview():
     return await db.get_metrics_preview()
 
 
+@app.get("/metrics/addresses/summary")
+async def get_metrics_addresses_summary():
+    return await db.get_metrics_address_counts_summary()
+
+
 @app.get("/metrics/addresses/series/30d")
 async def get_metrics_addresses_series_30d():
     return await db.get_metrics_addresses_series(30)
@@ -139,4 +144,3 @@ async def get_metrics_distribution_series_1y():
 @app.get("/metrics/distribution/series/all")
 async def get_metrics_distribution_series_all():
     return await db.get_metrics_distribution_series_full()
-

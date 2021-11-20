@@ -187,6 +187,25 @@ async def get_metrics_preview():
     return dict(row)
 
 
+async def get_metrics_address_counts_summary():
+    """
+    Latest summary of address counts.
+    """
+    qry = f"""
+        select label
+            , latest
+            , diff_1d
+            , diff_1w
+            , diff_4w
+            , diff_6m
+            , diff_1y
+        from dis.address_counts_summary;
+    """
+    async with CONNECTION_POOL.acquire() as conn:
+        rows = await conn.fetch(qry)
+    return [dict(r) for r in rows]
+
+
 async def get_metrics_addresses_series(days: int):
     """
     Last *days* days of addresses series.

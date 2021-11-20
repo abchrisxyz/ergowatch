@@ -353,6 +353,46 @@ async def update_preview(conn: pg.Connection, timestamp: int, height: int):
     await conn.execute(qry)
 
 
+async def update_address_counts_summary(conn: pg.Connection, height: int):
+    logger.info(f"Updating address counts summary")
+    await conn.execute("truncate dis.address_counts_summary;")
+
+    cs = circ_supply(height)
+
+    template = dedent(
+        """
+        insert into dis.address_counts_summary(label, latest, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y)
+            select '{0}' as label
+                , {0} as latest
+                , {0} - lead({0}, 1) over (order by timestamp desc) as diff_1d
+                , {0} - lead({0}, 7) over (order by timestamp desc) as diff_7d
+                , {0} - lead({0}, 28) over (order by timestamp desc) as diff_4w
+                , {0} - lead({0}, 183) over (order by timestamp desc) as diff_6m
+                , {0} - lead({0}, 365) over (order by timestamp desc) as diff_1y
+            from dis.address_counts_by_minimal_balance
+            order by timestamp desc
+            limit 1;
+        """
+    )
+
+    columns = [
+        "total",
+        "m_0_001",
+        "m_0_01",
+        "m_0_1",
+        "m_1",
+        "m_10",
+        "m_100",
+        "m_1k",
+        "m_10k",
+        "m_100k",
+        "m_1m",
+    ]
+    for col in columns:
+        qry = template.format(col)
+        await conn.execute(qry)
+
+
 async def sync(conn: pg.Connection):
     """
     Main sync function.
@@ -385,6 +425,7 @@ async def sync(conn: pg.Connection):
             await update_top_addresses_supply(conn, timestamp)
             await update_address_counts_by_minimal_balance(conn, timestamp)
             await update_preview(conn, timestamp, h)
+            await update_address_counts_summary(conn, h)
 
             await drop_snapshots(conn)
 
