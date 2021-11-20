@@ -98,13 +98,14 @@ async def test_get_metrics_preview():
     assert data["utxos"] > 0
 
 
+
 @pytest.mark.asyncio
 async def test_get_metrics_addresses_series_30d():
     data = await db.get_metrics_addresses_series(days=30)
     assert len(data) == 13
     assert len(data["timestamps"]) == 30
     # Always larger than timestamp of first block
-    assert data["timestamps"][0] >= 1561978977137
+    assert data["timestamps"][0] >= 1561978977137 // 1000
 
 
 @pytest.mark.asyncio
@@ -112,21 +113,21 @@ async def test_get_metrics_addresses_series_full():
     data = await db.get_metrics_addresses_series_full()
     assert len(data) == 13
     # Always starts with timestamp of first block
-    assert data["timestamps"][0] == 1561978977137
+    assert data["timestamps"][0] == 1561978977137 // 1000
 
 
 @pytest.mark.asyncio
 async def test_get_metrics_distribution_series_30d():
     data = await db.get_metrics_distribution_series(days=30)
-    assert len(data) == 13
+    assert len(data) == 7
     assert len(data["timestamps"]) == 30
     # Always larger than timestamp of first block
-    assert data["timestamps"][0] >= 1561978977137
+    assert data["timestamps"][0] >= 1561978977137 // 1000
 
 
 @pytest.mark.asyncio
 async def test_get_metrics_distribution_series_full():
     data = await db.get_metrics_distribution_series_full()
-    assert len(data) == 13
+    assert len(data) == 7
     # Always starts with timestamp of first block
-    assert data["timestamps"][0] == 1561978977137
+    assert data["timestamps"][0] == 1561978977137 // 1000
