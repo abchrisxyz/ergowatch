@@ -1,6 +1,6 @@
-# ------------------------------------------------------------------------------
-# Sync age schema
-# ------------------------------------------------------------------------------
+"""
+Maintains running stats by injesting each block.
+"""
 from datetime import datetime
 from textwrap import dedent
 from typing import NamedTuple, List
@@ -14,7 +14,7 @@ from utils import prep_logger
 import addresses
 from ergo import circ_supply
 
-logger = logging.getLogger("age")
+logger = logging.getLogger("continuous")
 prep_logger(logger, level=logging.INFO)
 
 
@@ -23,6 +23,7 @@ class BlockStats(NamedTuple):
     circ_supply: int  # nano
     transferred_value: int  # nano
     age: int  # milliseconds
+    transactions: int
 
 
 def emission(height: int) -> int:
@@ -117,7 +118,7 @@ async def qry_mean_age_at_block(conn: pg.Connection, height: int) -> int:
     qry = dedent(
         f"""
         select mean_age_ms
-        from age.block_stats
+        from con.block_stats
         where height = {height};
         """
     )
@@ -125,9 +126,24 @@ async def qry_mean_age_at_block(conn: pg.Connection, height: int) -> int:
     return r[0]
 
 
-async def qry_block_stats(conn: pg.Connection, height: int) -> BlockStats:
+async def qry_block_transactions(conn: pg.Connection, height: int) -> int:
     """
-    Return block stats for given height.
+    Return number of transactions in block
+    """
+    qry = dedent(
+        """
+        select count(*)
+        from node_transactions
+        where inclusion_height = $1;
+        """
+    )
+    r = await conn.fetchrow(qry, height)
+    return r[0]
+
+
+def calc_supply_age(prev_cs, cs, transferred_value, prev_age_ms, ms_since_prev_block) -> int:
+    """
+    Calculate mean supply height in ms from given args.
 
     Definitions:
      - h: height
@@ -155,15 +171,24 @@ async def qry_block_stats(conn: pg.Connection, height: int) -> BlockStats:
     s(n) = s(n-1) + e(n)
     a(n) = [ (s(n-1) - x(n)) * (a(n-1) + t(n)) ] / s(n)
     """
+    return ((prev_cs - transferred_value) * (prev_age_ms + ms_since_prev_block)) / cs
+
+
+async def qry_block_stats(conn: pg.Connection, height: int) -> BlockStats:
+    """
+    Return block stats for given height.
+    """
     prev_cs = circ_supply(height - 1) * 10 ** 9
     cs = circ_supply(height) * 10 ** 9
     transferred_value = await qry_block_transferred_value(conn, height)
     prev_age_ms = await qry_mean_age_at_block(conn, height - 1)
     ms_since_prev_block = await qry_milliseconds_since_previous_block(conn, height)
 
-    age_ms = ((prev_cs - transferred_value) * (prev_age_ms + ms_since_prev_block)) / cs
+    age_ms = calc_supply_age(prev_cs, cs, transferred_value, prev_age_ms, ms_since_prev_block)
 
-    return BlockStats(height, cs, transferred_value, age_ms)
+    nb_of_txs = await qry_block_transactions(conn, height)
+
+    return BlockStats(height, cs, transferred_value, age_ms, nb_of_txs)
 
 
 async def qry_last_processed_block(conn: pg.Connection) -> int:
@@ -172,7 +197,7 @@ async def qry_last_processed_block(conn: pg.Connection) -> int:
     """
     return (
         await conn.fetchrow(
-            "select height from age.block_stats order by 1 desc limit 1;"
+            "select height from con.block_stats order by 1 desc limit 1;"
         )
     )[0]
 
@@ -186,19 +211,18 @@ async def qry_current_block(conn: pg.Connection) -> int:
     )[0]
 
 
-async def insert_block_state(conn: pg.Connection, bs: BlockStats):
+async def insert_block_stats(conn: pg.Connection, row: BlockStats):
     """
     Add a row to the block stats table.
     """
-    logger.info(f"Inserting block stats for block {bs.height}")
+    logger.info(f"Inserting block stats for block {row.height}")
     qry = dedent(
         """
-        insert into age.block_stats (height, circulating_supply, transferred_value, mean_age_ms)
-        values ($1, $2, $3, $4)
+        insert into con.block_stats (height, circulating_supply, transferred_value, mean_age_ms, transactions)
+        values ($1, $2, $3, $4, $5)
         """
     )
-    h, cs, tv, age = bs
-    await conn.execute(qry, h, cs, tv, age)
+    await conn.execute(qry, *row)
 
 
 async def rollback_to_height(conn: pg.Connection, height: int):
@@ -208,11 +232,59 @@ async def rollback_to_height(conn: pg.Connection, height: int):
     logger.info(f"Rolling back to height: {height}")
     qry = dedent(
         f"""
-        delete from age.block_stats
+        delete from con.block_stats
         where height > {height};
         """
     )
     await conn.execute(qry)
+
+
+async def refresh_age_series(conn: pg.Connection):
+    logger.info("Refreshing age series")
+
+    async with conn.transaction():
+        await conn.execute("truncate table con.mean_age_series_daily;");
+
+        qry = dedent(
+            """
+            insert into con.mean_age_series_daily(timestamp, mean_age_days)
+                with fod_timestamps as (
+                    select min(timestamp) as timestamp
+                        , min(height) as height
+                    from node_headers
+                    where main_chain
+                    group by timestamp / 86400000
+                )
+                select t.timestamp
+                    , s.mean_age_ms / 86400000.
+                from con.block_stats s
+                join fod_timestamps t on t.height = s.height
+                order by 1;
+            """
+        )
+        await conn.execute(qry)
+
+
+async def refresh_aggregate_series(conn: pg.Connection):
+    logger.info("Refreshing aggregate series")
+
+    async with conn.transaction():
+        await conn.execute("truncate table con.aggregate_series_daily;");
+
+        qry = dedent(
+            """
+            insert into con.aggregate_series_daily(timestamp, transferred_value, transactions)
+                select MAX(timestamp) as timestamp
+                    , sum(s.transferred_value) as tval
+                    , sum(s.transactions) as txs
+                from con.block_stats s
+                join node_headers h on h.height = s.height
+                where h.main_chain
+                group by timestamp / 86400000
+                order by 1;
+            """
+        )
+        await conn.execute(qry)
 
 
 async def sync(conn: pg.Connection):
@@ -235,7 +307,10 @@ async def sync(conn: pg.Connection):
 
     for h in heights_to_process:
         stats = await qry_block_stats(conn, h)
-        await insert_block_state(conn, stats)
+        await insert_block_stats(conn, stats)
+
+    await refresh_age_series(conn)
+    await refresh_aggregate_series(conn)
 
     logger.info("Syncing completed")
 
@@ -256,9 +331,4 @@ if __name__ == "__main__":
 
     asyncio.get_event_loop().run_until_complete(main())
 
-    # TODO turn this into tests
-    # assert(circ_supply(1000) == 75000)
-    # assert(circ_supply(608548) == 45337806)
-    # assert(circ_supply(2080800) == 97739925)
-    # assert(circ_supply(2180800) == 97739925)
-    # assert(circ_supply(9080800) == 97739925)
+

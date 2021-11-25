@@ -126,6 +126,31 @@ async def get_metrics_addresses_series_all():
     return await db.get_metrics_addresses_series_full()
 
 
+@app.get("/metrics/contracts/summary")
+async def get_metrics_contracts_summary():
+    return await db.get_metrics_contract_counts_summary()
+
+
+@app.get("/metrics/contracts/series/30d")
+async def get_metrics_contracts_series_30d():
+    return await db.get_metrics_contracts_series(30)
+
+
+@app.get("/metrics/contracts/series/90d")
+async def get_metrics_contracts_series_90d():
+    return await db.get_metrics_contracts_series(90)
+
+
+@app.get("/metrics/contracts/series/1y")
+async def get_metrics_contracts_series_1y():
+    return await db.get_metrics_contracts_series(365)
+
+
+@app.get("/metrics/contracts/series/all")
+async def get_metrics_contracts_series_all():
+    return await db.get_metrics_contracts_series_full()
+
+
 @app.get("/metrics/distribution/series/30d")
 async def get_metrics_distribution_series_30d():
     return await db.get_metrics_distribution_series(30)

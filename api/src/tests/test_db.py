@@ -103,7 +103,7 @@ async def test_get_metrics_address_counts_summary():
     data = await db.get_metrics_address_counts_summary()
     assert len(data) == 11
     assert len(data[0]) == 7
-    assert data[0]["label"] == "total"
+    assert data[0]["col"] == "total"
     assert data[0]["latest"] > 0
 
 
@@ -125,9 +125,35 @@ async def test_get_metrics_addresses_series_full():
 
 
 @pytest.mark.asyncio
+async def test_get_metrics_contract_counts_summary():
+    data = await db.get_metrics_contract_counts_summary()
+    assert len(data) == 11
+    assert len(data[0]) == 7
+    assert data[0]["col"] == "total"
+    assert data[0]["latest"] > 0
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_contracts_series_30d():
+    data = await db.get_metrics_contracts_series(days=30)
+    assert len(data) == 13
+    assert len(data["timestamps"]) == 30
+    # Always larger than timestamp of first block
+    assert data["timestamps"][0] >= 1561978977137 // 1000
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_contracts_series_full():
+    data = await db.get_metrics_contracts_series_full()
+    assert len(data) == 13
+    # Always starts with timestamp of first block
+    assert data["timestamps"][0] == 1561978977137 // 1000
+
+
+@pytest.mark.asyncio
 async def test_get_metrics_distribution_series_30d():
     data = await db.get_metrics_distribution_series(days=30)
-    assert len(data) == 7
+    assert len(data) == 6
     assert len(data["timestamps"]) == 30
     # Always larger than timestamp of first block
     assert data["timestamps"][0] >= 1561978977137 // 1000
@@ -136,6 +162,6 @@ async def test_get_metrics_distribution_series_30d():
 @pytest.mark.asyncio
 async def test_get_metrics_distribution_series_full():
     data = await db.get_metrics_distribution_series_full()
-    assert len(data) == 7
+    assert len(data) == 6
     # Always starts with timestamp of first block
     assert data["timestamps"][0] == 1561978977137 // 1000

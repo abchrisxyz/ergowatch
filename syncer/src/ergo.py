@@ -1,6 +1,6 @@
-def circ_supply(height: int) -> int:
+def circ_supply(height: int, nano: bool = False) -> int:
     """
-    Circulating supply at given height, in ERG.
+    Circulating supply at given height, in ERG (or nanoERG).
     """
     # Emission settings
     initial_rate = 75
@@ -25,6 +25,15 @@ def circ_supply(height: int) -> int:
     current_epoch_cs = blocks_in_current_epoch * current_rate
 
     # Circulating supply
-    return fixed_period_cs + completed_epochs_cs + current_epoch_cs
+    cs = fixed_period_cs + completed_epochs_cs + current_epoch_cs
+    if nano:
+        cs *= 10**9
+    return cs
 
 
+# TODO turn this into tests
+# assert(circ_supply(1000) == 75000)
+# assert(circ_supply(608548) == 45337806)
+# assert(circ_supply(2080800) == 97739925)
+# assert(circ_supply(2180800) == 97739925)
+# assert(circ_supply(9080800) == 97739925)

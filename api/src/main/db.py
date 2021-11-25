@@ -8,7 +8,8 @@ CONNECTION_POOL = None
 
 async def init_connection_pool():
     global CONNECTION_POOL
-    dbstr = f"postgresql://{os.environ['POSTGRES_PASSWORD']}:ergo@db/ergo"
+    # dbstr = f"postgresql://{os.environ['POSTGRES_PASSWORD']}:ergo@db/ergo"
+    dbstr = f"postgresql://ergo:ergo@192.168.1.72/ergo"
     CONNECTION_POOL = await asyncpg.create_pool(dbstr)
 
 
@@ -192,14 +193,14 @@ async def get_metrics_address_counts_summary():
     Latest summary of address counts.
     """
     qry = f"""
-        select label
+        select col
             , latest
             , diff_1d
             , diff_1w
             , diff_4w
             , diff_6m
             , diff_1y
-        from dis.address_counts_summary;
+        from mtr.address_counts_by_minimal_balance_change_summary;
     """
     async with CONNECTION_POOL.acquire() as conn:
         rows = await conn.fetch(qry)
@@ -211,25 +212,25 @@ async def get_metrics_addresses_series(days: int):
     Last *days* days of addresses series.
     """
     qry = f"""
-        select array_agg(dis.timestamp / 1000 order by dis.timestamp) as timestamps
-            , array_agg(round(cgo.usd, 2) order by dis.timestamp) as ergusd
-            , array_agg(total order by dis.timestamp) as total
-            , array_agg(m_0_001 order by dis.timestamp) as m_0_001
-            , array_agg(m_0_01 order by dis.timestamp) as m_0_01
-            , array_agg(m_0_1 order by dis.timestamp) as m_0_1
-            , array_agg(m_1 order by dis.timestamp) as m_1
-            , array_agg(m_10 order by dis.timestamp) as m_10
-            , array_agg(m_100 order by dis.timestamp) as m_100
-            , array_agg(m_1k order by dis.timestamp) as m_1k
-            , array_agg(m_10k order by dis.timestamp) as m_10k
-            , array_agg(m_100k order by dis.timestamp) as m_100k
-            , array_agg(m_1m order by dis.timestamp) as m_1m
-        from dis.address_counts_by_minimal_balance dis
+        select array_agg(mtr.timestamp / 1000 order by mtr.timestamp) as timestamps
+            , array_agg(round(cgo.usd, 2) order by mtr.timestamp) as ergusd
+            , array_agg(total order by mtr.timestamp) as total
+            , array_agg(gte_0_001 order by mtr.timestamp) as gte_0_001
+            , array_agg(gte_0_01 order by mtr.timestamp) as gte_0_01
+            , array_agg(gte_0_1 order by mtr.timestamp) as gte_0_1
+            , array_agg(gte_1 order by mtr.timestamp) as gte_1
+            , array_agg(gte_10 order by mtr.timestamp) as gte_10
+            , array_agg(gte_100 order by mtr.timestamp) as gte_100
+            , array_agg(gte_1k order by mtr.timestamp) as gte_1k
+            , array_agg(gte_10k order by mtr.timestamp) as gte_10k
+            , array_agg(gte_100k order by mtr.timestamp) as gte_100k
+            , array_agg(gte_1m order by mtr.timestamp) as gte_1m
+        from mtr.address_counts_by_minimal_balance mtr
         left join cgo.price_at_first_of_day_block cgo
-            on cgo.timestamp = dis.timestamp
-        where dis.timestamp > (
+            on cgo.timestamp = mtr.timestamp
+        where mtr.timestamp > (
             select timestamp
-            from dis.address_counts_by_minimal_balance
+            from mtr.address_counts_by_minimal_balance
             order by 1 desc
             limit 1 offset {days}
         );
@@ -244,22 +245,102 @@ async def get_metrics_addresses_series_full():
     Full addresses series.
     """
     qry = f"""
-        select array_agg(dis.timestamp / 1000 order by dis.timestamp) as timestamps
-            , array_agg(round(cgo.usd, 2) order by dis.timestamp) as ergusd
-            , array_agg(total order by dis.timestamp) as total
-            , array_agg(m_0_001 order by dis.timestamp) as m_0_001
-            , array_agg(m_0_01 order by dis.timestamp) as m_0_01
-            , array_agg(m_0_1 order by dis.timestamp) as m_0_1
-            , array_agg(m_1 order by dis.timestamp) as m_1
-            , array_agg(m_10 order by dis.timestamp) as m_10
-            , array_agg(m_100 order by dis.timestamp) as m_100
-            , array_agg(m_1k order by dis.timestamp) as m_1k
-            , array_agg(m_10k order by dis.timestamp) as m_10k
-            , array_agg(m_100k order by dis.timestamp) as m_100k
-            , array_agg(m_1m order by dis.timestamp) as m_1m
-        from dis.address_counts_by_minimal_balance dis
+        select array_agg(mtr.timestamp / 1000 order by mtr.timestamp) as timestamps
+            , array_agg(round(cgo.usd, 2) order by mtr.timestamp) as ergusd
+            , array_agg(total order by mtr.timestamp) as total
+            , array_agg(gte_0_001 order by mtr.timestamp) as gte_0_001
+            , array_agg(gte_0_01 order by mtr.timestamp) as gte_0_01
+            , array_agg(gte_0_1 order by mtr.timestamp) as gte_0_1
+            , array_agg(gte_1 order by mtr.timestamp) as gte_1
+            , array_agg(gte_10 order by mtr.timestamp) as gte_10
+            , array_agg(gte_100 order by mtr.timestamp) as gte_100
+            , array_agg(gte_1k order by mtr.timestamp) as gte_1k
+            , array_agg(gte_10k order by mtr.timestamp) as gte_10k
+            , array_agg(gte_100k order by mtr.timestamp) as gte_100k
+            , array_agg(gte_1m order by mtr.timestamp) as gte_1m
+        from mtr.address_counts_by_minimal_balance mtr
         left join cgo.price_at_first_of_day_block cgo
-            on cgo.timestamp = dis.timestamp
+            on cgo.timestamp = mtr.timestamp
+        ;
+    """
+    async with CONNECTION_POOL.acquire() as conn:
+        row = await conn.fetchrow(qry)
+    return dict(row)
+
+
+async def get_metrics_contract_counts_summary():
+    """
+    Latest summary of address counts.
+    """
+    qry = f"""
+        select col
+            , latest
+            , diff_1d
+            , diff_1w
+            , diff_4w
+            , diff_6m
+            , diff_1y
+        from mtr.contract_counts_by_minimal_balance_change_summary;
+    """
+    async with CONNECTION_POOL.acquire() as conn:
+        rows = await conn.fetch(qry)
+    return [dict(r) for r in rows]
+
+
+async def get_metrics_contracts_series(days: int):
+    """
+    Last *days* days of contracts series.
+    """
+    qry = f"""
+        select array_agg(mtr.timestamp / 1000 order by mtr.timestamp) as timestamps
+            , array_agg(round(cgo.usd, 2) order by mtr.timestamp) as ergusd
+            , array_agg(total order by mtr.timestamp) as total
+            , array_agg(gte_0_001 order by mtr.timestamp) as gte_0_001
+            , array_agg(gte_0_01 order by mtr.timestamp) as gte_0_01
+            , array_agg(gte_0_1 order by mtr.timestamp) as gte_0_1
+            , array_agg(gte_1 order by mtr.timestamp) as gte_1
+            , array_agg(gte_10 order by mtr.timestamp) as gte_10
+            , array_agg(gte_100 order by mtr.timestamp) as gte_100
+            , array_agg(gte_1k order by mtr.timestamp) as gte_1k
+            , array_agg(gte_10k order by mtr.timestamp) as gte_10k
+            , array_agg(gte_100k order by mtr.timestamp) as gte_100k
+            , array_agg(gte_1m order by mtr.timestamp) as gte_1m
+        from mtr.contract_counts_by_minimal_balance mtr
+        left join cgo.price_at_first_of_day_block cgo
+            on cgo.timestamp = mtr.timestamp
+        where mtr.timestamp > (
+            select timestamp
+            from mtr.contract_counts_by_minimal_balance
+            order by 1 desc
+            limit 1 offset {days}
+        );
+    """
+    async with CONNECTION_POOL.acquire() as conn:
+        row = await conn.fetchrow(qry)
+    return dict(row)
+
+
+async def get_metrics_contracts_series_full():
+    """
+    Full contracts series.
+    """
+    qry = f"""
+        select array_agg(mtr.timestamp / 1000 order by mtr.timestamp) as timestamps
+            , array_agg(round(cgo.usd, 2) order by mtr.timestamp) as ergusd
+            , array_agg(total order by mtr.timestamp) as total
+            , array_agg(gte_0_001 order by mtr.timestamp) as gte_0_001
+            , array_agg(gte_0_01 order by mtr.timestamp) as gte_0_01
+            , array_agg(gte_0_1 order by mtr.timestamp) as gte_0_1
+            , array_agg(gte_1 order by mtr.timestamp) as gte_1
+            , array_agg(gte_10 order by mtr.timestamp) as gte_10
+            , array_agg(gte_100 order by mtr.timestamp) as gte_100
+            , array_agg(gte_1k order by mtr.timestamp) as gte_1k
+            , array_agg(gte_10k order by mtr.timestamp) as gte_10k
+            , array_agg(gte_100k order by mtr.timestamp) as gte_100k
+            , array_agg(gte_1m order by mtr.timestamp) as gte_1m
+        from mtr.contract_counts_by_minimal_balance mtr
+        left join cgo.price_at_first_of_day_block cgo
+            on cgo.timestamp = mtr.timestamp
         ;
     """
     async with CONNECTION_POOL.acquire() as conn:
@@ -272,19 +353,19 @@ async def get_metrics_distribution_series(days: int):
     Last *days* days of distribution series.
     """
     qry = f"""
-        select array_agg(dis.timestamp / 1000 order by dis.timestamp) as timestamps
-            , array_agg(round(cgo.usd, 2) order by dis.timestamp) as ergusd
-            , array_agg(top10 order by dis.timestamp) as top10
-            , array_agg(top100 order by dis.timestamp) as top100
-            , array_agg(top1k order by dis.timestamp) as top1k
-            , array_agg(top10k order by dis.timestamp) as top10k
-            , array_agg(cexs order by dis.timestamp) as cexs
-        from dis.top_addresses_supply dis
+        select array_agg(mtr.timestamp / 1000 order by mtr.timestamp) as timestamps
+            , array_agg(round(cgo.usd, 2) order by mtr.timestamp) as ergusd
+            , array_agg(total / 10^9 order by mtr.timestamp) as total
+            , array_agg(top10 / 10^9 order by mtr.timestamp) as top10
+            , array_agg(top100 / 10^9 order by mtr.timestamp) as top100
+            , array_agg(top1k / 10^9 order by mtr.timestamp) as top1k
+            --, array_agg(top10k / 10^9 order by mtr.timestamp) as top10k
+        from mtr.top_addresses_supply mtr
         left join cgo.price_at_first_of_day_block cgo
-            on cgo.timestamp = dis.timestamp
-        where dis.timestamp > (
+            on cgo.timestamp = mtr.timestamp
+        where mtr.timestamp > (
             select timestamp
-            from dis.top_addresses_supply
+            from mtr.top_addresses_supply
             order by 1 desc
             limit 1 offset {days}
         );
@@ -299,16 +380,16 @@ async def get_metrics_distribution_series_full():
     Full distribution series.
     """
     qry = f"""
-        select array_agg(dis.timestamp / 1000 order by dis.timestamp) as timestamps
-            , array_agg(round(cgo.usd, 2) order by dis.timestamp) as ergusd
-            , array_agg(top10 order by dis.timestamp) as top10
-            , array_agg(top100 order by dis.timestamp) as top100
-            , array_agg(top1k order by dis.timestamp) as top1k
-            , array_agg(top10k order by dis.timestamp) as top10k
-            , array_agg(cexs order by dis.timestamp) as cexs
-        from dis.top_addresses_supply dis
+        select array_agg(mtr.timestamp / 1000 order by mtr.timestamp) as timestamps
+            , array_agg(round(cgo.usd, 2) order by mtr.timestamp) as ergusd
+            , array_agg(top10  / 10^9 order by mtr.timestamp) as top10
+            , array_agg(top100 / 10^9  order by mtr.timestamp) as top100
+            , array_agg(top1k  / 10^9 order by mtr.timestamp) as top1k
+            --, array_agg(top10k / 10^9  order by mtr.timestamp) as top10k
+            , array_agg(total  / 10^9 order by mtr.timestamp) as total
+        from mtr.top_addresses_supply mtr
         left join cgo.price_at_first_of_day_block cgo
-            on cgo.timestamp = dis.timestamp
+            on cgo.timestamp = mtr.timestamp
         ;
     """
     async with CONNECTION_POOL.acquire() as conn:

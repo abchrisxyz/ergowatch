@@ -6,8 +6,8 @@ import logging
 
 from utils import prep_logger
 import coingecko
-import age
-import distribution
+import continuous
+import snapshots
 
 # Logger
 logger = logging.getLogger("main")
@@ -66,15 +66,15 @@ def process_queue():
                 logger.error(e)
 
             try:
-                await age.sync(conn)
+                await continuous.sync(conn)
             except Exception as e:
-                logger.error("Error while calling age.sync()")
+                logger.error("Error while calling continuous.sync()")
                 logger.error(e)
 
             try:
-                await distribution.sync(conn)
+                await snapshots.sync(conn)
             except Exception as e:
-                logger.error("Error while calling distribution.sync()")
+                logger.error("Error while calling snapshots.sync()")
                 logger.error(e)
 
             logger.info(f"Task for {height} completed")
