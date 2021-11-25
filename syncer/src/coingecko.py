@@ -1,5 +1,5 @@
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import logging
 
@@ -14,19 +14,29 @@ prep_logger(logger)
 API_ROOT = "https://api.coingecko.com/api/v3"
 
 
-def _cg_get_price(date_dt: datetime):
+def _cg_get_price(timestamp: int):
     """
     Return USD price of coin for given date.
     """
-    # Format date to CoinGecko api standard
-    date_cg = date_dt.strftime("%d-%m-%Y")
+    half_window = 40000
+    at_unix = timestamp // 1000
+    fr_unix = at_unix - half_window
+    to_unix = at_unix + half_window
 
-    # Query
-    qry = API_ROOT + f"/coins/ergo/history?date={date_cg}"
+    qry = (
+        API_ROOT
+        + f"/coins/ergo/market_chart/range?vs_currency=usd&from={fr_unix}&to={to_unix}"
+    )
+
     r = requests.get(qry)
     d = r.json()
 
-    return d["market_data"]["current_price"]["usd"]
+    diffs = [(ts, p, abs(ts - timestamp)) for (ts, p) in d["prices"]]
+    best =  [d for d in diffs if d[2] == min([d[2] for d in diffs])][0]
+
+    ts, usd, diff = best
+
+    return ts, usd
 
 
 async def sync(conn: pg.Connection):
@@ -44,28 +54,28 @@ async def sync(conn: pg.Connection):
     while ergo_timestamps:
         ts = ergo_timestamps.pop(0)
 
-        # Convert ergo timestamp to python datetime
-        dt = datetime.fromtimestamp(ts / 1000)
-
         # Fetch price from coingecko
-        price_usd = _cg_get_price(dt)
+        price_ts, price_usd = _cg_get_price(ts)
 
         # Insert in db
         await conn.execute(
-            "insert into cgo.price_at_first_of_day_block (timestamp, usd) values ($1, $2);",
+            "insert into cgo.price_at_first_of_day_block (timestamp, usd, coingecko_ts) values ($1, $2, $3);",
             ts,
             price_usd,
+            price_ts
         )
 
         # Show progress when processing many dates
         if len(ergo_timestamps) > 30:
-            log.info(f"{dt} - {price_usd}")
+            logger.info(f"{datetime.fromtimestamp(ts / 1000, tz=timezone.utc)}: {price_usd}")
 
         # Be nice with the gecko
         if ergo_timestamps:
             await asyncio.sleep(1)
 
+
     logger.info("Syncing completed")
+
 
 async def main():
     """
@@ -78,6 +88,44 @@ async def main():
     await conn.close()
 
 
+def debug(timestamp):
+    from datetime import timezone
+
+    print(timestamp, datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc))
+
+    at_unix = timestamp // 1000
+    half_window = 40000
+    fr_unix = at_unix - half_window
+    to_unix = at_unix + half_window
+
+    print(datetime.fromtimestamp(fr_unix, tz=timezone.utc))
+    print(datetime.fromtimestamp(to_unix, tz=timezone.utc))
+
+    qry = (
+        API_ROOT
+        + f"/coins/ergo/market_chart/range?vs_currency=usd&from={fr_unix}&to={to_unix}"
+    )
+
+    r = requests.get(qry)
+    d = r.json()
+    prices = d["prices"]
+
+    diffs = [(ts, p, abs(ts - timestamp)) for (ts, p) in prices]
+    best =  [d for d in diffs if d[2] == min([d[2] for d in diffs])][0]
+    print(best)
+
+    for (ts, p) in prices:
+        print(ts, datetime.fromtimestamp(ts / 1000, tz=timezone.utc), p)
+    print('-----')
+
+    print(ts, datetime.fromtimestamp(best[0] / 1000, tz=timezone.utc), best[1])
+
+
 if __name__ == "__main__":
     from local import DBSTR
+
     asyncio.get_event_loop().run_until_complete(main())
+
+    # debug(1563062518473)
+
+    # debug(1562976228965)

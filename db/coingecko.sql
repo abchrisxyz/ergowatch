@@ -8,7 +8,8 @@ create schema cgo;
 
 create table cgo.price_at_first_of_day_block(
 	timestamp bigint primary key,
-	usd numeric not null
+	usd numeric not null,
+	coingecko_ts bigint not null
 );
 
 
