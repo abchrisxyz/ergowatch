@@ -430,7 +430,8 @@ create materialized view sig.series_history_mv as
             from combined
         ) sq
     )
-    select nhs.timestamp / 1000 as timestamp
+    select nhs.height
+		, nhs.timestamp / 1000 as timestamp
         , wrk.oracle_price
         , htx.reserves
         , htx.circ_sigusd
@@ -445,7 +446,7 @@ create materialized view sig.series_history_mv as
         and wrk.bank_box_idx is not null
     order by 1 desc;
 
-create unique index on sig.series_history_mv(timestamp);
+create unique index on sig.series_history_mv(height);
 refresh materialized view sig.series_history_mv;
 	
 
