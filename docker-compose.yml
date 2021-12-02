@@ -7,7 +7,7 @@ volumes:
 services:
   # Ergo blockchain node
   node:
-    image: ergoplatform/ergo:v4.0.14
+    image: ergoplatform/ergo:v4.0.16
     command: --mainnet -c /etc/ergo.conf
     volumes:
       - ew_node:/home/ergo/.ergo
