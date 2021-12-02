@@ -23,7 +23,7 @@ values (1, 75 * 10^9, 0, 0, 1);
 create table con.mean_age_series_daily (
 	timestamp bigint primary key, -- first of day block
 	mean_age_days float not null
-)
+);
 
 
 create table con.aggregate_series_daily (
