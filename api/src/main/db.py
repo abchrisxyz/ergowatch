@@ -552,6 +552,20 @@ async def get_metrics_cexs_series_full():
     return dict(row)
 
 
+async def get_metrics_cex_list():
+    """
+    Known CEX addresses list.
+    """
+    qry = f"""
+        select address, cex
+        from mtr.cex_addresses
+        order by 2 desc;
+    """
+    async with CONNECTION_POOL.acquire() as conn:
+        rows = await conn.fetch(qry)
+    return [dict(r) for r in rows]
+
+
 async def get_metrics_age_series(days: int):
     """
     Last *days* days of supply age series.

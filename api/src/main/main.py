@@ -226,6 +226,11 @@ async def get_metrics_cexs_series_all():
     return await db.get_metrics_cexs_series_full()
 
 
+@app.get("/metrics/cexs/list")
+async def get_metrics_cexs_list():
+    return await db.get_metrics_cexs_list()
+
+
 @app.get("/metrics/age/series/30d")
 async def get_metrics_age_series_30d():
     return await db.get_metrics_age_series(30)
