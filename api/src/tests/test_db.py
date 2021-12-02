@@ -234,11 +234,12 @@ async def test_get_metrics_cexs_series_full():
 
 
 @pytest.mark.asyncio
-async def test_get_metrics_cex_list():
-    data = await db.get_metrics_cex_list()
+async def test_get_metrics_cexs_list():
+    data = await db.get_metrics_cexs_list()
     assert len(data) > 5
     assert isinstance(data[0]["address"], str)
     assert isinstance(data[0]["cex"], str)
+    assert isinstance(data[0]["balance"], float)
 
 
 @pytest.mark.asyncio

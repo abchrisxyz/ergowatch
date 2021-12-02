@@ -552,14 +552,19 @@ async def get_metrics_cexs_series_full():
     return dict(row)
 
 
-async def get_metrics_cex_list():
+async def get_metrics_cexs_list():
     """
     Known CEX addresses list.
     """
     qry = f"""
-        select address, cex
-        from mtr.cex_addresses
-        order by 2 desc;
+        select a.cex
+            , a.address
+            , coalesce(s.nano, 0) / 10^9 as balance
+        from mtr.cex_addresses a
+        left join mtr.cex_addresses_supply s
+            on s.address = a.address
+            and s.timestamp = (select timestamp from mtr.cex_addresses_supply order by 1 desc limit 1)
+        order by 3 desc;
     """
     async with CONNECTION_POOL.acquire() as conn:
         rows = await conn.fetch(qry)
