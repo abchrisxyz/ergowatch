@@ -8,8 +8,7 @@ CONNECTION_POOL = None
 
 async def init_connection_pool():
     global CONNECTION_POOL
-    # dbstr = f"postgresql://{os.environ['POSTGRES_PASSWORD']}:ergo@db/ergo"
-    dbstr = f"postgresql://ergo:ergo@192.168.1.72/ergo"
+    dbstr = f"postgresql://{os.environ['POSTGRES_PASSWORD']}:ergo@db/ergo"
     CONNECTION_POOL = await asyncpg.create_pool(dbstr)
 
 
