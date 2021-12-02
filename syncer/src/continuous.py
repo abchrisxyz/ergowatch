@@ -141,7 +141,9 @@ async def qry_block_transactions(conn: pg.Connection, height: int) -> int:
     return r[0]
 
 
-def calc_supply_age(prev_cs, cs, transferred_value, prev_age_ms, ms_since_prev_block) -> int:
+def calc_supply_age(
+    prev_cs, cs, transferred_value, prev_age_ms, ms_since_prev_block
+) -> int:
     """
     Calculate mean supply height in ms from given args.
 
@@ -184,7 +186,9 @@ async def qry_block_stats(conn: pg.Connection, height: int) -> BlockStats:
     prev_age_ms = await qry_mean_age_at_block(conn, height - 1)
     ms_since_prev_block = await qry_milliseconds_since_previous_block(conn, height)
 
-    age_ms = calc_supply_age(prev_cs, cs, transferred_value, prev_age_ms, ms_since_prev_block)
+    age_ms = calc_supply_age(
+        prev_cs, cs, transferred_value, prev_age_ms, ms_since_prev_block
+    )
 
     nb_of_txs = await qry_block_transactions(conn, height)
 
@@ -243,7 +247,7 @@ async def refresh_age_series(conn: pg.Connection):
     logger.info("Refreshing age series")
 
     async with conn.transaction():
-        await conn.execute("truncate table con.mean_age_series_daily;");
+        await conn.execute("truncate table con.mean_age_series_daily;")
 
         qry = dedent(
             """
@@ -269,12 +273,12 @@ async def refresh_aggregate_series(conn: pg.Connection):
     logger.info("Refreshing aggregate series")
 
     async with conn.transaction():
-        await conn.execute("truncate table con.aggregate_series_daily;");
+        await conn.execute("truncate table con.aggregate_series_daily;")
 
         qry = dedent(
             """
             insert into con.aggregate_series_daily(timestamp, transferred_value, transactions)
-                select MAX(timestamp) as timestamp
+                select max(timestamp) as timestamp
                     , sum(s.transferred_value) as tval
                     , sum(s.transactions) as txs
                 from con.block_stats s
@@ -282,6 +286,36 @@ async def refresh_aggregate_series(conn: pg.Connection):
                 where h.main_chain
                 group by timestamp / 86400000
                 order by 1;
+            """
+        )
+        await conn.execute(qry)
+
+
+async def refresh_preview(conn: pg.Connection):
+    """
+    Refresh 24h preview.
+    """
+    logger.info("Refreshing preview")
+
+    async with conn.transaction():
+        await conn.execute("truncate table con.preview;")
+
+        qry = dedent(
+            """
+            insert into con.preview(timestamp, mean_age_days, transferred_value_24h, transactions_24h)
+            select max(h.timestamp)
+                , (select mean_age_ms / 86400. / 1000. from con.block_stats order by height desc limit 1)
+                , sum(s.transferred_value)
+                , sum(s.transactions)
+            from con.block_stats s
+            join node_headers h on h.height = s.height
+            where h.main_chain and timestamp >= (
+                select timestamp - 86400000
+                from con.block_stats s
+                join node_headers h on h.height = s.height
+                where h.main_chain
+                order by h.timestamp desc limit 1
+            );
             """
         )
         await conn.execute(qry)
@@ -311,6 +345,7 @@ async def sync(conn: pg.Connection):
 
     await refresh_age_series(conn)
     await refresh_aggregate_series(conn)
+    await refresh_preview(conn)
 
     logger.info("Syncing completed")
 
@@ -330,5 +365,3 @@ if __name__ == "__main__":
     from local import DBSTR
 
     asyncio.get_event_loop().run_until_complete(main())
-
-

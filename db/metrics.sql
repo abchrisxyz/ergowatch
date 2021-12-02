@@ -113,12 +113,12 @@ create table mtr.top_addresses_supply (
 
 create table mtr.top_addresses_supply_change_summary (
 	col text primary key,
-	latest bigint,
-	diff_1d bigint,
-	diff_1w bigint,
-	diff_4w bigint,
-	diff_6m bigint,
-	diff_1y bigint
+	latest numeric,
+	diff_1d numeric,
+	diff_1w numeric,
+	diff_4w numeric,
+	diff_6m numeric,
+	diff_1y numeric
 );
 
 
@@ -140,12 +140,12 @@ create table mtr.top_contracts_supply (
 
 create table mtr.top_contracts_supply_change_summary (
 	col text primary key,
-	latest bigint,
-	diff_1d bigint,
-	diff_1w bigint,
-	diff_4w bigint,
-	diff_6m bigint,
-	diff_1y bigint
+	latest numeric,
+	diff_1d numeric,
+	diff_1w numeric,
+	diff_4w numeric,
+	diff_6m numeric,
+	diff_1y numeric
 );
 
 
@@ -174,12 +174,12 @@ create table mtr.cexs_supply (
 
 create table mtr.cexs_supply_change_summary (
 	col text primary key,
-	latest bigint,
-	diff_1d bigint,
-	diff_1w bigint,
-	diff_4w bigint,
-	diff_6m bigint,
-	diff_1y bigint
+	latest numeric,
+	diff_1d numeric,
+	diff_1w numeric,
+	diff_4w numeric,
+	diff_6m numeric,
+	diff_1y numeric
 );
 
 
@@ -209,4 +209,17 @@ create table mtr.unspent_boxes_change_summary (
 create table mtr.unspent_boxes_top_addresses (
 	address text primary key,
 	boxes bigint not null
+);
+
+
+-- Latest values
+create table mtr.preview (
+	singleton integer primary key default 1 check(singleton = 1),
+	timestamp bigint,
+	total_addresses bigint,
+	total_contracts bigint,
+	top100_supply_fraction numeric,
+	contracts_supply_fraction numeric,
+	cexs_supply bigint,
+	boxes bigint
 );

@@ -165,6 +165,39 @@ async def qry_block_timestamp(conn: pg.Connection, height: int) -> int:
     return r[0]
 
 
+async def refresh_preview(conn: pg.Connection):
+    """
+    Refresh 24h preview.
+    """
+    logger.info("Refreshing preview")
+
+    async with conn.transaction():
+        await conn.execute("truncate table mtr.preview;")
+
+        qry = dedent(
+            """
+            insert into mtr.preview(
+                timestamp,
+                total_addresses,
+                total_contracts,
+                top100_supply_fraction,
+                contracts_supply_fraction,
+                cexs_supply,
+                boxes
+            )
+            select (select timestamp from mtr.address_counts_by_minimal_balance order by timestamp desc limit 1)
+                , (select total from mtr.address_counts_by_minimal_balance order by timestamp desc limit 1)
+                , (select total from mtr.contract_counts_by_minimal_balance order by timestamp desc limit 1)
+                , (select top100::numeric / circulating_supply from mtr.top_addresses_supply order by timestamp desc limit 1)
+                , (select total::numeric / circulating_supply from mtr.top_contracts_supply order by timestamp desc limit 1)
+                , (select total from mtr.cexs_supply order by timestamp desc limit 1)
+                , (select boxes from mtr.unspent_boxes order by timestamp desc limit 1)
+            ;
+            """
+        )
+        await conn.execute(qry)
+
+
 async def sync(conn: pg.Connection):
     """
     Main sync function.
@@ -213,6 +246,7 @@ async def main():
     """
     conn = await pg.connect(DBSTR)
     await sync(conn)
+    await refresh_preview(conn)
     await conn.close()
 
 

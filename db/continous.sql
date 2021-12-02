@@ -15,6 +15,11 @@ create table con.block_stats(
 );
 
 
+-- Initialise block stats
+insert into con.block_stats (height, circulating_supply, transferred_value, mean_age_ms, transactions)
+values (1, 75 * 10^9, 0, 0, 1);
+
+
 create table con.mean_age_series_daily (
 	timestamp bigint primary key, -- first of day block
 	mean_age_days float not null
@@ -28,8 +33,10 @@ create table con.aggregate_series_daily (
 );
 
 
--- Initialise block stats
-insert into con.block_stats (height, circulating_supply, transferred_value, mean_age_ms, transactions)
-values (1, 75 * 10^9, 0, 0, 1);
-
-
+create table con.preview (
+	singleton integer primary key default 1 check(singleton = 1),
+	timestamp bigint, -- latest available
+	mean_age_days real not null, -- latest available
+	transferred_value_24h bigint not null, -- total transverred volume in last 24h
+	transactions_24h bigint not null -- total transactions in last 24h
+);

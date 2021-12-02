@@ -13,6 +13,7 @@ METRIC_ID = "distribution"
 SERIES_TABLE = "mtr.top_addresses_supply"
 SUMMARY_TABLE = "mtr.top_addresses_supply_change_summary"
 
+
 class Record(NamedTuple):
     timestamp: int
     top10: int
@@ -111,12 +112,12 @@ async def refresh_change_summary(conn: pg.Connection):
             col, latest, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
         )
             select '{{0}}' as col
-                , {{0}} as latest
-                , {{0}} - lead({{0}}, 1) over (order by timestamp desc) as diff_1d
-                , {{0}} - lead({{0}}, 7) over (order by timestamp desc) as diff_7d
-                , {{0}} - lead({{0}}, 28) over (order by timestamp desc) as diff_4w
-                , {{0}} - lead({{0}}, 183) over (order by timestamp desc) as diff_6m
-                , {{0}} - lead({{0}}, 365) over (order by timestamp desc) as diff_1y
+                , {{0}} / 10^9 as latest
+                , ({{0}} - lead({{0}}, 1) over (order by timestamp desc)) / 10^9 as diff_1d
+                , ({{0}} - lead({{0}}, 7) over (order by timestamp desc)) / 10^9 as diff_7d
+                , ({{0}} - lead({{0}}, 28) over (order by timestamp desc)) / 10^9 as diff_4w
+                , ({{0}} - lead({{0}}, 183) over (order by timestamp desc)) / 10^9 as diff_6m
+                , ({{0}} - lead({{0}}, 365) over (order by timestamp desc)) / 10^9 as diff_1y
             from {SERIES_TABLE}
             order by timestamp desc
             limit 1;
@@ -130,6 +131,36 @@ async def refresh_change_summary(conn: pg.Connection):
         "top10k",
         "total",
         "circulating_supply",
+    ]
+    for col in columns:
+        qry = template.format(col)
+        await conn.execute(qry)
+
+    # TODO: refactor relative changes into own table
+    template = dedent(
+        f"""
+        insert into {SUMMARY_TABLE} (
+            col, latest, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
+        )
+            select '{{0}}_rel' as col
+                , {{0}}::numeric / circulating_supply * 100 as latest
+                , ({{0}}::numeric / circulating_supply - lead({{0}}::numeric / circulating_supply, 1) over (order by timestamp desc)) * 100 as diff_1d
+                , ({{0}}::numeric / circulating_supply - lead({{0}}::numeric / circulating_supply, 7) over (order by timestamp desc)) * 100 as diff_7d
+                , ({{0}}::numeric / circulating_supply - lead({{0}}::numeric / circulating_supply, 28) over (order by timestamp desc)) * 100 as diff_4w
+                , ({{0}}::numeric / circulating_supply - lead({{0}}::numeric / circulating_supply, 183) over (order by timestamp desc)) * 100 as diff_6m
+                , ({{0}}::numeric / circulating_supply - lead({{0}}::numeric / circulating_supply, 365) over (order by timestamp desc)) * 100 as diff_1y
+            from {SERIES_TABLE}
+            order by timestamp desc
+            limit 1;
+        """
+    )
+
+    columns = [
+        "top10",
+        "top100",
+        "top1k",
+        "top10k",
+        "total",
     ]
     for col in columns:
         qry = template.format(col)

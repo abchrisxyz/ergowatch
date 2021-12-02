@@ -90,12 +90,17 @@ async def test_get_sigmausd_history_5d():
 @pytest.mark.asyncio
 async def test_get_metrics_preview():
     data = await db.get_metrics_preview()
-    assert len(data) == 4
+    assert len(data) == 9
     assert data["total_addresses"] > 0
     assert data["top100_supply_fraction"] >= 0.0
     assert data["top100_supply_fraction"] < 1.0
-    assert data["mean_age"] > 0
+    assert data["contracts_supply_fraction"] >= 0.0
+    assert data["contracts_supply_fraction"] < 1.0
     assert data["utxos"] > 0
+    assert data["mean_age_days"] > 0
+    assert data["mean_age_days"] > 0
+    assert data["transferred_value_24h"] > 0
+    assert data["transactions_24h"] > 0
 
 
 @pytest.mark.asyncio
@@ -151,9 +156,18 @@ async def test_get_metrics_contracts_series_full():
 
 
 @pytest.mark.asyncio
+async def test_get_metrics_distribution_summary():
+    data = await db.get_metrics_distribution_summary()
+    assert len(data) == 11
+    assert len(data[0]) == 7
+    assert data[0]["col"] == "top10"
+    assert data[0]["latest"] > 0
+
+
+@pytest.mark.asyncio
 async def test_get_metrics_distribution_series_30d():
     data = await db.get_metrics_distribution_series(days=30)
-    assert len(data) == 6
+    assert len(data) == 7
     assert len(data["timestamps"]) == 30
     # Always larger than timestamp of first block
     assert data["timestamps"][0] >= 1561978977137 // 1000
@@ -162,6 +176,141 @@ async def test_get_metrics_distribution_series_30d():
 @pytest.mark.asyncio
 async def test_get_metrics_distribution_series_full():
     data = await db.get_metrics_distribution_series_full()
-    assert len(data) == 6
+    assert len(data) == 7
     # Always starts with timestamp of first block
     assert data["timestamps"][0] == 1561978977137 // 1000
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_tvl_summary():
+    data = await db.get_metrics_tvl_summary()
+    assert len(data) == 11
+    assert len(data[0]) == 7
+    assert data[0]["col"] == "top10"
+    assert data[0]["latest"] > 0
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_tvl_series_30d():
+    data = await db.get_metrics_tvl_series(days=30)
+    assert len(data) == 7
+    assert len(data["timestamps"]) == 30
+    # Always larger than timestamp of first block
+    assert data["timestamps"][0] >= 1561978977137 // 1000
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_tvl_series_full():
+    data = await db.get_metrics_tvl_series_full()
+    assert len(data) == 7
+    # Always starts with timestamp of first block
+    assert data["timestamps"][0] == 1561978977137 // 1000
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_cexs_summary():
+    data = await db.get_metrics_cexs_summary()
+    assert len(data) == 9
+    assert len(data[0]) == 7
+    assert data[0]["col"] == "circulating_supply"
+    assert data[0]["latest"] > 0
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_cexs_series_30d():
+    data = await db.get_metrics_cexs_series(days=30)
+    assert len(data) == 7
+    assert len(data["timestamps"]) == 30
+    # Always larger than timestamp of first block
+    assert data["timestamps"][0] >= 1561978977137 // 1000
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_cexs_series_full():
+    data = await db.get_metrics_cexs_series_full()
+    assert len(data) == 7
+    # No cex on genesis, so check at least gte
+    assert data["timestamps"][0] >= 1561978977137 // 1000
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_age_series_30d():
+    data = await db.get_metrics_age_series(days=30)
+    assert len(data) == 3
+    assert len(data["timestamps"]) == 30
+    # Always larger than timestamp of first block
+    assert data["timestamps"][0] >= 1561978977137 // 1000
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_age_series_full():
+    data = await db.get_metrics_age_series_full()
+    assert len(data) == 3
+    # Always starts with timestamp of first block
+    assert data["timestamps"][0] == 1561978977137 // 1000
+    assert data["mean_age_days"][0] == 0
+    assert data["mean_age_days"][1] >= 0
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_transfer_volume_series_30d():
+    data = await db.get_metrics_transfer_volume_series(days=30)
+    assert len(data) == 3
+    assert len(data["timestamps"]) == 30
+    # Always larger than timestamp of first block
+    assert data["timestamps"][0] >= 1561978977137 // 1000
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_transfer_volume_series_full():
+    data = await db.get_metrics_transfer_volume_series_full()
+    assert len(data) == 3
+    # Starts at midnight UTC of genesis day
+    assert data["timestamps"][0] == 1562025329
+    assert data["transferred_volume"][0] == 0
+    assert data["transferred_volume"][1] >= 0
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_transactions_series_30d():
+    data = await db.get_metrics_transactions_series(days=30)
+    assert len(data) == 3
+    assert len(data["timestamps"]) == 30
+    # Always larger than timestamp of first block
+    assert data["timestamps"][0] >= 1561978977137 // 1000
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_transactions_series_full():
+    data = await db.get_metrics_transactions_series_full()
+    assert len(data) == 3
+    # Starts at midnight UTC of genesis day
+    assert data["timestamps"][0] == 1562025329
+    assert data["transactions"][0] > 0
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_utxos_series_30d():
+    data = await db.get_metrics_utxos_series(days=30)
+    assert len(data) == 3
+    assert len(data["timestamps"]) == 30
+    # Always larger than timestamp of first block
+    assert data["timestamps"][0] >= 1561978977137 // 1000
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_utxos_series_full():
+    data = await db.get_metrics_utxos_series_full()
+    assert len(data) == 3
+    # Always starts with timestamp of first block
+    assert data["timestamps"][0] == 1561978977137 // 1000
+    assert data["boxes"][0] == 1
+    assert data["boxes"][1] >= 1
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_utxos_list():
+    data = await db.get_metrics_utxos_list()
+    assert len(data) == 100
+    assert isinstance(data[0]["address"], str)
+    assert data[0]["boxes"] > 0
