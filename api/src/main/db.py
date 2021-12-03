@@ -172,7 +172,7 @@ async def get_metrics_preview():
             , m.total_contracts
             , m.top100_supply_fraction
             , m.contracts_supply_fraction
-            , m.cexs_supply
+            , m.cexs_supply_fraction
             , m.boxes as utxos
             , c.mean_age_days
             , c.transferred_value_24h

@@ -220,6 +220,6 @@ create table mtr.preview (
 	total_contracts bigint,
 	top100_supply_fraction numeric,
 	contracts_supply_fraction numeric,
-	cexs_supply bigint,
+	cexs_supply_fraction numeric,
 	boxes bigint
 );

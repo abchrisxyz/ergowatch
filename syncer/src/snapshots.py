@@ -182,7 +182,7 @@ async def refresh_preview(conn: pg.Connection):
                 total_contracts,
                 top100_supply_fraction,
                 contracts_supply_fraction,
-                cexs_supply,
+                cexs_supply_fraction,
                 boxes
             )
             select (select timestamp from mtr.address_counts_by_minimal_balance order by timestamp desc limit 1)
@@ -190,7 +190,7 @@ async def refresh_preview(conn: pg.Connection):
                 , (select total from mtr.contract_counts_by_minimal_balance order by timestamp desc limit 1)
                 , (select top100::numeric / circulating_supply from mtr.top_addresses_supply order by timestamp desc limit 1)
                 , (select total::numeric / circulating_supply from mtr.top_contracts_supply order by timestamp desc limit 1)
-                , (select total from mtr.cexs_supply order by timestamp desc limit 1)
+                , (select total::numeric / circulating_supply from mtr.cexs_supply order by timestamp desc limit 1)
                 , (select boxes from mtr.unspent_boxes order by timestamp desc limit 1)
             ;
             """
