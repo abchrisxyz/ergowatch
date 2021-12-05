@@ -235,6 +235,8 @@ async def sync(conn: pg.Connection):
 
             await drop_snapshots(conn)
 
+    await refresh_preview(conn)
+
     logger.info("Syncing completed")
 
 
