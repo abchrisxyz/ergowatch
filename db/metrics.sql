@@ -26,6 +26,8 @@ insert into mtr.cex_addresses (address, cex) values
 	('9fowPvQ2GXdmhD2bN54EL9dRnio3kBQGyrD3fkbHwuTXD6z1wBU', 'coinex'),
 	('9fPiW45mZwoTxSwTLLXaZcdekqi72emebENmScyTGsjryzrntUe', 'coinex'),
 	('9iKFBBrryPhBYVGDKHuZQW7SuLfuTdUJtTPzecbQ5pQQzD4VykC', 'gate'),
+	('9enQZco9hPuqaHvR7EpPRWvYbkDYoWu3NK7pQk8VFwgVnv5taQE', 'gate'),
+	('9i7134eY3zUotQyS8nBeZDJ3SWbTPn117nCJYi977FBn9AaxhZY', 'gate'),
 	('9hU5VUSUAmhEsTehBKDGFaFQSJx574UPoCquKBq59Ushv5XYgAu', 'kucoin'),
 	('9i8Mci4ufn8iBQhzohh4V3XM3PjiJbxuDG1hctouwV4fjW5vBi3', 'kucoin'),
 	('9guZaxPoe4jecHi6ZxtMotKUL4AzpomFf3xqXsFSuTyZoLbmUBr', 'kucoin');
