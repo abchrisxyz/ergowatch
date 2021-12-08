@@ -40,7 +40,8 @@ insert into mtr.cex_addresses (address, cex) values
 	-- Kucoin
 	('9hU5VUSUAmhEsTehBKDGFaFQSJx574UPoCquKBq59Ushv5XYgAu', 'kucoin'),
 	('9i8Mci4ufn8iBQhzohh4V3XM3PjiJbxuDG1hctouwV4fjW5vBi3', 'kucoin'),
-	('9guZaxPoe4jecHi6ZxtMotKUL4AzpomFf3xqXsFSuTyZoLbmUBr', 'kucoin');
+	('9guZaxPoe4jecHi6ZxtMotKUL4AzpomFf3xqXsFSuTyZoLbmUBr', 'kucoin'),
+	('9iNt6wfxSc3DSaBVp22E7g993dwKUCvbGdHoEjxF8SRqj35oXvT', 'kucoin');
 
 
 -------------------------------------------------------------------------------
