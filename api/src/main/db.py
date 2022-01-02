@@ -8,9 +8,8 @@ CONNECTION_POOL = None
 
 async def init_connection_pool():
     global CONNECTION_POOL
-    dbstr = f"postgresql://{os.environ['POSTGRES_PASSWORD']}:ergo@db/ergo"
+    dbstr = f"postgresql://ergo:{os.environ['POSTGRES_PASSWORD']}@db/ergo"
     CONNECTION_POOL = await asyncpg.create_pool(dbstr)
-
 
 async def get_latest_block_height():
     qry = "SELECT MAX(height) AS height FROM node_headers;"
