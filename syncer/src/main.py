@@ -24,7 +24,7 @@ except KeyError as e:
     logger.error(f"Environment variable {e} is not set")
     exit(1)
 
-DBSTR = f"postgresql://{DB_PASS}:{DB_USER}@{DB_HOST}/{DB_NAME}"
+DBSTR = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}"
 
 # Node heights queue
 Q = asyncio.Queue()
