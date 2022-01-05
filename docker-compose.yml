@@ -46,6 +46,9 @@ services:
     build:
       context: ./explorer-backend/9.4.3
       dockerfile: chain-grabber.Dockerfile
+    env_file:
+      # Defines POSTGRES_PASSWORD
+      - ./explorer-backend/db/db.secret
     volumes:
       - ./explorer-backend/conf/explorer-backend.conf:/explorer-backend.conf:ro
     command: /explorer-backend.conf
