@@ -2,7 +2,7 @@
 	ERG market price retrieved from Coingecko.
 */
 
--- drop schema cgo cascade;
+drop schema if exists cgo cascade;
 create schema cgo;
 
 
