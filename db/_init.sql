@@ -8,6 +8,6 @@
 \i './oracle-pools.sql'
 \i './sigmausd.sql'
 \i './coingecko.sql'
-\i './snapshots.sql'
+-- \i './snapshots.sql'
 \i './continuous.sql'
 \i './sync.sql'
