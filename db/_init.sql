@@ -11,3 +11,4 @@
 -- \i './snapshots.sql'
 \i './continuous.sql'
 \i './sync.sql'
+\i './metrics.sql'
