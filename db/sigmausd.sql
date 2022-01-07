@@ -1,4 +1,3 @@
-drop schema if exists sig cascade;
 create schema sig;
 
 

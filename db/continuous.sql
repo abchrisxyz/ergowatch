@@ -1,7 +1,6 @@
 /*
 	con - Continous block stats.
 */
-drop schema if exists con cascade;
 create schema con;
 
 
