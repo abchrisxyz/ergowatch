@@ -12,7 +12,6 @@
 		- supply held in top x addresses
 		- number of addresses with balance > x
 */
-
 create schema mtr;
 
 

@@ -1,4 +1,3 @@
-drop schema if exists orp cascade;
 create schema orp;
 
 -------------------------------------------------------------------------------

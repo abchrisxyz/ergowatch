@@ -1,7 +1,6 @@
 /*
 	con - Continous block stats.
 */
--- drop schema if exists age cascade;
 create schema con;
 
 

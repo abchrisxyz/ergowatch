@@ -30,6 +30,10 @@ docker volume create ew_node
 
 # Build and run the docker environement
 docker-compose -f docker-compose.yml up -d --build
+
+# Create ergowatch database schemas
+cd db
+psql -h localhost -U ergo -p 5433 -d ergo --single-transaction -f ./_init.sql
 ```
 
 > Please note that you might see errors in your docker logs but these will automatically

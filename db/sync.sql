@@ -3,7 +3,6 @@
 
 	Takes care of notifying new blocks and defines top-level sync routine.
 */
-drop schema if exists ew cascade;
 create schema ew;
 
 
