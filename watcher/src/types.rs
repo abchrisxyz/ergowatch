@@ -1,6 +1,7 @@
 use crate::node;
 
-pub type Height = u32;
+// pub type Height = u32;
+// pub type HeaderID = String;
 
 pub struct Header {
     pub height: u32,
