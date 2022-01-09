@@ -22,48 +22,122 @@ alter table core.headers alter column parent_id set not null;
 alter table core.headers alter column timestamp set not null;
 alter table core.headers add constraint headers_unique_id unique(id);
 alter table core.headers add constraint headers_unique_parent_id unique(parent_id);
--- alter table core.headers add constraint headers_self_fk foreign key (parent_id) references core.headers(id);
 
--- create table ew.outputs (
--- 	id text,
--- 	tx_id text,
--- 	header_id text,
--- 	creation_height int,
--- 	value bigint,
--- );
+create table core.transactions (
+	id text,
+	header_id text,
+	height integer,
+	index integer
+);
 
--- create table ew.inputs (
--- 	id text,
--- 	tx_id text,
--- 	header_id text,
--- )
+alter table core.transactions add primary key (id);
+alter table core.transactions add constraint core_transactions_header_id__fk_core_headers_id
+	foreign key (header_id)
+	references core.headers (id)
+	on delete cascade;
 
--- create table ew.tokens (
--- 	box_id text,
--- 	token_id text,
--- 	header_id text,
--- 	value numeric,
--- )
+create table core.outputs (
+	id text,
+	tx_id text,
+	header_id text,
+	creation_height int,
+	-- settlement_height int,
+	index int,
+	value bigint,
+	additional_registers json
+);
 
--- alter table ew.tokens add primary key (box_id, token_id, header_id)
+alter table core.outputs add primary key (id);
+alter table core.outputs alter column tx_id set not null;
+alter table core.outputs alter column header_id set not null;
+alter table core.outputs add constraint core_outputs_tx_id__fk_core_transactions_id
+	foreign key (tx_id)
+	references core.transactions (id)
+	on delete cascade;
+alter table core.outputs add constraint core_outputs_header_id__fk_core_headers_id
+	foreign key (header_id)
+	references core.headers (id)
+	on delete cascade;
 
--- drop schema if exists boxes cascade;
+create table core.inputs (
+	id text,
+	tx_id text,
+	header_id text,
+	index int
+);
 
--- -- Changes in ERG balances
--- create table bal.erg (
--- 	address text,
--- 	height int,
--- 	change bigint
--- );
+alter table core.inputs add primary key (id);
+alter table core.inputs alter column tx_id set not null;
+alter table core.inputs alter column header_id set not null;
+alter table core.inputs add constraint core_inputs_tx_id__fk_core_transactions_id
+	foreign key (tx_id)
+	references core.transactions (id)
+	on delete cascade;
+alter table core.inputs add constraint core_inputs_header_id__fk_core_headers_id
+	foreign key (header_id)
+	references core.headers (id)
+	on delete cascade;
+
+create table core.data_inputs (
+	id text,
+	tx_id text,
+	header_id text,
+	index int
+);
+
+alter table core.data_inputs add primary key (id);
+alter table core.data_inputs alter column tx_id set not null;
+alter table core.data_inputs alter column header_id set not null;
+alter table core.data_inputs add constraint core_data_inputs_tx_id__fk_core_transactions_id
+	foreign key (tx_id)
+	references core.transactions (id)
+	on delete cascade;
+alter table core.data_inputs add constraint core_data_inputs_header_id__fk_core_headers_id
+	foreign key (header_id)
+	references core.headers (id)
+	on delete cascade;
+
+create table core.tokens (
+	token_id text,
+	box_id text,
+	emission_amount bigint,
+	name text,
+	description text,
+	type text,
+	decimals integer
+);
+
+create table core.box_assets (
+	box_id text,
+	token_id text,
+	value numeric
+);
+
+alter table core.box_assets add primary key (box_id, token_id);
+alter table core.box_assets
+	add constraint core_box_assets_box_id__fk_core_outputs_id
+	foreign key (box_id) references core.outputs (id);
+
+
+-------------------------------------------------------------------------------
+-- Balances
+------------------------------------------------------------------------------- 
+drop schema if exists bal cascade;
+create schema bal;
+
+-- Changes in ERG balances
+create table bal.erg (
+	address text,
+	height int,
+	change bigint
+);
 
 -- alter table bal.erg add primary key (address, height);
--- alter table
 
--- -- Changes in token balances
--- create table bal.tokens (
--- 	address text not null,
--- 	token_id text,
--- 	height int,
--- 	value numeric, 
--- )
-
+-- Changes in token balances
+create table bal.tokens (
+	address text,
+	token_id text,
+	height int,
+	value numeric
+);
