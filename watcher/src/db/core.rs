@@ -45,12 +45,12 @@ pub fn delete_header(header: &Header) -> Result<(), postgres::Error> {
     Ok(())
 }
 
-pub fn get_last_header() -> Result<crate::types::Header, postgres::Error> {
+pub fn get_last_header() -> Result<Option<crate::types::Header>, postgres::Error> {
     let mut client = Client::connect(
         "host=192.168.1.72 port=5432 dbname=dev user=ergo password=ergo",
         NoTls,
     )?;
-    let row = client.query_one(
+    let row_opt = client.query_opt(
         "select height \
             , id \
             , parent_id \
@@ -60,13 +60,18 @@ pub fn get_last_header() -> Result<crate::types::Header, postgres::Error> {
          limit 1;",
         &[],
     )?;
-    let height: i32 = row.get("height");
-    let timestamp: i64 = row.get("timestamp");
-    let header = crate::types::Header {
-        height: height as u32,
-        id: row.get("id"),
-        parent_id: row.get("parent_id"),
-        timestamp: timestamp as u64,
-    };
-    Ok(header)
+    match row_opt {
+        Some(row) => {
+            let height: i32 = row.get("height");
+            let timestamp: i64 = row.get("timestamp");
+            let header = crate::types::Header {
+                height: height as u32,
+                id: row.get("id"),
+                parent_id: row.get("parent_id"),
+                timestamp: timestamp as u64,
+            };
+            Ok(Some(header))
+        },
+        None => Ok(None)
+    }
 }

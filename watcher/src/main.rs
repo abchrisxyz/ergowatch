@@ -11,41 +11,13 @@ use std::{thread, time};
 
 const POLL_INTERVAL_SECONDS: u64 = 5;
 
-// Process genesis block if needed.
-fn init() -> () {
-    let db_height = match db::core::get_height() {
-        Ok(h) => h,
-        Err(e) => {
-            error!("{}", e);
-            panic!("Failed retrieving height from db");
-        }
-    };
-
-    if db_height > 0 {
-        // Already initialized, do nothing.
-        return;
-    }
-
-    info!("Adding genesis block");
-    let header_id = node::api::get_block_at(1).unwrap();
-    let header = types::Header::from(node::api::get_block(header_id).unwrap());
-    db::core::insert_header(&header).unwrap();
-}
-
 fn main() {
     env_logger::init();
     info!("Starting Ergo Watcher");
 
-    init();
-
-    // let core = units::core::CoreUnit::new();
-
-    // let units: [&dyn Unit; 1] = [&core];
     let mut units = vec![Box::new(units::core::CoreUnit::new())];
 
     info!("DB core is at height: {}", units[0].last_height);
-
-    // core.last_height += 1;
 
     loop {
         let node_height = match node::api::get_height() {

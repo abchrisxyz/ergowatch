@@ -30,14 +30,10 @@ impl Unit for CoreUnit {
         db::core::delete_header(&header).unwrap();
         info!("Deleted header {} for height {}", header.id, header.height);
     }
-
-    // fn poll() -> Height {
-    //     todo!()
-    // }
 }
 
 impl CoreUnit {
-    pub fn new_genesis() -> CoreUnit {
+    fn new_genesis() -> CoreUnit {
         CoreUnit {
             last_height: 0,
             last_header_id: String::from(
@@ -48,9 +44,13 @@ impl CoreUnit {
 
     pub fn new() -> CoreUnit {
         let head = db::core::get_last_header().unwrap();
-        CoreUnit {
-            last_height: head.height,
-            last_header_id: head.id,
+        match head {
+            Some(h) =>
+                CoreUnit {
+                    last_height: h.height,
+                    last_header_id: h.id,
+                },
+            None => CoreUnit::new_genesis()
         }
     }
 
