@@ -21,8 +21,10 @@ fn main() {
 
     let core = units::core::CoreUnit {};
 
+    let node = node::Node::new();
+
     loop {
-        let node_height = node::api::get_height().unwrap();
+        let node_height = node.get_height().unwrap();
 
         if node_height <= head.height {
             debug!("No new blocks - waiting {} seconds", POLL_INTERVAL_SECONDS);
@@ -33,8 +35,8 @@ fn main() {
         while head.height < node_height {
             let next_height = head.height + 1;
             // Fetch next block from node
-            let header_id = node::api::get_block_at(next_height).unwrap();
-            let block = node::api::get_block(header_id).unwrap();
+            let header_id = node.get_block_at(next_height).unwrap();
+            let block = node.get_block(header_id).unwrap();
 
             if block.header.parent_id == head.header_id {
                 // Process block
