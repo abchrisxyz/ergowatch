@@ -9,29 +9,24 @@ pub enum Statement {
 }
 
 impl Statement {
-
-    // pub fn execute(&self) -> Result<(), postgres::Error> {
-    //     // ToDo: factor connection out of here !!!
-    //     let mut client = Client::connect(
-    //         "host=192.168.1.72 port=5432 dbname=dev user=ergo password=ergo",
-    //         NoTls,
-    //     )?;
-    //     let stmt = match self {
-    //         Statement::InsertHeader(stmt) => stmt,
-    //     };
-    //     stmt.execute(&mut client)
-    // }
-
-    pub fn execute(&self) -> Result<(), postgres::Error> {
-        // ToDo: factor connection out of here !!!
-        let mut client = Client::connect(
-            "host=192.168.1.72 port=5432 dbname=dev user=ergo password=ergo",
-            NoTls,
-        )?;
+    pub fn execute(&self, tx: &mut postgres::Transaction) -> Result<(), postgres::Error> {
         match self {
             Statement::Core(stmt) => stmt,
-        }.execute(&mut client)
+        }.execute(tx)
     }
+}
+
+/// Executes collection of statements in a single transaction
+pub fn execute_in_transaction(statements: Vec<Statement>) -> Result<(), postgres::Error> {
+    let mut client = Client::connect(
+        "host=192.168.1.72 port=5432 dbname=dev user=ergo password=ergo",
+        NoTls,
+    )?;
+    let mut transaction = client.transaction()?;
+    for stmt in statements {
+        stmt.execute(&mut transaction)?;
+    }
+    transaction.commit()
 }
 
 /// Retrieves sync head from current db state.

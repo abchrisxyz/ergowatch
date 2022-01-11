@@ -42,12 +42,14 @@ fn main() {
                     "Including block {} for height {}",
                     block.header.id, block.header.height
                 );
-                // units.iter_mut().for_each(|u| u.ingest(&block));
-                // core.ingest(&block);
+
+                // Collect statements
                 let statements = core.prep(&block);
-                for stmt in &statements {
-                    stmt.execute().unwrap();
-                }
+
+                // Execute statements in single transaction
+                db::execute_in_transaction(statements).unwrap();
+
+                // Move head to latest block
                 head.height = next_height;
                 head.header_id = block.header.id;
             } else {
