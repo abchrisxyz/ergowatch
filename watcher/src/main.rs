@@ -2,10 +2,13 @@ mod db;
 mod node;
 mod types;
 mod units;
+mod settings;
 
 use log::debug;
 use log::info;
 use std::{thread, time};
+
+use settings::Settings;
 
 // const DB_VERSION: i32 = 1;
 const POLL_INTERVAL_SECONDS: u64 = 5;
@@ -14,14 +17,16 @@ fn main() {
     env_logger::init();
     info!("Starting Ergo Watcher");
 
+    let cfg = Settings::new().unwrap();
+    let node = node::Node::new(cfg.node.url);
+
     // ToDo: check db version
 
     let mut head = db::get_head().unwrap();
     info!("Database is currently at block {}", head.height);
 
+    // Parsing units
     let core = units::core::CoreUnit {};
-
-    let node = node::Node::new();
 
     loop {
         let node_height = node.get_height().unwrap();

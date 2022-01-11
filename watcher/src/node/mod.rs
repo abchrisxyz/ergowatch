@@ -10,13 +10,13 @@ use models::NodeInfo;
 
 
 pub struct Node {
-    pub url: String
+    url: String
 }
 
 impl Node {
-    pub fn new() -> Self {
+    pub fn new(url: String) -> Self {
         Node {
-            url: String::from("http://192.168.1.72:9053")
+            url: url
         }
     }
 
