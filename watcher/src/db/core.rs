@@ -2,7 +2,7 @@
 //!
 //! Read/write access to core tables.
 
-use log::info;
+use log::debug;
 
 use crate::types::Header;
 
@@ -35,7 +35,7 @@ impl InsertHeaderStmt {
             "insert into core.headers (height, id, parent_id, timestamp) values ($1, $2, $3, $4);",
             &[&height, &self.header.id, &self.header.parent_id, &timestamp],
         )?;
-        info!("Added header {} for height {}", self.header.id, self.header.height);
+        debug!("Added header {} for height {}", self.header.id, self.header.height);
         Ok(())
     }
 }
