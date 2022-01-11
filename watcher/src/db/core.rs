@@ -2,24 +2,37 @@
 //!
 //! Read/write access to core tables.
 
-use log::debug;
+use log::info;
 use postgres::{Client, NoTls};
 
 use crate::types::Header;
+use super::Executable;
 
-pub fn get_height() -> Result<u32, postgres::Error> {
-    debug!("Retrieving sync height from db");
-    let mut client = Client::connect(
-        "host=192.168.1.72 port=5432 dbname=dev user=ergo password=ergo",
-        NoTls,
-    )?;
-    let row = client.query_one(
-        "select 0 as height union select height from core.headers order by 1 desc limit 1;",
-        &[],
-    )?;
-    let height: i32 = row.get("height");
-    Ok(height as u32)
+pub enum CoreStatement {
+    InsertHeader(InsertHeaderStmt),
 }
+
+impl CoreStatement {
+    pub fn execute(&self, client: &mut postgres::Client) -> Result<(), postgres::Error> {
+        match self {
+            Self::InsertHeader(stmt) => stmt,
+        }.execute(client)
+    }
+}
+
+// pub fn get_height() -> Result<u32, postgres::Error> {
+//     debug!("Retrieving sync height from db");
+//     let mut client = Client::connect(
+//         "host=192.168.1.72 port=5432 dbname=dev user=ergo password=ergo",
+//         NoTls,
+//     )?;
+//     let row = client.query_one(
+//         "select 0 as height union select height from core.headers order by 1 desc limit 1;",
+//         &[],
+//     )?;
+//     let height: i32 = row.get("height");
+//     Ok(height as u32)
+// }
 
 pub fn insert_header(header: &Header) -> Result<(), postgres::Error> {
     let mut client = Client::connect(
@@ -74,4 +87,46 @@ pub fn get_last_header() -> Result<Option<crate::types::Header>, postgres::Error
         },
         None => Ok(None)
     }
+}
+
+pub struct InsertHeaderStmt {
+    pub header: Header,
+}
+
+impl InsertHeaderStmt {
+    pub fn new(header: Header) -> Self {
+        Self {header: header}
+    }
+}
+
+impl InsertHeaderStmt {
+    pub fn execute(&self, client: &mut postgres::Client) -> Result<(), postgres::Error> {
+        let height: i32 = self.header.height as i32;
+        let timestamp: i64 = self.header.timestamp as i64;
+        client.execute(
+            "insert into core.headers (height, id, parent_id, timestamp) values ($1, $2, $3, $4);",
+            &[&height, &self.header.id, &self.header.parent_id, &timestamp],
+        )?;
+        info!("Added header {} for height {}", self.header.id, self.header.height);
+        Ok(())
+    }
+}
+
+impl Executable for InsertHeaderStmt {
+    fn execute(&self, client: &mut postgres::Client) -> Result<(), postgres::Error> {
+        let height: i32 = self.header.height as i32;
+        let timestamp: i64 = self.header.timestamp as i64;
+        client.execute(
+            "insert into core.headers (height, id, parent_id, timestamp) values ($1, $2, $3, $4);",
+            &[&height, &self.header.id, &self.header.parent_id, &timestamp],
+        )?;
+        Ok(())
+    }
+}
+
+pub fn get_sql_to_insert_header(header: &Header) -> String {
+    format!("\
+        insert into core.headers (height, id, parent_id, timestamp) \
+        values ({}, {}, {}, {});",
+        &header.height, &header.id, &header.parent_id, &header.timestamp)
 }

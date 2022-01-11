@@ -3,6 +3,13 @@ use crate::node;
 // pub type Height = u32;
 // pub type HeaderID = String;
 
+/// Represents last block synced to db
+pub struct Head {
+    pub height: u32,
+    pub header_id: String,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct Header {
     pub height: u32,
     pub id: String,

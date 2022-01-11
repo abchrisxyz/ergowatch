@@ -47,7 +47,7 @@ pub struct Header {
     // pub extension_hash: Digest32,
     // pub pow_solutions: ...,
     // pub ad_proofs_id: Digest32,
-    pub transactions_id: Digest32,
+    // pub transactions_id: Digest32,
     pub parent_id: HeaderID,
 }
 
