@@ -17,6 +17,12 @@ impl CoreStatement {
             Self::InsertHeader(stmt) => stmt,
         }.execute(tx)
     }
+
+    pub fn to_sql(&self) -> String {
+        match self {
+            Self::InsertHeader(stmt) => stmt,
+        }.to_sql()
+    }
 }
 
 pub struct InsertHeaderStmt {
@@ -37,6 +43,32 @@ impl InsertHeaderStmt {
         )?;
         debug!("Added header {} for height {}", self.header.id, self.header.height);
         Ok(())
+    }
+
+    pub fn to_sql(&self) -> String {
+        format!(
+            "insert into core.headers (height, id, parent_id, timestamp) values ({}, '{}', '{}', {});",
+            self.header.height, self.header.id, self.header.parent_id, self.header.timestamp
+        )
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn insert_header_statement_to_sql() {
+        let header = crate::types::Header {
+             height: 8,
+             id: String::from("dummy_id"),
+             parent_id: String::from("dummy_parent_id"),
+             timestamp: 123456789,
+        };
+        let stmt = super::InsertHeaderStmt::new(header);
+        assert_eq!(stmt.to_sql(), "\
+            insert into core.headers (height, id, parent_id, timestamp) \
+            values (8, 'dummy_id', 'dummy_parent_id', 123456789);"
+        )
     }
 }
 

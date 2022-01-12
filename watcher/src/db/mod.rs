@@ -14,6 +14,12 @@ impl Statement {
             Statement::Core(stmt) => stmt,
         }.execute(tx)
     }
+
+    pub fn to_sql(&self) -> String {
+        match self {
+            Statement::Core(stmt) => stmt,
+        }.to_sql()
+    }
 }
 
 /// Executes collection of statements in a single transaction
@@ -26,6 +32,22 @@ pub fn execute_in_transaction(statements: Vec<Statement>) -> Result<(), postgres
     for stmt in statements {
         stmt.execute(&mut transaction)?;
     }
+    transaction.commit()
+}
+
+/// Executes collection of statements as batch sql
+pub fn execute_in_batch(statements: Vec<Statement>) -> Result<(), postgres::Error> {
+    let mut client = Client::connect(
+        "host=192.168.1.72 port=5432 dbname=dev user=ergo password=ergo",
+        NoTls,
+    )?;
+    let sql = statements
+        .iter()
+        .map(|s| s.to_sql())
+        .collect::<Vec<String>>()
+        .join(" ");
+    let mut transaction = client.transaction()?;
+    transaction.batch_execute(&sql)?;
     transaction.commit()
 }
 

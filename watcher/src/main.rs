@@ -54,7 +54,8 @@ fn main() {
                 let statements = core.prep(&block);
 
                 // Execute statements in single transaction
-                db::execute_in_transaction(statements).unwrap();
+                // db::execute_in_transaction(statements).unwrap();
+                db::execute_in_batch(statements).unwrap();
 
                 // Move head to latest block
                 head.height = next_height;
