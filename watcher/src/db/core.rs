@@ -5,23 +5,27 @@
 use log::debug;
 
 use crate::types::Header;
+use crate::types::Transaction;
 
 
 pub enum CoreStatement {
     InsertHeader(InsertHeaderStmt),
+    InsertTransactions(InsertTransactionsStmt),
 }
 
 impl CoreStatement {
     pub fn execute(&self, tx: &mut postgres::Transaction) -> Result<(), postgres::Error> {
         match self {
-            Self::InsertHeader(stmt) => stmt,
-        }.execute(tx)
+            Self::InsertHeader(stmt) => stmt.execute(tx),
+            Self::InsertTransactions(stmt) => stmt.execute(tx),
+        }
     }
 
     pub fn to_sql(&self) -> String {
         match self {
-            Self::InsertHeader(stmt) => stmt,
-        }.to_sql()
+            Self::InsertHeader(stmt) => stmt.to_sql(),
+            Self::InsertTransactions(stmt) => stmt.to_sql(),
+        }
     }
 }
 
@@ -50,6 +54,35 @@ impl InsertHeaderStmt {
             "insert into core.headers (height, id, parent_id, timestamp) values ({}, '{}', '{}', {});",
             self.header.height, self.header.id, self.header.parent_id, self.header.timestamp
         )
+    }
+}
+
+pub struct InsertTransactionsStmt {
+    transactions: Vec<Transaction>
+}
+
+impl InsertTransactionsStmt {
+    pub fn new(transactions: Vec<Transaction>) -> Self {
+        Self {transactions: transactions}
+    }
+
+    pub fn execute(&self, tx: &mut postgres::Transaction) -> Result<(), postgres::Error> {
+        for t in &self.transactions {
+            let height: i32 = t.height as i32;
+            tx.execute(
+                "insert into core.transactions (id, header_id, height, index) values ($1, $2, $3, $4);",
+                &[&t.id, &t.header_id, &height, &(t.index as i32)],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn to_sql(&self) -> String {
+        todo!()
+        // format!(
+        //     "insert into core.transactions (id, header_id, height, index) values ('{}', '{}', {}, {});",
+        //     "dummy", "dummy", 0, 0
+        // )
     }
 }
 

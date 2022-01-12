@@ -38,3 +38,12 @@ impl From<&node::models::Block> for Header {
         }
     }
 }
+
+// ToDo use &str instread of String (node Block will always outlive Transaction)
+#[derive(Debug, PartialEq)]
+pub struct Transaction {
+    pub id: String,
+    pub header_id: String,
+    pub height: u32,
+    pub index: u32,
+}

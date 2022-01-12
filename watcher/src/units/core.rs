@@ -3,17 +3,38 @@
 //! Process blocks into core tables data.
 
 use crate::db;
-use crate::db::core::{InsertHeaderStmt};
+use crate::db::core::CoreStatement;
+use crate::db::core::{InsertHeaderStmt, InsertTransactionsStmt};
 use crate::node::models::Block;
 use crate::types::Header;
+use crate::types::Transaction;
 
 pub struct CoreUnit;
 
 impl CoreUnit {
     pub fn prep(&self, block: &Block) -> Vec<db::Statement> {
-        vec![
-            db::Statement::Core(db::core::CoreStatement::InsertHeader(InsertHeaderStmt::new(Header::from(block))))
-        ]
+        let mut statements: Vec<db::Statement> = vec![]; 
+        let height = block.header.height;
+        let header_id = &block.header.id;
+        let statements = vec![
+            db::Statement::Core(CoreStatement::InsertHeader(InsertHeaderStmt::new(Header::from(block)))),
+            db::Statement::Core(CoreStatement::InsertTransactions(InsertTransactionsStmt::new(
+                block.block_transactions.transactions
+                    .iter()
+                    .map(|t| Transaction {
+                        id: String::from(&t.id),
+                        header_id: String::from(header_id),
+                        height: height,
+                        index: 0, // TODOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO !!!!!
+                    })
+                    .collect()
+            )))
+        ];
+
+        
+
+        statements
+        
     }
 
     // fn rollback(&self, block: &Block) -> () {
@@ -54,7 +75,7 @@ mod tests {
         let block = make_test_block();
         let unit = CoreUnit;
         let statements: Vec<db::Statement> = unit.prep(&block);
-        assert_eq!(statements.len(), 1);
+        assert_eq!(statements.len(), 2);
         match &statements[0] {
             db::Statement::Core(db::core::CoreStatement::InsertHeader(stmt)) => {
                 assert_eq!(stmt.header, crate::types::Header::from(block));
