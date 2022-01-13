@@ -815,6 +815,8 @@ dependencies = [
  "bytes",
  "fallible-iterator",
  "postgres-protocol",
+ "serde 1.0.133",
+ "serde_json",
 ]
 
 [[package]]

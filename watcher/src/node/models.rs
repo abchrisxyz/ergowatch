@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use serde::Deserialize;
 
 pub type BoxID = Digest32;
@@ -11,7 +9,7 @@ pub type TokenID = Digest32;
 pub type TransactionID = Digest32;
 pub type Version = u8;
 pub type Value = u64;
-pub type Registers = HashMap<String, String>;
+pub type Registers = serde_json::Value;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -113,7 +111,6 @@ pub mod testing {
     use super::Input;
     use super::Output;
     use super::Transaction;
-    use std::collections::HashMap;
 
     pub fn block_600k() -> Block {
         Block {
@@ -152,7 +149,7 @@ pub mod testing {
                                 value: 52909132500000000,
                                 assets: vec![],
                                 creation_height: 600000,
-                                additional_registers: HashMap::from([]),
+                                additional_registers: serde_json::Value::Null,
                                 transaction_id: String::from(
                                     "4ac89169a2f83adb895b3d76735dbcfc63ad7940bddc2492d9ee4201299bf927",
                                 ),
@@ -165,7 +162,7 @@ pub mod testing {
                                 value: 67500000000,
                                 assets: vec![],
                                 creation_height: 600000,
-                                additional_registers: HashMap::from([]),
+                                additional_registers: serde_json::Value::Null,
                                 transaction_id: String::from(
                                     "4ac89169a2f83adb895b3d76735dbcfc63ad7940bddc2492d9ee4201299bf927",
                                 ),
@@ -204,11 +201,11 @@ pub mod testing {
                                     }
                                 ],
                                 creation_height: 599998,
-                                additional_registers: HashMap::from([
-                                    (String::from("R4"), String::from("0703553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8")),
-                                    (String::from("R5"), String::from("0e2098479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8")),
-                                    (String::from("R6"), String::from("05a4c3edd9998877")),
-                                ]),
+                                additional_registers: serde_json::json!({
+                                    "R4": "0703553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8",
+                                    "R5": "0e2098479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8",
+                                    "R6": "05a4c3edd9998877",
+                                }),
                                 transaction_id: String::from(
                                     "26dab775e0a6ba4315271db107398b47f6b7ec9c7218165a54938bf58b81c4a8",
                                 ),
@@ -221,7 +218,7 @@ pub mod testing {
                                 value: 1100000,
                                 assets: vec![],
                                 creation_height: 599998,
-                                additional_registers: HashMap::from([]),
+                                additional_registers: serde_json::Value::Null,
                                 transaction_id: String::from(
                                     "26dab775e0a6ba4315271db107398b47f6b7ec9c7218165a54938bf58b81c4a8",
                                 ),
@@ -234,7 +231,7 @@ pub mod testing {
                                 value: 2784172525,
                                 assets: vec![],
                                 creation_height: 599998,
-                                additional_registers: HashMap::from([]),
+                                additional_registers: serde_json::Value::Null,
                                 transaction_id: String::from(
                                     "26dab775e0a6ba4315271db107398b47f6b7ec9c7218165a54938bf58b81c4a8",
                                 ),
@@ -261,7 +258,7 @@ pub mod testing {
                                 value: 1100000,
                                 assets: vec![],
                                 creation_height: 600000,
-                                additional_registers: HashMap::from([]),
+                                additional_registers: serde_json::Value::Null,
                                 transaction_id: String::from(
                                     "db3d79ab228b1b93bcb8cd742bacb0a4b49ad5fe67cc11b495482b8c541d3ae2",
                                 ),

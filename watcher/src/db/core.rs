@@ -2,6 +2,7 @@
 //!
 //! Read/write access to core tables.
 pub mod header;
+pub mod outputs;
 pub mod transaction;
 
 // pub fn get_height() -> Result<u32, postgres::Error> {

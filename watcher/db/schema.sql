@@ -37,7 +37,7 @@ alter table core.transactions add constraint core_transactions_header_id__fk_cor
 	on delete cascade;
 
 create table core.outputs (
-	id text,
+	box_id text,
 	tx_id text,
 	header_id text,
 	creation_height int,
@@ -47,7 +47,7 @@ create table core.outputs (
 	additional_registers json
 );
 
-alter table core.outputs add primary key (id);
+alter table core.outputs add primary key (box_id);
 alter table core.outputs alter column tx_id set not null;
 alter table core.outputs alter column header_id set not null;
 alter table core.outputs add constraint core_outputs_tx_id__fk_core_transactions_id
@@ -60,13 +60,13 @@ alter table core.outputs add constraint core_outputs_header_id__fk_core_headers_
 	on delete cascade;
 
 create table core.inputs (
-	id text,
+	box_id text,
 	tx_id text,
 	header_id text,
 	index int
 );
 
-alter table core.inputs add primary key (id);
+alter table core.inputs add primary key (box_id);
 alter table core.inputs alter column tx_id set not null;
 alter table core.inputs alter column header_id set not null;
 alter table core.inputs add constraint core_inputs_tx_id__fk_core_transactions_id
@@ -79,13 +79,13 @@ alter table core.inputs add constraint core_inputs_header_id__fk_core_headers_id
 	on delete cascade;
 
 create table core.data_inputs (
-	id text,
+	box_id text,
 	tx_id text,
 	header_id text,
 	index int
 );
 
-alter table core.data_inputs add primary key (id);
+alter table core.data_inputs add primary key (box_id);
 alter table core.data_inputs alter column tx_id set not null;
 alter table core.data_inputs alter column header_id set not null;
 alter table core.data_inputs add constraint core_data_inputs_tx_id__fk_core_transactions_id
@@ -115,8 +115,8 @@ create table core.box_assets (
 
 alter table core.box_assets add primary key (box_id, token_id);
 alter table core.box_assets
-	add constraint core_box_assets_box_id__fk_core_outputs_id
-	foreign key (box_id) references core.outputs (id);
+	add constraint core_box_assets_box_id__fk_core_outputs_box_id
+	foreign key (box_id) references core.outputs (box_id);
 
 
 -------------------------------------------------------------------------------
