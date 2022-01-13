@@ -3,6 +3,7 @@
 //! Process blocks into core tables data.
 
 use crate::db::core::HeaderRow;
+use crate::db::core::TransactionRow;
 use crate::db::SQLStatement;
 use crate::node::models::Block;
 // use crate::types::Transaction;
@@ -12,17 +13,35 @@ pub struct CoreUnit;
 impl CoreUnit {
     pub fn prep(&self, block: &Block) -> Vec<SQLStatement> {
         let mut statements: Vec<SQLStatement> = vec![];
-        let height = block.header.height;
+        let height = block.header.height as i32;
         let header_id = &block.header.id;
+        // Header
         statements.push(
             HeaderRow {
-                height: height as i32,
+                height: height,
                 id: header_id,
                 parent_id: &block.header.parent_id,
                 timestamp: block.header.timestamp as i64,
             }
             .to_statement(),
         );
+        // Transactions
+        statements.append(
+            &mut block
+                .block_transactions
+                .transactions
+                .iter()
+                .enumerate()
+                .map(|(i, tx)| TransactionRow {
+                    id: &tx.id,
+                    header_id: &header_id,
+                    height: height,
+                    index: i as i32,
+                })
+                .map(|row| row.to_statement())
+                .collect(),
+        );
+
         statements
     }
 
@@ -38,7 +57,7 @@ mod tests {
     use super::CoreUnit;
     use crate::db;
     use crate::db::SQLArg;
-    use crate::node::models::{Block, BlockTransactions, Header};
+    use crate::node::models::{Block, BlockTransactions, Header, Transaction};
 
     fn make_test_block() -> Block {
         Block {
@@ -58,7 +77,26 @@ mod tests {
                 header_id: String::from(
                     "5cacca81066cb5ffd64e26096fd6ad4b6b590e7a3c09208bfda79779a7ab90a4",
                 ),
-                transactions: vec![],
+                transactions: vec![
+                    Transaction {
+                        id: String::from(
+                            "4ac89169a2f83adb895b3d76735dbcfc63ad7940bddc2492d9ee4201299bf927",
+                        ),
+                        inputs: vec![],
+                        data_inputs: vec![],
+                        outputs: vec![],
+                        size: 344,
+                    },
+                    Transaction {
+                        id: String::from(
+                            "26dab775e0a6ba4315271db107398b47f6b7ec9c7218165a54938bf58b81c4a8",
+                        ),
+                        inputs: vec![],
+                        data_inputs: vec![],
+                        outputs: vec![],
+                        size: 674,
+                    },
+                ],
                 block_version: 2,
                 size: 1155,
             },
@@ -69,7 +107,7 @@ mod tests {
     #[test]
     fn number_of_statements() -> () {
         let statements = CoreUnit.prep(&make_test_block());
-        assert_eq!(statements.len(), 1);
+        assert_eq!(statements.len(), 3);
     }
 
     #[test]
@@ -91,5 +129,13 @@ mod tests {
             ))
         );
         assert_eq!(stmnt.args[3], SQLArg::BigInt(1634511451404));
+    }
+
+    #[test]
+    fn transaction_statement() -> () {
+        let statements = CoreUnit.prep(&make_test_block());
+        assert_eq!(statements[1].sql, db::core::INSERT_TRANSACTION);
+        assert_eq!(statements[2].sql, db::core::INSERT_TRANSACTION);
+        let stmnt = &statements[1];
     }
 }

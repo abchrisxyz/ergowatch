@@ -30,50 +30,30 @@ impl HeaderRow<'_> {
     }
 }
 
-// pub fn make_stmt_insert_header<'a>(
-//     row: HeaderRow,
-// ) -> super::SQLStatement<'a> {
-//     super::SQLStatement {
-//         sql: String::from(INSERT_HEADER),
-//         args: vec![
-//             super::SQLArg::Integer(height),
-//             super::SQLArg::Text(id),
-//             super::SQLArg::Text(parent_id),
-//             super::SQLArg::BigInt(timestamp),
-//         ],
-//     }
-// }
+pub const INSERT_TRANSACTION: &str = "\
+insert into core.transactions (id, header_id, height, index) \
+    values ($1, $2, $3, $4);";
 
-// pub struct InsertTransactionsStmt {
-//     transactions: Vec<Transaction>,
-// }
+pub struct TransactionRow<'a> {
+    pub id: &'a str,
+    pub header_id: &'a str,
+    pub height: i32,
+    pub index: i32,
+}
 
-// impl InsertTransactionsStmt {
-//     pub fn new(transactions: Vec<Transaction>) -> Self {
-//         Self {
-//             transactions: transactions,
-//         }
-//     }
-
-//     pub fn execute(&self, tx: &mut postgres::Transaction) -> Result<(), postgres::Error> {
-//         for t in &self.transactions {
-//             let height: i32 = t.height as i32;
-//             tx.execute(
-//                 "insert into core.transactions (id, header_id, height, index) values ($1, $2, $3, $4);",
-//                 &[&t.id, &t.header_id, &height, &(t.index as i32)],
-//             )?;
-//         }
-//         Ok(())
-//     }
-
-//     pub fn to_sql(&self) -> String {
-//         todo!()
-//         // format!(
-//         //     "insert into core.transactions (id, header_id, height, index) values ('{}', '{}', {}, {});",
-//         //     "dummy", "dummy", 0, 0
-//         // )
-//     }
-// }
+impl TransactionRow<'_> {
+    pub fn to_statement(&self) -> SQLStatement {
+        SQLStatement {
+            sql: String::from(INSERT_TRANSACTION),
+            args: vec![
+                SQLArg::Text(String::from(self.id)),
+                SQLArg::Text(String::from(self.header_id)),
+                SQLArg::Integer(self.height),
+                SQLArg::Integer(self.index),
+            ],
+        }
+    }
+}
 
 // pub fn get_height() -> Result<u32, postgres::Error> {
 //     debug!("Retrieving sync height from db");
