@@ -1,59 +1,8 @@
 //! # core
 //!
 //! Read/write access to core tables.
-
-use super::SQLArg;
-use super::SQLStatement;
-
-pub const INSERT_HEADER: &str = "\
-    insert into core.headers (height, id, parent_id, timestamp) \
-    values ($1, $2, $3, $4);";
-
-pub struct HeaderRow<'a> {
-    pub height: i32,
-    pub id: &'a str,
-    pub parent_id: &'a str,
-    pub timestamp: i64,
-}
-
-impl HeaderRow<'_> {
-    pub fn to_statement(&self) -> SQLStatement {
-        SQLStatement {
-            sql: String::from(INSERT_HEADER),
-            args: vec![
-                SQLArg::Integer(self.height),
-                SQLArg::Text(String::from(self.id)),
-                SQLArg::Text(String::from(self.parent_id)),
-                SQLArg::BigInt(self.timestamp),
-            ],
-        }
-    }
-}
-
-pub const INSERT_TRANSACTION: &str = "\
-insert into core.transactions (id, header_id, height, index) \
-    values ($1, $2, $3, $4);";
-
-pub struct TransactionRow<'a> {
-    pub id: &'a str,
-    pub header_id: &'a str,
-    pub height: i32,
-    pub index: i32,
-}
-
-impl TransactionRow<'_> {
-    pub fn to_statement(&self) -> SQLStatement {
-        SQLStatement {
-            sql: String::from(INSERT_TRANSACTION),
-            args: vec![
-                SQLArg::Text(String::from(self.id)),
-                SQLArg::Text(String::from(self.header_id)),
-                SQLArg::Integer(self.height),
-                SQLArg::Integer(self.index),
-            ],
-        }
-    }
-}
+pub mod header;
+pub mod transaction;
 
 // pub fn get_height() -> Result<u32, postgres::Error> {
 //     debug!("Retrieving sync height from db");

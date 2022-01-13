@@ -2,8 +2,8 @@
 //!
 //! Process blocks into core tables data.
 
-use crate::db::core::HeaderRow;
-use crate::db::core::TransactionRow;
+use crate::db::core::header::HeaderRow;
+use crate::db::core::transaction::TransactionRow;
 use crate::db::SQLStatement;
 use crate::node::models::Block;
 // use crate::types::Transaction;
@@ -58,7 +58,6 @@ mod tests {
     use crate::db;
     use crate::db::SQLArg;
     use crate::node::models::testing::block_600k;
-    use crate::node::models::{Block, BlockTransactions, Header, Transaction};
 
     // fn make_test_block() -> Block {
     //     Block {
@@ -116,7 +115,7 @@ mod tests {
     fn header_statement() -> () {
         let statements = CoreUnit.prep(&block_600k());
         let stmnt = &statements[0];
-        assert_eq!(stmnt.sql, db::core::INSERT_HEADER);
+        assert_eq!(stmnt.sql, db::core::header::INSERT_HEADER);
         assert_eq!(stmnt.args[0], SQLArg::Integer(600000));
         assert_eq!(
             stmnt.args[1],
@@ -136,9 +135,9 @@ mod tests {
     #[test]
     fn transaction_statement() -> () {
         let statements = CoreUnit.prep(&block_600k());
-        assert_eq!(statements[1].sql, db::core::INSERT_TRANSACTION);
-        assert_eq!(statements[2].sql, db::core::INSERT_TRANSACTION);
-        assert_eq!(statements[3].sql, db::core::INSERT_TRANSACTION);
-        let stmnt = &statements[1];
+        assert_eq!(statements[1].sql, db::core::transaction::INSERT_TRANSACTION);
+        assert_eq!(statements[2].sql, db::core::transaction::INSERT_TRANSACTION);
+        assert_eq!(statements[3].sql, db::core::transaction::INSERT_TRANSACTION);
+        // let stmnt = &statements[1];
     }
 }
