@@ -1,8 +1,8 @@
 mod db;
 mod node;
+mod settings;
 mod types;
 mod units;
-mod settings;
 
 use log::debug;
 use log::info;
@@ -44,18 +44,16 @@ fn main() {
             let block = node.get_block(header_id).unwrap();
 
             if block.header.parent_id == head.header_id {
-                // Process block
                 info!(
                     "Including block {} for height {}",
                     block.header.id, block.header.height
                 );
 
                 // Collect statements
-                let statements = core.prep(&block);
+                let sql_statements = core.prep(&block);
 
                 // Execute statements in single transaction
-                db::execute_in_transaction(statements).unwrap();
-                // db::execute_in_batch(statements).unwrap();
+                db::execute_in_transaction(sql_statements).unwrap();
 
                 // Move head to latest block
                 head.height = next_height;
