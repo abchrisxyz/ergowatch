@@ -43,6 +43,7 @@ create table core.outputs (
 	tx_id text,
 	header_id text,
 	creation_height int,
+	address text,
 	-- settlement_height int,
 	index int,
 	value bigint,
@@ -52,6 +53,7 @@ create table core.outputs (
 alter table core.outputs add primary key (box_id);
 alter table core.outputs alter column tx_id set not null;
 alter table core.outputs alter column header_id set not null;
+alter table core.outputs alter column address set not null;
 alter table core.outputs add constraint core_outputs_tx_id__fk_core_transactions_id
 	foreign key (tx_id)
 	references core.transactions (id)
