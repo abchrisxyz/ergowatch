@@ -72,12 +72,12 @@ async def get_sigmausd_sigrsv_ohlc_d():
 
 
 @app.get("/sigmausd/history/1d")
-async def get_sigmausd_series_liabs_1d():
+async def get_sigmausd_history_1d():
     return await db.get_sigmausd_history(1)
 
 
 @app.get("/sigmausd/history/5d")
-async def get_sigmausd_series_liabs_5d():
+async def get_sigmausd_history_5d():
     return await db.get_sigmausd_history(5)
 
 
