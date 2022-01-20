@@ -1,11 +1,19 @@
+-------------------------------------------------------------------------------
+-- Migrations
+-------------------------------------------------------------------------------
 drop schema if exists ew cascade;
 create schema ew;
-create table ew.meta (
+create table ew.revision (
 	singleton int primary key default 1,
 	version integer not null,
 	check(singleton = 1)
 );
+insert into ew.revision (version) values (1);
 
+
+-------------------------------------------------------------------------------
+-- Core
+------------------------------------------------------------------------------- 
 drop schema if exists core cascade;
 create schema core;
 
