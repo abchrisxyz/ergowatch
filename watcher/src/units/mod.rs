@@ -4,7 +4,6 @@ pub mod sigma;
 // pub mod metrics;
 
 use crate::node;
-use sigma::base16_to_address;
 
 /// A preprocessed version of block data provided by the node.
 ///
@@ -27,7 +26,13 @@ impl<'a> BlockData<'a> {
             header_id: &block.header.id,
             parent_header_id: &block.header.parent_id,
             timestamp: block.header.timestamp as i64,
-            transactions: vec![],
+            transactions: block
+                .block_transactions
+                .transactions
+                .iter()
+                .enumerate()
+                .map(|(i, tx)| Transaction::from_node_transaction(tx, i))
+                .collect(),
         }
     }
 }
@@ -70,17 +75,9 @@ impl<'a> Output<'a> {
         Output {
             box_id: &output.box_id,
             creation_height: output.creation_height as i32,
-            address: base16_to_address(&output.ergo_tree),
+            address: sigma::base16_to_address(&output.ergo_tree),
             index: output.index as i32,
             value: output.value as i64,
-            // additional_registers: [
-            //     Some(String::from("")),
-            //     Some(String::from("")),
-            //     Some(String::from("")),
-            //     Some(String::from("")),
-            //     Some(String::from("")),
-            //     Some(String::from("")),
-            // ],
             additional_registers: parse_additional_registers(&output.additional_registers),
         }
     }
@@ -132,17 +129,14 @@ fn parse_additional_registers(regs: &serde_json::Value) -> [Option<String>; 6] {
         ],
         _ => {
             panic!("Non map object for additional registers: {:?}", &regs);
-        } // _ => [None, None, None, None, None, None],
+        }
     }
 }
 
 fn decode_register(value: &serde_json::Value) -> Option<String> {
     match value {
         serde_json::Value::String(s) => Some(sigma::render_register_value(&s)),
-        _ => {
-            unimplemented!("Non string value in register: {}", value);
-            // None
-        }
+        _ => unimplemented!("Non string value in register: {}", value),
     }
 }
 
@@ -162,10 +156,10 @@ mod tests {
         assert_eq!(block.header_id, node_block.header.id);
         assert_eq!(block.parent_header_id, node_block.header.parent_id);
         assert_eq!(block.timestamp, node_block.header.timestamp as i64);
-        // assert_eq!(
-        //     block.transactions.len(),
-        //     node_block.block_transactions.transactions.len()
-        // );
+        assert_eq!(
+            block.transactions.len(),
+            node_block.block_transactions.transactions.len()
+        );
     }
 
     #[test]

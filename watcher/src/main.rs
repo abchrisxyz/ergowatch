@@ -50,7 +50,8 @@ fn main() {
                 );
 
                 // Collect statements
-                let sql_statements = core.prep(&units::BlockData::new(&block));
+                let prepped_block = units::BlockData::new(&block);
+                let sql_statements = core.prep(&prepped_block);
 
                 // Execute statements in single transaction
                 db::execute_in_transaction(sql_statements).unwrap();

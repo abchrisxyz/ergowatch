@@ -7,7 +7,6 @@ use crate::db::core::header::HeaderRow;
 use crate::db::core::outputs::OutputRow;
 use crate::db::core::transaction::TransactionRow;
 use crate::db::SQLStatement;
-use crate::node::models::Block;
 
 pub struct CoreUnit;
 
@@ -15,8 +14,8 @@ impl CoreUnit {
     pub fn prep(&self, block: &BlockData) -> Vec<SQLStatement> {
         let mut statements: Vec<SQLStatement> = vec![];
         statements.push(extract_header(&block));
-        // statements.append(&mut extract_transactions(&block));
-        // statements.append(&mut extract_outputs(&block));
+        statements.append(&mut extract_transactions(&block));
+        statements.append(&mut extract_outputs(&block));
         statements
     }
 
@@ -47,28 +46,22 @@ fn extract_header(block: &BlockData) -> SQLStatement {
 // }
 
 // Convert block transactions to sql statements
-fn extract_transactions(block: &Block) -> Vec<SQLStatement> {
-    let header_id = &block.header.id;
-    let height = block.header.height as i32;
+fn extract_transactions(block: &BlockData) -> Vec<SQLStatement> {
     block
-        .block_transactions
         .transactions
         .iter()
-        .enumerate()
-        .map(|(i, tx)| TransactionRow {
+        .map(|tx| TransactionRow {
             id: &tx.id,
-            header_id: &header_id,
-            height: height,
-            index: i as i32,
+            header_id: &block.header_id,
+            height: block.height,
+            index: tx.index,
         })
         .map(|row| row.to_statement())
         .collect()
 }
 
-fn extract_outputs(block: &Block) -> Vec<SQLStatement> {
-    let header_id = &block.header.id;
+fn extract_outputs(block: &BlockData) -> Vec<SQLStatement> {
     block
-        .block_transactions
         .transactions
         .iter()
         .flat_map(|tx| {
@@ -76,12 +69,11 @@ fn extract_outputs(block: &Block) -> Vec<SQLStatement> {
                 OutputRow {
                     box_id: &op.box_id,
                     tx_id: &tx.id,
-                    header_id: &header_id,
-                    creation_height: op.creation_height as i32,
-                    address: "",
-                    index: op.index as i32,
-                    value: op.value as i64,
-                    additional_registers: &op.additional_registers,
+                    header_id: &block.header_id,
+                    creation_height: op.creation_height,
+                    address: &op.address,
+                    index: op.index,
+                    value: op.value,
                 }
                 .to_statement()
             })

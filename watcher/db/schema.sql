@@ -54,8 +54,8 @@ create table core.outputs (
 	address text,
 	-- settlement_height int,
 	index int,
-	value bigint,
-	additional_registers json
+	value bigint
+-- 	additional_registers json
 );
 
 alter table core.outputs add primary key (box_id);
