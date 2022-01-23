@@ -131,6 +131,17 @@ create table core.tokens (
 );
 
 
+create table core.box_registers (
+	id smallint, -- [4,9]
+	box_id text,
+	value_type text,
+	serialized_value text,
+	rendered_value text
+);
+
+alter table core.box_registers add primary key (id, box_id);
+
+
 create table core.box_assets (
 	box_id text,
 	token_id text,

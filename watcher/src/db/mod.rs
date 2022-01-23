@@ -6,6 +6,7 @@ use crate::types::Head;
 
 #[derive(Debug, PartialEq)]
 pub enum SQLArg {
+    SmallInt(i16),
     Integer(i32),
     BigInt(i64),
     Text(String),
@@ -25,6 +26,7 @@ impl SQLStatement {
             .args
             .iter()
             .map(|a| match a {
+                SQLArg::SmallInt(v) => v as &(dyn postgres::types::ToSql + Sync),
                 SQLArg::Integer(v) => v as &(dyn postgres::types::ToSql + Sync),
                 SQLArg::Text(v) => v as &(dyn postgres::types::ToSql + Sync),
                 SQLArg::BigInt(v) => v as &(dyn postgres::types::ToSql + Sync),
