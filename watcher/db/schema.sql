@@ -90,10 +90,11 @@ alter table core.inputs add constraint core_inputs_header_id__fk_core_headers_id
 	foreign key (header_id)
 	references core.headers (id)
 	on delete cascade;
-alter table core.inputs	add constraint core_inputs_box_id__fk_core_outputs_box_id
-	foreign key (box_id)
-	references core.outputs (box_id)
-	on delete cascade;
+-- Not applicable to genesis block
+-- alter table core.inputs add constraint core_inputs_box_id__fk_core_outputs_box_id
+-- 	foreign key (box_id)
+-- 	references core.outputs (box_id)
+-- 	on delete cascade;
 
 
 create table core.data_inputs (
