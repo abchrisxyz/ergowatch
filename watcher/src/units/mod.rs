@@ -67,7 +67,7 @@ struct Output<'a> {
     address: String,
     index: i32,
     value: i64,
-    additional_registers: [Option<String>; 6],
+    additional_registers: [Option<Register>; 6],
 }
 
 impl<'a> Output<'a> {
@@ -84,21 +84,34 @@ impl<'a> Output<'a> {
 }
 
 impl Output<'_> {
-    pub fn R4(&self) -> Option<&str> {
-        match &self.additional_registers[0] {
-            Some(s) => Some(&s),
-            None => None,
-        }
+    pub fn R4(&self) -> &Option<Register> {
+        &self.additional_registers[0]
     }
-    pub fn R5(&self) -> &Option<String> {
+    pub fn R5(&self) -> &Option<Register> {
         &self.additional_registers[1]
     }
-    pub fn R6(&self) -> &Option<String> {
+    pub fn R6(&self) -> &Option<Register> {
         &self.additional_registers[2]
+    }
+    pub fn R7(&self) -> &Option<Register> {
+        &self.additional_registers[3]
+    }
+    pub fn R8(&self) -> &Option<Register> {
+        &self.additional_registers[4]
+    }
+    pub fn R9(&self) -> &Option<Register> {
+        &self.additional_registers[5]
     }
 }
 
-fn parse_additional_registers(regs: &serde_json::Value) -> [Option<String>; 6] {
+#[derive(Debug)]
+struct Register {
+    stype: String,
+    serialized_value: String,
+    rendered_value: String,
+}
+
+fn parse_additional_registers(regs: &serde_json::Value) -> [Option<Register>; 6] {
     match regs {
         serde_json::Value::Null => [None, None, None, None, None, None],
         serde_json::Value::Object(map) => [
@@ -133,11 +146,16 @@ fn parse_additional_registers(regs: &serde_json::Value) -> [Option<String>; 6] {
     }
 }
 
-fn decode_register(value: &serde_json::Value) -> Option<String> {
-    match value {
-        serde_json::Value::String(s) => Some(sigma::render_register_value(&s)),
-        _ => unimplemented!("Non string value in register: {}", value),
+fn decode_register(value: &serde_json::Value) -> Option<Register> {
+    if let serde_json::Value::String(s) = value {
+        let rendered_register = sigma::render_register_value(&s);
+        return Some(Register {
+            stype: rendered_register.value_type,
+            serialized_value: String::new(),
+            rendered_value: rendered_register.value,
+        });
     }
+    panic!("Non string value in register: {}", value);
 }
 
 #[cfg(test)]
@@ -189,15 +207,16 @@ mod tests {
         let node_output = &block_600k().block_transactions.transactions[1].outputs[0];
         let output = Output::from_node_output(&node_output);
         assert_eq!(
-            output.R4(),
-            Some("03553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8")
+            &output.R4().as_ref().unwrap().rendered_value,
+            "03553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8"
         );
         assert_eq!(
-            output.R5(),
-            &Some(String::from(
-                "98479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8"
-            ))
+            &output.R5().as_ref().unwrap().rendered_value,
+            "98479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8"
         );
-        assert_eq!(output.R6(), &Some(String::from("261824656027858")));
+        assert_eq!(
+            &output.R6().as_ref().unwrap().rendered_value,
+            "261824656027858"
+        );
     }
 }
