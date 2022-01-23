@@ -237,6 +237,8 @@ mod testing {
     use super::Output;
     use super::Register;
     use super::Transaction;
+
+    /// Returns a BlockData with contents of block 600k
     pub fn block_600k<'a>() -> BlockData<'a> {
         let tx_1 = Transaction {
             id: "4ac89169a2f83adb895b3d76735dbcfc63ad7940bddc2492d9ee4201299bf927",

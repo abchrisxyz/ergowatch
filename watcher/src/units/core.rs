@@ -3,11 +3,14 @@
 //! Process blocks into core tables data.
 
 use super::BlockData;
+use crate::db::core::assets::BoxAssetRow;
 use crate::db::core::data_inputs::DataInputRow;
 use crate::db::core::header::HeaderRow;
 use crate::db::core::inputs::InputRow;
 use crate::db::core::outputs::OutputRow;
 use crate::db::core::registers::BoxRegisterRow;
+use crate::db::core::tokens::TokenRow;
+use crate::db::core::tokens::TokenRowEIP4;
 use crate::db::core::transaction::TransactionRow;
 use crate::db::SQLStatement;
 
@@ -22,6 +25,8 @@ impl CoreUnit {
         statements.append(&mut extract_inputs(&block));
         statements.append(&mut extract_data_inputs(&block));
         statements.append(&mut extract_additional_registers(&block));
+        statements.append(&mut extract_new_tokens(&block));
+        // TODO: assets
         statements
     }
 
@@ -31,6 +36,7 @@ impl CoreUnit {
     //     info!("Deleted header {} for height {}", header.id, header.height);
     // }
 }
+
 // Convert block header to sql statement
 fn extract_header(block: &BlockData) -> SQLStatement {
     HeaderRow {
@@ -136,6 +142,45 @@ fn extract_additional_registers(block: &BlockData) -> Vec<SQLStatement> {
                     })
             })
         })
+        .collect()
+}
+
+// Handle newly minted tokes.
+// New tokens have the same id as the first input box of the tx.
+// EIP-4 asset standard: https://github.com/ergoplatform/eips/blob/master/eip-0004.md
+fn extract_new_tokens(block: &BlockData) -> Vec<SQLStatement> {
+    block
+        .transactions
+        .iter()
+        .flat_map(|tx| {
+            tx.outputs.iter().flat_map(|op| {
+                op.assets
+                    .iter()
+                    .map(|a| match a.token_id == tx.input_box_ids[0] {
+                        true => Some(if op.R4().is_some() && op.R5().is_some() {
+                            TokenRowEIP4 {
+                                token_id: &a.token_id,
+                                box_id: op.box_id,
+                                emission_amount: 20, //TODO
+                                name: &op.R4().as_ref().unwrap().rendered_value, // TODO decode UTF-8
+                                description: &op.R5().as_ref().unwrap().rendered_value, // TODO decode UTF-8
+                                decimals: 0, //&op.R6().unwrap().rendered_value, // TODO decode UTF-8 and convert to i32
+                            }
+                            .to_statement()
+                        } else {
+                            TokenRow {
+                                token_id: &a.token_id,
+                                box_id: op.box_id,
+                                emission_amount: 20, //TODO
+                            }
+                            .to_statement()
+                        }),
+                        false => None,
+                    })
+            })
+        })
+        .filter(|opt| opt.is_some())
+        .map(|opt| opt.unwrap())
         .collect()
 }
 

@@ -13,6 +13,7 @@ pub enum SQLArg {
 }
 
 /// Stores a SQL statement and its arguments.
+#[derive(Debug, PartialEq)]
 pub struct SQLStatement {
     pub sql: String, // ToDo use &str instead
     pub args: Vec<SQLArg>,
@@ -24,7 +25,7 @@ impl SQLStatement {
         let arg_refs = &self
             .args
             .iter()
-            .map(|a| match a {
+            .map(|arg| match arg {
                 SQLArg::SmallInt(v) => v as &(dyn postgres::types::ToSql + Sync),
                 SQLArg::Integer(v) => v as &(dyn postgres::types::ToSql + Sync),
                 SQLArg::Text(v) => v as &(dyn postgres::types::ToSql + Sync),
