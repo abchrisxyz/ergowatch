@@ -120,15 +120,7 @@ alter table core.data_inputs add constraint core_data_inputs_box_id__fk_core_out
 	on delete cascade;
 
 
-create table core.tokens (
-	token_id text,
-	box_id text,
-	emission_amount bigint,
-	name text,
-	description text,
-	type text,
-	decimals integer
-);
+
 
 
 create table core.box_registers (
@@ -142,16 +134,35 @@ create table core.box_registers (
 alter table core.box_registers add primary key (id, box_id);
 
 
+create table core.tokens (
+	id text,
+	box_id text,
+	emission_amount bigint,
+	name text,
+	description text,
+	type text,
+	decimals integer
+);
+
+alter table core.tokens add primary key (id);
+alter table core.tokens
+	add constraint core_tokens_box_id__fk_core_outputs_box_id
+	foreign key (box_id) references core.outputs (box_id);
+
+
 create table core.box_assets (
 	box_id text,
 	token_id text,
-	value numeric
+	amount bigint
 );
 
 alter table core.box_assets add primary key (box_id, token_id);
 alter table core.box_assets
 	add constraint core_box_assets_box_id__fk_core_outputs_box_id
 	foreign key (box_id) references core.outputs (box_id);
+alter table core.box_assets
+	add constraint core_box_assets_token_id__fk_core_tokens_id
+	foreign key token_id) references core.tokens (id);
 
 
 -------------------------------------------------------------------------------
