@@ -15,7 +15,7 @@ pub struct DataInputRow<'a> {
 impl DataInputRow<'_> {
     pub fn to_statement(&self) -> SQLStatement {
         SQLStatement {
-            sql: String::from(INSERT_DATA_NPUT),
+            sql: String::from(INSERT_DATA_INPUT),
             args: vec![
                 SQLArg::Text(String::from(self.box_id)),
                 SQLArg::Text(String::from(self.tx_id)),

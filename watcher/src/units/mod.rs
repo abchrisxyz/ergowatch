@@ -68,6 +68,7 @@ struct Output<'a> {
     index: i32,
     value: i64,
     additional_registers: [Option<Register>; 6],
+    assets: Vec<Asset<'a>>,
 }
 
 impl<'a> Output<'a> {
@@ -79,6 +80,7 @@ impl<'a> Output<'a> {
             index: output.index as i32,
             value: output.value as i64,
             additional_registers: parse_additional_registers(&output.additional_registers),
+            assets: vec![],
         }
     }
 }
@@ -158,6 +160,11 @@ fn decode_register(value: &serde_json::Value) -> Option<Register> {
     panic!("Non string value in register: {}", value);
 }
 
+struct Asset<'a> {
+    token_id: &'a str,
+    amount: i64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::BlockData;
@@ -223,6 +230,7 @@ mod tests {
 
 #[cfg(test)]
 mod testing {
+    use super::Asset;
     use super::BlockData;
     use super::Output;
     use super::Register;
@@ -238,6 +246,7 @@ mod testing {
                 index: 0,
                 value: 52909132500000000,
                 additional_registers: [None, None, None, None, None, None],
+                assets: vec![],
             }, Output {
                 box_id: "6cb8ffe391838b627cb893c9b2027aa2a03f3a20455dd11e5ac903c7e4179ace",
                 creation_height: 600000,
@@ -245,6 +254,7 @@ mod testing {
                 index: 0,
                 value: 67500000000,
                 additional_registers: [None, None, None, None, None, None],
+                assets: vec![],
             }],
             input_box_ids: vec!["eb1c4a582ba3e8f9d4af389a19f3bc6fa6759fd33956f9902b34dcd4a1d3842f"],
             data_input_box_ids: vec![],
@@ -276,6 +286,12 @@ mod testing {
                             rendered_value: String::from("98479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8"),
                         }),
                         None, None, None],
+                    assets: vec![
+                        Asset {
+                            token_id: "01e6498911823f4d36deaf49a964e883b2c4ae2a4530926f18b9c1411ab2a2c2",
+                            amount: 1,
+                        }
+                    ],
                 },
                 Output {
                     box_id: "5c029ba7b1c67deedbd68878d02e5d7bb49b54943bc68fb5a30956a7a16224e4",
@@ -284,6 +300,7 @@ mod testing {
                     index: 1,
                     value: 1100000,
                     additional_registers: [None, None, None, None, None, None],
+                    assets: vec![],
                 },
                 Output {
                     box_id: "22adc6d1fd18e81da0ab9fa47bc389c5948780c98906c0ea3d812eba4ef17a33",
@@ -292,6 +309,7 @@ mod testing {
                     index: 1,
                     value: 2784172525,
                     additional_registers: [None, None, None, None, None, None],
+                    assets: vec![],
                 }
             ],
             input_box_ids: vec![
@@ -310,6 +328,7 @@ mod testing {
                 index: 0,
                 value: 1100000,
                 additional_registers: [None, None, None, None, None, None],
+                assets: vec![],
             }],
             input_box_ids: vec!["5c029ba7b1c67deedbd68878d02e5d7bb49b54943bc68fb5a30956a7a16224e4"],
             data_input_box_ids: vec![],

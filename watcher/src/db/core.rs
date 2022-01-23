@@ -1,7 +1,9 @@
 //! # core
 //!
 //! Read/write access to core tables.
+pub mod data_inputs;
 pub mod header;
+pub mod inputs;
 pub mod outputs;
 pub mod transaction;
 

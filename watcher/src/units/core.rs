@@ -3,7 +3,9 @@
 //! Process blocks into core tables data.
 
 use super::BlockData;
+use crate::db::core::data_inputs::DataInputRow;
 use crate::db::core::header::HeaderRow;
+use crate::db::core::inputs::InputRow;
 use crate::db::core::outputs::OutputRow;
 use crate::db::core::transaction::TransactionRow;
 use crate::db::SQLStatement;
@@ -16,6 +18,8 @@ impl CoreUnit {
         statements.push(extract_header(&block));
         statements.append(&mut extract_transactions(&block));
         statements.append(&mut extract_outputs(&block));
+        statements.append(&mut extract_inputs(&block));
+        statements.append(&mut extract_data_inputs(&block));
         statements
     }
 
@@ -35,15 +39,6 @@ fn extract_header(block: &BlockData) -> SQLStatement {
     }
     .to_statement()
 }
-// fn extract_header(block: &Block) -> SQLStatement {
-//     HeaderRow {
-//         height: block.header.height as i32,
-//         id: &block.header.id,
-//         parent_id: &block.header.parent_id,
-//         timestamp: block.header.timestamp as i64,
-//     }
-//     .to_statement()
-// }
 
 // Convert block transactions to sql statements
 fn extract_transactions(block: &BlockData) -> Vec<SQLStatement> {
@@ -81,6 +76,42 @@ fn extract_outputs(block: &BlockData) -> Vec<SQLStatement> {
         .collect()
 }
 
+fn extract_inputs(block: &BlockData) -> Vec<SQLStatement> {
+    block
+        .transactions
+        .iter()
+        .flat_map(|tx| {
+            tx.input_box_ids.iter().enumerate().map(|(ix, id)| {
+                InputRow {
+                    box_id: &id,
+                    tx_id: &tx.id,
+                    header_id: &block.header_id,
+                    index: ix as i32,
+                }
+                .to_statement()
+            })
+        })
+        .collect()
+}
+
+fn extract_data_inputs(block: &BlockData) -> Vec<SQLStatement> {
+    block
+        .transactions
+        .iter()
+        .flat_map(|tx| {
+            tx.data_input_box_ids.iter().enumerate().map(|(ix, id)| {
+                DataInputRow {
+                    box_id: &id,
+                    tx_id: &tx.id,
+                    header_id: &block.header_id,
+                    index: ix as i32,
+                }
+                .to_statement()
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::CoreUnit;
@@ -91,8 +122,8 @@ mod tests {
     #[test]
     fn number_of_statements() -> () {
         let statements = CoreUnit.prep(&block_600k());
-        // 1 header + 3 transactions + 6 outputs
-        assert_eq!(statements.len(), 10);
+        // 1 header + 3 transactions + 6 outputs + 4 inputs + 1 data input
+        assert_eq!(statements.len(), 15);
     }
 
     #[test]
@@ -133,5 +164,20 @@ mod tests {
         assert_eq!(statements[7].sql, db::core::outputs::INSERT_OUTPUT);
         assert_eq!(statements[8].sql, db::core::outputs::INSERT_OUTPUT);
         assert_eq!(statements[9].sql, db::core::outputs::INSERT_OUTPUT);
+    }
+
+    #[test]
+    fn input_statements() -> () {
+        let statements = CoreUnit.prep(&block_600k());
+        assert_eq!(statements[10].sql, db::core::inputs::INSERT_INPUT);
+        assert_eq!(statements[11].sql, db::core::inputs::INSERT_INPUT);
+        assert_eq!(statements[12].sql, db::core::inputs::INSERT_INPUT);
+        assert_eq!(statements[13].sql, db::core::inputs::INSERT_INPUT);
+    }
+
+    #[test]
+    fn data_input_statements() -> () {
+        let statements = CoreUnit.prep(&block_600k());
+        assert_eq!(statements[14].sql, db::core::data_inputs::INSERT_DATA_INPUT);
     }
 }
