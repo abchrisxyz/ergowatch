@@ -11,7 +11,7 @@ pub struct BoxAssetRow<'a> {
     pub amount: i64,
 }
 
-impl InputRow<'_> {
+impl BoxAssetRow<'_> {
     pub fn to_statement(&self) -> SQLStatement {
         SQLStatement {
             sql: String::from(INSERT_BOX_ASSET),
