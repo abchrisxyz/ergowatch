@@ -220,3 +220,106 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod testing {
+    use super::BlockData;
+    use super::Output;
+    use super::Register;
+    use super::Transaction;
+    pub fn block_600k<'a>() -> BlockData<'a> {
+        let tx_1 = Transaction {
+            id: "4ac89169a2f83adb895b3d76735dbcfc63ad7940bddc2492d9ee4201299bf927",
+            index: 0,
+            outputs: vec![Output {
+                box_id: "029bc1cb151aaef51c3678d2c74f3e82c9f4d197dd37e7a4eb73612f9da4f1f6",
+                creation_height: 600000,
+                address: String::from("2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU"),
+                index: 0,
+                value: 52909132500000000,
+                additional_registers: [None, None, None, None, None, None],
+            }, Output {
+                box_id: "6cb8ffe391838b627cb893c9b2027aa2a03f3a20455dd11e5ac903c7e4179ace",
+                creation_height: 600000,
+                address: String::from("88dhgzEuTXaRvR2VKsnXYTGUPh3A9VK8ojeRcpHihcrBu23dnwbB12BbVcJuTcdGfRuSzA8bW25Az6n9"),
+                index: 0,
+                value: 67500000000,
+                additional_registers: [None, None, None, None, None, None],
+            }],
+            input_box_ids: vec!["eb1c4a582ba3e8f9d4af389a19f3bc6fa6759fd33956f9902b34dcd4a1d3842f"],
+            data_input_box_ids: vec![],
+        };
+        let tx_2 = Transaction {
+            id: "26dab775e0a6ba4315271db107398b47f6b7ec9c7218165a54938bf58b81c4a8",
+            index: 1i32,
+            outputs: vec![
+                Output {
+                    box_id: "aa94183d21f9e8fee38d4f3326d2acf8258dd36e6dff38142fa93e633d01464d",
+                    creation_height: 599998,
+                    address: String::from("jL2aaqw6XU61SZznvcri5VZnx1Gn8hfZWK87JH6PM7o1YMDMZfpH1uoGJSd3gDQabX6AmCZKLyMSBqSoUAo8X7E5oNRV9JgCdLBFjV6i1BEjZLwgGo3RUr4p8zchqrJ1FeGPLf2DidW6F41aeM1zCM64ZjfBqcy8d6fgEnAn53W28GEDQi5W1XCWRjFvgTFuDdAzd6Yj65KGJhdvMSgffP7pELpCtqK5Z4dX9SQKtt8Y4RMBaeEKtKB1pEx1n"),
+                    index: 0,
+                    value: 1000000,
+                    additional_registers: [
+                        Some(Register {
+                            stype: String::from("SLong"),
+                            serialized_value: String::from("05a4c3edd9998877"),
+                            rendered_value: String::from("261824656027858"),
+                        }),
+                        Some(Register {
+                            stype: String::from("SGroupElement"),
+                            serialized_value: String::from("0703553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8"),
+                            rendered_value: String::from("03553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8"),
+                        }),
+                        Some(Register {
+                            stype: String::from("Coll[SByte]"),
+                            serialized_value: String::from("0e2098479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8"),
+                            rendered_value: String::from("98479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8"),
+                        }),
+                        None, None, None],
+                },
+                Output {
+                    box_id: "5c029ba7b1c67deedbd68878d02e5d7bb49b54943bc68fb5a30956a7a16224e4",
+                    creation_height: 599998,
+                    address: String::from("2iHkR7CWvD1R4j1yZg5bkeDRQavjAaVPeTDFGGLZduHyfWMuYpmhHocX8GJoaieTx78FntzJbCBVL6rf96ocJoZdmWBL2fci7NqWgAirppPQmZ7fN9V6z13Ay6brPriBKYqLp1bT2Fk4FkFLCfdPpe"),
+                    index: 1,
+                    value: 1100000,
+                    additional_registers: [None, None, None, None, None, None],
+                },
+                Output {
+                    box_id: "22adc6d1fd18e81da0ab9fa47bc389c5948780c98906c0ea3d812eba4ef17a33",
+                    creation_height: 599998,
+                    address: String::from("9h7L7sUHZk43VQC3PHtSp5ujAWcZtYmWATBH746wi75C5XHi68b"),
+                    index: 1,
+                    value: 2784172525,
+                    additional_registers: [None, None, None, None, None, None],
+                }
+            ],
+            input_box_ids: vec![
+                "c739a3294d592377a131840d491bd2b66c27f51ae2c62c66be7bb41b248f321e",
+                "6ca2a9d63f2f08663c09d99126ec1be7b65ce2e8f34e283c4d5af78485b47c91",
+            ],
+            data_input_box_ids: vec!["98479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8"],
+        };
+        let tx_3 = Transaction {
+            id: "db3d79ab228b1b93bcb8cd742bacb0a4b49ad5fe67cc11b495482b8c541d3ae2",
+            index: 2,
+            outputs: vec![Output {
+                box_id: "98d0271b7a29d62b672d8dd002e38b8cfbfc8e4055a637422b3e9d59cd6ff86d",
+                creation_height: 600000,
+                address: String::from("2iHkR7CWvD1R4j1yZg5bkeDRQavjAaVPeTDFGGLZduHyfWMuYpmhHocX8GJoaieTx78FntzJbCBVL6rf96ocJoZdmWBL2fci7NqWgAirppPQmZ7fN9V6z13Ay6brPriBKYqLp1bT2Fk4FkFLCfdPpe"),
+                index: 0,
+                value: 1100000,
+                additional_registers: [None, None, None, None, None, None],
+            }],
+            input_box_ids: vec!["5c029ba7b1c67deedbd68878d02e5d7bb49b54943bc68fb5a30956a7a16224e4"],
+            data_input_box_ids: vec![],
+        };
+        BlockData {
+            height: 600000,
+            header_id: "5cacca81066cb5ffd64e26096fd6ad4b6b590e7a3c09208bfda79779a7ab90a4",
+            parent_header_id: "eac9b85b5faca84fda89ed344730488bf11c5689165e04a059bf523776ae39d1",
+            timestamp: 1634511451404,
+            transactions: vec![tx_1, tx_2, tx_3],
+        }
+    }
+}

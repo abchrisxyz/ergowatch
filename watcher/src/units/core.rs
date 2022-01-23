@@ -81,102 +81,57 @@ fn extract_outputs(block: &BlockData) -> Vec<SQLStatement> {
         .collect()
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::CoreUnit;
-//     use crate::db;
-//     use crate::db::SQLArg;
-//     use crate::node::models::testing::block_600k;
+#[cfg(test)]
+mod tests {
+    use super::CoreUnit;
+    use crate::db;
+    use crate::db::SQLArg;
+    use crate::units::testing::block_600k;
 
-//     // fn make_test_block() -> Block {
-//     //     Block {
-//     //         header: Header {
-//     //             votes: String::from("000000"),
-//     //             timestamp: 1634511451404,
-//     //             size: 221,
-//     //             height: 600000,
-//     //             id: String::from(
-//     //                 "5cacca81066cb5ffd64e26096fd6ad4b6b590e7a3c09208bfda79779a7ab90a4",
-//     //             ),
-//     //             parent_id: String::from(
-//     //                 "eac9b85b5faca84fda89ed344730488bf11c5689165e04a059bf523776ae39d1",
-//     //             ),
-//     //         },
-//     //         block_transactions: BlockTransactions {
-//     //             header_id: String::from(
-//     //                 "5cacca81066cb5ffd64e26096fd6ad4b6b590e7a3c09208bfda79779a7ab90a4",
-//     //             ),
-//     //             transactions: vec![
-//     //                 Transaction {
-//     //                     id: String::from(
-//     //                         "4ac89169a2f83adb895b3d76735dbcfc63ad7940bddc2492d9ee4201299bf927",
-//     //                     ),
-//     //                     inputs: vec![],
-//     //                     data_inputs: vec![],
-//     //                     outputs: vec![],
-//     //                     size: 344,
-//     //                 },
-//     //                 Transaction {
-//     //                     id: String::from(
-//     //                         "26dab775e0a6ba4315271db107398b47f6b7ec9c7218165a54938bf58b81c4a8",
-//     //                     ),
-//     //                     inputs: vec![],
-//     //                     data_inputs: vec![],
-//     //                     outputs: vec![],
-//     //                     size: 674,
-//     //                 },
-//     //             ],
-//     //             block_version: 2,
-//     //             size: 1155,
-//     //         },
-//     //         size: 8486,
-//     //     }
-//     // }
+    #[test]
+    fn number_of_statements() -> () {
+        let statements = CoreUnit.prep(&block_600k());
+        // 1 header + 3 transactions + 6 outputs
+        assert_eq!(statements.len(), 10);
+    }
 
-//     #[test]
-//     fn number_of_statements() -> () {
-//         let statements = CoreUnit.prep(&block_600k());
-//         // 1 header + 3 transactions + 6 outputs
-//         assert_eq!(statements.len(), 10);
-//     }
+    #[test]
+    fn header_statement() -> () {
+        let statements = CoreUnit.prep(&block_600k());
+        let stmnt = &statements[0];
+        assert_eq!(stmnt.sql, db::core::header::INSERT_HEADER);
+        assert_eq!(stmnt.args[0], SQLArg::Integer(600000));
+        assert_eq!(
+            stmnt.args[1],
+            SQLArg::Text(String::from(
+                "5cacca81066cb5ffd64e26096fd6ad4b6b590e7a3c09208bfda79779a7ab90a4"
+            ))
+        );
+        assert_eq!(
+            stmnt.args[2],
+            SQLArg::Text(String::from(
+                "eac9b85b5faca84fda89ed344730488bf11c5689165e04a059bf523776ae39d1"
+            ))
+        );
+        assert_eq!(stmnt.args[3], SQLArg::BigInt(1634511451404));
+    }
 
-//     #[test]
-//     fn header_statement() -> () {
-//         let statements = CoreUnit.prep(&block_600k());
-//         let stmnt = &statements[0];
-//         assert_eq!(stmnt.sql, db::core::header::INSERT_HEADER);
-//         assert_eq!(stmnt.args[0], SQLArg::Integer(600000));
-//         assert_eq!(
-//             stmnt.args[1],
-//             SQLArg::Text(String::from(
-//                 "5cacca81066cb5ffd64e26096fd6ad4b6b590e7a3c09208bfda79779a7ab90a4"
-//             ))
-//         );
-//         assert_eq!(
-//             stmnt.args[2],
-//             SQLArg::Text(String::from(
-//                 "eac9b85b5faca84fda89ed344730488bf11c5689165e04a059bf523776ae39d1"
-//             ))
-//         );
-//         assert_eq!(stmnt.args[3], SQLArg::BigInt(1634511451404));
-//     }
+    #[test]
+    fn transaction_statements() -> () {
+        let statements = CoreUnit.prep(&block_600k());
+        assert_eq!(statements[1].sql, db::core::transaction::INSERT_TRANSACTION);
+        assert_eq!(statements[2].sql, db::core::transaction::INSERT_TRANSACTION);
+        assert_eq!(statements[3].sql, db::core::transaction::INSERT_TRANSACTION);
+    }
 
-//     #[test]
-//     fn transaction_statements() -> () {
-//         let statements = CoreUnit.prep(&block_600k());
-//         assert_eq!(statements[1].sql, db::core::transaction::INSERT_TRANSACTION);
-//         assert_eq!(statements[2].sql, db::core::transaction::INSERT_TRANSACTION);
-//         assert_eq!(statements[3].sql, db::core::transaction::INSERT_TRANSACTION);
-//     }
-
-//     #[test]
-//     fn output_statements() -> () {
-//         let statements = CoreUnit.prep(&block_600k());
-//         assert_eq!(statements[4].sql, db::core::outputs::INSERT_OUTPUT);
-//         assert_eq!(statements[5].sql, db::core::outputs::INSERT_OUTPUT);
-//         assert_eq!(statements[6].sql, db::core::outputs::INSERT_OUTPUT);
-//         assert_eq!(statements[7].sql, db::core::outputs::INSERT_OUTPUT);
-//         assert_eq!(statements[8].sql, db::core::outputs::INSERT_OUTPUT);
-//         assert_eq!(statements[9].sql, db::core::outputs::INSERT_OUTPUT);
-//     }
-// }
+    #[test]
+    fn output_statements() -> () {
+        let statements = CoreUnit.prep(&block_600k());
+        assert_eq!(statements[4].sql, db::core::outputs::INSERT_OUTPUT);
+        assert_eq!(statements[5].sql, db::core::outputs::INSERT_OUTPUT);
+        assert_eq!(statements[6].sql, db::core::outputs::INSERT_OUTPUT);
+        assert_eq!(statements[7].sql, db::core::outputs::INSERT_OUTPUT);
+        assert_eq!(statements[8].sql, db::core::outputs::INSERT_OUTPUT);
+        assert_eq!(statements[9].sql, db::core::outputs::INSERT_OUTPUT);
+    }
+}
