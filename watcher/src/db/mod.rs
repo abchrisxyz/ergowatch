@@ -10,7 +10,6 @@ pub enum SQLArg {
     Integer(i32),
     BigInt(i64),
     Text(String),
-    Json(serde_json::Value),
 }
 
 /// Stores a SQL statement and its arguments.
@@ -30,8 +29,6 @@ impl SQLStatement {
                 SQLArg::Integer(v) => v as &(dyn postgres::types::ToSql + Sync),
                 SQLArg::Text(v) => v as &(dyn postgres::types::ToSql + Sync),
                 SQLArg::BigInt(v) => v as &(dyn postgres::types::ToSql + Sync),
-                // Drop with-serde_json-1 feature if not using
-                SQLArg::Json(v) => v as &(dyn postgres::types::ToSql + Sync),
             })
             .collect::<Vec<&(dyn postgres::types::ToSql + Sync)>>();
         tx.execute(&self.sql, &arg_refs[..])?;
