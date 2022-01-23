@@ -7,6 +7,7 @@ use crate::db::core::data_inputs::DataInputRow;
 use crate::db::core::header::HeaderRow;
 use crate::db::core::inputs::InputRow;
 use crate::db::core::outputs::OutputRow;
+use crate::db::core::registers::BoxRegisterRow;
 use crate::db::core::transaction::TransactionRow;
 use crate::db::SQLStatement;
 
@@ -20,6 +21,7 @@ impl CoreUnit {
         statements.append(&mut extract_outputs(&block));
         statements.append(&mut extract_inputs(&block));
         statements.append(&mut extract_data_inputs(&block));
+        statements.append(&mut extract_additional_registers(&block));
         statements
     }
 
@@ -112,6 +114,31 @@ fn extract_data_inputs(block: &BlockData) -> Vec<SQLStatement> {
         .collect()
 }
 
+fn extract_additional_registers(block: &BlockData) -> Vec<SQLStatement> {
+    block
+        .transactions
+        .iter()
+        .flat_map(|tx| {
+            tx.outputs.iter().flat_map(|op| {
+                op.additional_registers
+                    .iter()
+                    .filter(|r| r.is_some())
+                    .map(|r| r.as_ref().unwrap())
+                    .map(|r| {
+                        BoxRegisterRow {
+                            id: r.id,
+                            box_id: &op.box_id,
+                            stype: &r.stype,
+                            serialized_value: &r.serialized_value,
+                            rendered_value: &r.rendered_value,
+                        }
+                        .to_statement()
+                    })
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::CoreUnit;
@@ -122,8 +149,8 @@ mod tests {
     #[test]
     fn number_of_statements() -> () {
         let statements = CoreUnit.prep(&block_600k());
-        // 1 header + 3 transactions + 6 outputs + 4 inputs + 1 data input
-        assert_eq!(statements.len(), 15);
+        // 1 header + 3 transactions + 6 outputs + 4 inputs + 1 data input + 3 registers
+        assert_eq!(statements.len(), 18);
     }
 
     #[test]
@@ -179,5 +206,13 @@ mod tests {
     fn data_input_statements() -> () {
         let statements = CoreUnit.prep(&block_600k());
         assert_eq!(statements[14].sql, db::core::data_inputs::INSERT_DATA_INPUT);
+    }
+
+    #[test]
+    fn box_register_statements() -> () {
+        let statements = CoreUnit.prep(&block_600k());
+        assert_eq!(statements[15].sql, db::core::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[16].sql, db::core::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[17].sql, db::core::registers::INSERT_BOX_REGISTER);
     }
 }

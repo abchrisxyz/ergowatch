@@ -108,6 +108,7 @@ impl Output<'_> {
 
 #[derive(Debug)]
 struct Register {
+    id: i16,
     stype: String,
     serialized_value: String,
     rendered_value: String,
@@ -118,27 +119,27 @@ fn parse_additional_registers(regs: &serde_json::Value) -> [Option<Register>; 6]
         serde_json::Value::Null => [None, None, None, None, None, None],
         serde_json::Value::Object(map) => [
             match map.get("R4") {
-                Some(v) => decode_register(&v),
+                Some(v) => decode_register(&v, 4),
                 None => None,
             },
             match map.get("R5") {
-                Some(v) => decode_register(&v),
+                Some(v) => decode_register(&v, 5),
                 None => None,
             },
             match map.get("R6") {
-                Some(v) => decode_register(&v),
+                Some(v) => decode_register(&v, 6),
                 None => None,
             },
             match map.get("R7") {
-                Some(v) => decode_register(&v),
+                Some(v) => decode_register(&v, 7),
                 None => None,
             },
             match map.get("R8") {
-                Some(v) => decode_register(&v),
+                Some(v) => decode_register(&v, 8),
                 None => None,
             },
             match map.get("R9") {
-                Some(v) => decode_register(&v),
+                Some(v) => decode_register(&v, 9),
                 None => None,
             },
         ],
@@ -148,10 +149,11 @@ fn parse_additional_registers(regs: &serde_json::Value) -> [Option<Register>; 6]
     }
 }
 
-fn decode_register(value: &serde_json::Value) -> Option<Register> {
+fn decode_register(value: &serde_json::Value, id: i16) -> Option<Register> {
     if let serde_json::Value::String(s) = value {
         let rendered_register = sigma::render_register_value(&s);
         return Some(Register {
+            id: id,
             stype: rendered_register.value_type,
             serialized_value: String::new(),
             rendered_value: rendered_register.value,
@@ -271,16 +273,19 @@ mod testing {
                     value: 1000000,
                     additional_registers: [
                         Some(Register {
+                            id: 4,
                             stype: String::from("SLong"),
                             serialized_value: String::from("05a4c3edd9998877"),
                             rendered_value: String::from("261824656027858"),
                         }),
                         Some(Register {
+                            id: 5,
                             stype: String::from("SGroupElement"),
                             serialized_value: String::from("0703553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8"),
                             rendered_value: String::from("03553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8"),
                         }),
                         Some(Register {
+                            id: 6,
                             stype: String::from("Coll[SByte]"),
                             serialized_value: String::from("0e2098479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8"),
                             rendered_value: String::from("98479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8"),
