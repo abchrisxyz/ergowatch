@@ -5,14 +5,14 @@ pub const INSERT_INPUT: &str = "\
     insert into core.inputs (box_id, tx_id, header_id, index) \
     values ($1, $2, $3, $4);";
 
-pub struct OutputRow<'a> {
+pub struct InputRow<'a> {
     pub box_id: &'a str,
     pub tx_id: &'a str,
     pub header_id: &'a str,
     pub index: i32,
 }
 
-impl OutputRow<'_> {
+impl InputRow<'_> {
     pub fn to_statement(&self) -> SQLStatement {
         SQLStatement {
             sql: String::from(INSERT_OUTPUT),
