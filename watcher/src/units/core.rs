@@ -3,7 +3,8 @@
 //! Process blocks into core tables data.
 
 use super::BlockData;
-use crate::db::core::assets::BoxAssetRow;
+use super::Output;
+// use crate::db::core::assets::BoxAssetRow;
 use crate::db::core::data_inputs::DataInputRow;
 use crate::db::core::header::HeaderRow;
 use crate::db::core::inputs::InputRow;
@@ -13,6 +14,7 @@ use crate::db::core::tokens::TokenRow;
 use crate::db::core::tokens::TokenRowEIP4;
 use crate::db::core::transaction::TransactionRow;
 use crate::db::SQLStatement;
+use log::warn;
 
 pub struct CoreUnit;
 
@@ -157,24 +159,27 @@ fn extract_new_tokens(block: &BlockData) -> Vec<SQLStatement> {
                 op.assets
                     .iter()
                     .map(|a| match a.token_id == tx.input_box_ids[0] {
-                        true => Some(if op.R4().is_some() && op.R5().is_some() {
-                            TokenRowEIP4 {
-                                token_id: &a.token_id,
-                                box_id: op.box_id,
-                                emission_amount: 20, //TODO
-                                name: &op.R4().as_ref().unwrap().rendered_value, // TODO decode UTF-8
-                                description: &op.R5().as_ref().unwrap().rendered_value, // TODO decode UTF-8
-                                decimals: 0, //&op.R6().unwrap().rendered_value, // TODO decode UTF-8 and convert to i32
-                            }
-                            .to_statement()
-                        } else {
-                            TokenRow {
-                                token_id: &a.token_id,
-                                box_id: op.box_id,
-                                emission_amount: 20, //TODO
-                            }
-                            .to_statement()
-                        }),
+                        true => match EIP4Data::from_output(op) {
+                            Some(eip4_data) => Some(
+                                TokenRowEIP4 {
+                                    token_id: &a.token_id,
+                                    box_id: op.box_id,
+                                    emission_amount: a.amount,
+                                    name: eip4_data.name,
+                                    description: eip4_data.description,
+                                    decimals: eip4_data.decimals,
+                                }
+                                .to_statement(),
+                            ),
+                            None => Some(
+                                TokenRow {
+                                    token_id: &a.token_id,
+                                    box_id: &op.box_id,
+                                    emission_amount: a.amount,
+                                }
+                                .to_statement(),
+                            ),
+                        },
                         false => None,
                     })
             })
@@ -184,12 +189,60 @@ fn extract_new_tokens(block: &BlockData) -> Vec<SQLStatement> {
         .collect()
 }
 
+struct EIP4Data {
+    name: String,
+    description: String,
+    decimals: i32,
+}
+
+impl EIP4Data {
+    fn from_output<'a, 'b: 'a>(output: &'a Output) -> Option<EIP4Data> {
+        if output.R4().is_none() || output.R5().is_none() || output.R6().is_none() {
+            return None;
+        }
+        let r4 = output.R4().as_ref().unwrap();
+        let r5 = output.R5().as_ref().unwrap();
+        let r6 = output.R6().as_ref().unwrap();
+
+        if r4.stype != "Coll[SByte]" || r5.stype != "Coll[SByte]" || r6.stype != "Coll[SByte]" {
+            return None;
+        }
+
+        let decimals = match parse_eip4_register(&r6.rendered_value)
+            .unwrap()
+            .parse::<i32>()
+        {
+            Ok(i32) => i32,
+            Err(error) => {
+                warn!(
+                    "Invalid integer literal in R6 of possible EIP4 transaction: {}. Box ID: {}",
+                    &r6.rendered_value, &output.box_id
+                );
+                log::warn!("{}", error);
+                return None;
+            }
+        };
+
+        Some(EIP4Data {
+            name: parse_eip4_register(&r4.rendered_value).unwrap(),
+            description: parse_eip4_register(&r5.rendered_value).unwrap(),
+            decimals: decimals,
+        })
+    }
+}
+
+fn parse_eip4_register(base16_str: &str) -> anyhow::Result<String> {
+    let bytes = base16::decode(base16_str.as_bytes()).unwrap();
+    anyhow::Ok(String::from_utf8(bytes)?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::CoreUnit;
     use crate::db;
     use crate::db::SQLArg;
     use crate::units::testing::block_600k;
+    use crate::units::testing::block_minting_tokens;
 
     #[test]
     fn number_of_statements() -> () {
@@ -259,5 +312,14 @@ mod tests {
         assert_eq!(statements[15].sql, db::core::registers::INSERT_BOX_REGISTER);
         assert_eq!(statements[16].sql, db::core::registers::INSERT_BOX_REGISTER);
         assert_eq!(statements[17].sql, db::core::registers::INSERT_BOX_REGISTER);
+    }
+
+    #[test]
+    fn minted_tokens() -> () {
+        let statements = CoreUnit.prep(&block_minting_tokens());
+        // 1 header + 2 transactions + 6 outputs + 3 inputs + 6 registers + 2 tokens
+        assert_eq!(statements.len(), 20);
+        assert_eq!(statements[18].sql, db::core::tokens::INSERT_TOKEN_EIP4);
+        assert_eq!(statements[19].sql, db::core::tokens::INSERT_TOKEN);
     }
 }

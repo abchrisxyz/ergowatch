@@ -255,7 +255,7 @@ mod testing {
                 box_id: "6cb8ffe391838b627cb893c9b2027aa2a03f3a20455dd11e5ac903c7e4179ace",
                 creation_height: 600000,
                 address: String::from("88dhgzEuTXaRvR2VKsnXYTGUPh3A9VK8ojeRcpHihcrBu23dnwbB12BbVcJuTcdGfRuSzA8bW25Az6n9"),
-                index: 0,
+                index: 1,
                 value: 67500000000,
                 additional_registers: [None, None, None, None, None, None],
                 assets: vec![],
@@ -265,7 +265,7 @@ mod testing {
         };
         let tx_2 = Transaction {
             id: "26dab775e0a6ba4315271db107398b47f6b7ec9c7218165a54938bf58b81c4a8",
-            index: 1i32,
+            index: 1,
             outputs: vec![
                 Output {
                     box_id: "aa94183d21f9e8fee38d4f3326d2acf8258dd36e6dff38142fa93e633d01464d",
@@ -313,7 +313,7 @@ mod testing {
                     box_id: "22adc6d1fd18e81da0ab9fa47bc389c5948780c98906c0ea3d812eba4ef17a33",
                     creation_height: 599998,
                     address: String::from("9h7L7sUHZk43VQC3PHtSp5ujAWcZtYmWATBH746wi75C5XHi68b"),
-                    index: 1,
+                    index: 2,
                     value: 2784172525,
                     additional_registers: [None, None, None, None, None, None],
                     assets: vec![],
@@ -346,6 +346,141 @@ mod testing {
             parent_header_id: "eac9b85b5faca84fda89ed344730488bf11c5689165e04a059bf523776ae39d1",
             timestamp: 1634511451404,
             transactions: vec![tx_1, tx_2, tx_3],
+        }
+    }
+
+    /// Returns a BlockData with token minting transactions.
+    /// Fictive block based off block 600k
+    pub fn block_minting_tokens<'a>() -> BlockData<'a> {
+        // minting 5000 best tokens
+        let tx_1_minting_eip4_tokens = Transaction {
+            id: "075574e63e1f18d3f66398e256f581ef6d22a704801f25665a772d0d0b7914e2",
+            index: 0,
+            outputs: vec![
+                Output{
+                    box_id: "5410f440002d0f350781463633ff6be869c54149cebeaeb935eb2968918e846b",
+                    creation_height: 114626,
+                    address: String::from("9ggm43XYvHgqp2DfAuqdPoFJ9UgG33Y3fDrk9ydkH9h9k15eGwK"),
+                    index: 0,
+                    value: 100000,
+                    additional_registers: [
+                        Some(Register {
+                            id: 4,
+                            stype: String::from("Coll[SByte]"),
+                            serialized_value: String::from("0e0462657374"),
+                            rendered_value: String::from("62657374"),
+                        }),
+                        Some(Register {
+                            id: 5,
+                            stype: String::from("Coll[SByte]"),
+                            serialized_value: String::from("0e057465737420"),
+                            rendered_value: String::from("7465737420"),
+                        }),
+                        Some(Register {
+                            id: 6,
+                            stype: String::from("Coll[SByte]"),
+                            serialized_value: String::from("0e0131"),
+                            rendered_value: String::from("31"),
+                        }),
+                        None, None, None],
+                    assets: vec![
+                        Asset {
+                            token_id: "34d14f73cc1d5342fb06bc1185bd1335e8119c90b1795117e2874ca6ca8dd2c5",
+                            amount: 5000,
+                        }
+                    ],
+                }, Output {
+                    box_id: "bbb7d9e0333007ff5005771dccfe11c309a98df99c0cf10e17c60e64cb7ccc5b",
+                    creation_height: 114626,
+                    address: String::from("2iHkR7CWvD1R4j1yZg5bkeDRQavjAaVPeTDFGGLZduHyfWMuYpmhHocX8GJoaieTx78FntzJbCBVL6rf96ocJoZdmWBL2fci7NqWgAirppPQmZ7fN9V6z13Ay6brPriBKYqLp1bT2Fk4FkFLCfdPpe"),
+                    index: 1,
+                    value: 1000000,
+                    additional_registers: [None, None, None, None, None, None],
+                    assets: vec![],
+                }, Output {
+                    box_id: "b5d971fa03de96b5bfbdff9dba76c519ed0f1f8196a01c139c6be74a9c47040a",
+                    creation_height: 114626,
+                    address: String::from("9ggm43XYvHgqp2DfAuqdPoFJ9UgG33Y3fDrk9ydkH9h9k15eGwK"),
+                    index: 2,
+                    value: 31134600,
+                    additional_registers: [None, None, None, None, None, None],
+                    assets: vec![],
+            }],
+            input_box_ids: vec![
+                "34d14f73cc1d5342fb06bc1185bd1335e8119c90b1795117e2874ca6ca8dd2c5",
+                "7acc484210f3459217ba3d5549aef99b1a6fd7fec54943e8e3a909784f36ee1f"
+            ],
+            data_input_box_ids: vec![],
+        };
+        // minting 1000 non-eip4 compliant tokens (decimals provided as int)
+        let tx_2_minting_non_compliant_eip4_token = Transaction {
+            id: "91f3e120b62a6848521d3eff1601d251682df8181a95052050c23610ce6b18ee",
+            index: 1,
+            outputs: vec![
+                Output {
+                    box_id: "48461e901b2a518d66b8d147a5282119cfc5b065a3ebba6a56b354686686a48c",
+                    creation_height: 106481,
+                    address: String::from("9fjo2FEBvkpJkq7TB5eaqcT3zUcokDRSL4JaGpEonLr9cS1JZZ2"),
+                    index: 0,
+                    value: 50760,
+                    additional_registers: [
+                        Some(Register {
+                            id: 4,
+                            stype: String::from("Coll[SByte]"),
+                            serialized_value: String::from("0e06617070545354"),
+                            rendered_value: String::from("617070545354"),
+                        }),
+                        Some(Register {
+                            id: 5,
+                            stype: String::from("Coll[SByte]"),
+                            serialized_value: String::from("0e0a5465737420746f6b656e"),
+                            rendered_value: String::from("5465737420746f6b656e"),
+                        }),
+                        Some(Register {
+                            id: 6,
+                            stype: String::from("SInt"),
+                            serialized_value: String::from("0410"),
+                            rendered_value: String::from("8"),
+                        }),
+                        None, None, None],
+                    assets: vec![
+                        Asset {
+                            token_id: "3c65b325ebf58f4907d6c085d216e176d105a5093540704baf1f7a2a42ad60f8",
+                            amount: 1000,
+                        }
+                    ],
+                },
+                Output {
+                    box_id: "51c38dad38332ca22508f7614568f31b62fb5ccd09b5287734f2152ef8c04360",
+                    creation_height: 106481,
+                    address: String::from("2iHkR7CWvD1R4j1yZg5bkeDRQavjAaVPeTDFGGLZduHyfWMuYpmhHocX8GJoaieTx78FntzJbCBVL6rf96ocJoZdmWBL2fci7NqWgAirppPQmZ7fN9V6z13Ay6brPriBKYqLp1bT2Fk4FkFLCfdPpe"),
+                    index: 1,
+                    value: 1000000,
+                    additional_registers: [None, None, None, None, None, None],
+                    assets: vec![],
+                },
+                Output {
+                    box_id: "f6fa1d664ca8153f4b696453ef1e7b18c75de67cce1237312d1ce39349cc7160",
+                    creation_height: 599998,
+                    address: String::from("9fjo2FEBvkpJkq7TB5eaqcT3zUcokDRSL4JaGpEonLr9cS1JZZ2"),
+                    index: 2,
+                    value: 1998949240,
+                    additional_registers: [None, None, None, None, None, None],
+                    assets: vec![],
+                }
+            ],
+            input_box_ids: vec!["3c65b325ebf58f4907d6c085d216e176d105a5093540704baf1f7a2a42ad60f8"],
+            data_input_box_ids: vec![],
+        };
+        BlockData {
+            height: 600000,
+            header_id: "5cacca81066cb5ffd64e26096fd6ad4b6b590e7a3c09208bfda79779a7ab90a4",
+            parent_header_id: "eac9b85b5faca84fda89ed344730488bf11c5689165e04a059bf523776ae39d1",
+            timestamp: 1634511451404,
+            transactions: vec![
+                tx_1_minting_eip4_tokens,
+                tx_2_minting_non_compliant_eip4_token,
+            ],
         }
     }
 }
