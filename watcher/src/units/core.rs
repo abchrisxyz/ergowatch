@@ -5,6 +5,9 @@
 mod additional_registers;
 use additional_registers::extract_additional_registers;
 
+mod assets;
+use assets::extract_assets;
+
 mod data_inputs;
 use data_inputs::extract_data_inputs;
 
@@ -38,7 +41,7 @@ impl CoreUnit {
         statements.append(&mut extract_data_inputs(&block));
         statements.append(&mut extract_additional_registers(&block));
         statements.append(&mut extract_new_tokens(&block));
-        // TODO: assets
+        statements.append(&mut extract_assets(&block));
         statements
     }
 
@@ -58,8 +61,8 @@ mod tests {
     #[test]
     fn statements_order() -> () {
         let statements = CoreUnit.prep(&block_600k());
-        // 1 header + 3 transactions + 6 outputs + 4 inputs + 1 data input + 3 registers
-        assert_eq!(statements.len(), 18);
+        // 1 header + 3 transactions + 6 outputs + 4 inputs + 1 data input + 3 registers + 1 asset
+        assert_eq!(statements.len(), 19);
         assert_eq!(statements[0].sql, db::core::header::INSERT_HEADER);
         assert_eq!(statements[1].sql, db::core::transaction::INSERT_TRANSACTION);
         assert_eq!(statements[2].sql, db::core::transaction::INSERT_TRANSACTION);
@@ -78,5 +81,6 @@ mod tests {
         assert_eq!(statements[15].sql, db::core::registers::INSERT_BOX_REGISTER);
         assert_eq!(statements[16].sql, db::core::registers::INSERT_BOX_REGISTER);
         assert_eq!(statements[17].sql, db::core::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[18].sql, db::core::assets::INSERT_BOX_ASSET);
     }
 }
