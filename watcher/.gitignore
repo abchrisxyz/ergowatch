@@ -3,3 +3,6 @@ Cargo.lock
 
 # Local config for use with cargo run
 local.toml
+
+# Local test db connection settings
+**/local.py

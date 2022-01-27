@@ -1,0 +1,2 @@
+psycopg3 
+pytest
