@@ -130,6 +130,12 @@ create table core.box_registers (
 );
 
 alter table core.box_registers add primary key (id, box_id);
+alter table core.box_registers add constraint core_box_registers_box_id__fk_core_outputs_box_id
+	foreign key (box_id)
+	references core.outputs (box_id)
+	on delete cascade;
+alter table core.box_registers add constraint core_box_registers__id_range_check
+	check (id >= 4 and id <= 9);
 
 
 create table core.tokens (
@@ -144,9 +150,12 @@ create table core.tokens (
 
 alter table core.tokens add primary key (id);
 alter table core.tokens alter column box_id set not null;
-alter table core.tokens
-	add constraint core_tokens_box_id__fk_core_outputs_box_id
-	foreign key (box_id) references core.outputs (box_id);
+alter table core.tokens	add constraint core_tokens_box_id__fk_core_outputs_box_id
+	foreign key (box_id)
+	references core.outputs (box_id)
+	on delete cascade;
+alter table core.tokens add constraint core_tokens__positive_emission_amount_check
+	check (emission_amount > 0);
 
 
 create table core.box_assets (
@@ -158,12 +167,16 @@ create table core.box_assets (
 alter table core.box_assets add primary key (box_id, token_id);
 alter table core.box_assets alter column box_id set not null;
 alter table core.box_assets alter column token_id set not null;
-alter table core.box_assets
-	add constraint core_box_assets_box_id__fk_core_outputs_box_id
-	foreign key (box_id) references core.outputs (box_id);
-alter table core.box_assets
-	add constraint core_box_assets_token_id__fk_core_tokens_id
-	foreign key (token_id) references core.tokens (id);
+alter table core.box_assets	add constraint core_box_assets_box_id__fk_core_outputs_box_id
+	foreign key (box_id)
+	references core.outputs (box_id)
+	on delete cascade;
+alter table core.box_assets	add constraint core_box_assets_token_id__fk_core_tokens_id
+	foreign key (token_id)
+	references core.tokens (id)
+	on delete cascade;
+alter table core.box_assets add constraint core_box_assets__positive_amount_check
+	check (amount > 0);
 
 
 -------------------------------------------------------------------------------
