@@ -110,51 +110,49 @@ class API(bottle.Bottle):
         return json.dumps(self.blocks[header])
 
 
+# API variants
 api_genesis = API([genesis_block])
 api = API([bootstrap_block, block_600k])
 api_buffered = API([bootstrap_block, block_600k], buffered=True)
 
 
+class MockApi:
+    """
+    Utility class turning API's as context managers.
+    """
+
+    def __init__(self, variant: str):
+        self._variant: str = variant
+        self._p: subprocess.Popen = None
+
+    def __enter__(self):
+        os.chdir(Path(__file__).parent.absolute())
+        args = [sys.executable]
+        args.extend(shlex.split(f"-m bottle -b localhost:9053 api:{self._variant}"))
+        print(args)
+        self._p = subprocess.Popen(args)
+        try:
+            self._p.wait(0.3)
+        except subprocess.TimeoutExpired:
+            pass
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        self._p.kill()
+
+
 @pytest.fixture
 def mock_api():
-    os.chdir(Path(__file__).parent.absolute())
-    args = [sys.executable]
-    args.extend(shlex.split("-m bottle -b localhost:9053 api:api"))
-    print(args)
-    p = subprocess.Popen(args)
-    try:
-        p.wait(0.3)
-    except subprocess.TimeoutExpired:
-        pass
-    yield
-    p.kill()
+    with MockApi("api"):
+        yield
 
 
 @pytest.fixture
 def mock_api_genesis():
-    os.chdir(Path(__file__).parent.absolute())
-    args = [sys.executable]
-    args.extend(shlex.split("-m bottle -b localhost:9053 api:api_genesis"))
-    print(args)
-    p = subprocess.Popen(args)
-    try:
-        p.wait(0.3)
-    except subprocess.TimeoutExpired:
-        pass
-    yield
-    p.kill()
+    with MockApi("api_genesis"):
+        yield
 
 
 @pytest.fixture
 def mock_api_buffered():
-    os.chdir(Path(__file__).parent.absolute())
-    args = [sys.executable]
-    args.extend(shlex.split("-m bottle -b localhost:9053 api:api_buffered"))
-    print(args)
-    p = subprocess.Popen(args)
-    try:
-        p.wait(0.3)
-    except subprocess.TimeoutExpired:
-        pass
-    yield
-    p.kill()
+    with MockApi("api_bufferd"):
+        yield
