@@ -122,6 +122,10 @@ def mock_api():
     args.extend(shlex.split("-m bottle -b localhost:9053 api:api"))
     print(args)
     p = subprocess.Popen(args)
+    try:
+        p.wait(0.3)
+    except subprocess.TimeoutExpired:
+        pass
     yield
     p.kill()
 
@@ -133,6 +137,10 @@ def mock_api_genesis():
     args.extend(shlex.split("-m bottle -b localhost:9053 api:api_genesis"))
     print(args)
     p = subprocess.Popen(args)
+    try:
+        p.wait(0.3)
+    except subprocess.TimeoutExpired:
+        pass
     yield
     p.kill()
 
@@ -144,5 +152,9 @@ def mock_api_buffered():
     args.extend(shlex.split("-m bottle -b localhost:9053 api:api_buffered"))
     print(args)
     p = subprocess.Popen(args)
+    try:
+        p.wait(0.3)
+    except subprocess.TimeoutExpired:
+        pass
     yield
     p.kill()
