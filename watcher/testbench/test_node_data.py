@@ -1,0 +1,22 @@
+"""
+Making sure the mock node mimics the real one.
+"""
+import requests
+
+from api import mock_api
+from local import NODE_URL
+
+
+def test_block_600k(mock_api):
+    """
+    Checks the mocked and real node api's return identical responses.
+    """
+    header = "5cacca81066cb5ffd64e26096fd6ad4b6b590e7a3c09208bfda79779a7ab90a4"
+    r = requests.get(f"{NODE_URL}/blocks/{header}/")
+    assert r.status_code == 200
+    real_data = r.json()
+
+    r = requests.get(f"http://localhost:9053/blocks/{header}")
+    assert r.status_code == 200
+    mock_data = r.json()
+    assert mock_data == real_data

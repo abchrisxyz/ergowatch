@@ -1,2 +1,4 @@
-psycopg3 
+psycopg
 pytest
+bottle
+requests
