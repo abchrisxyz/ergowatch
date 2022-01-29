@@ -1,4 +1,5 @@
 use config::{Config, ConfigError, Environment, File};
+use log::info;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -26,12 +27,16 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn new() -> Result<Self, ConfigError> {
+    pub fn new(path: Option<String>) -> Result<Self, ConfigError> {
         let mut s = Config::new();
-        // ToDo take path from cli
-        s.merge(File::with_name("local.toml")).unwrap();
+        let cfg_path = match path {
+            Some(p) => p.clone(),
+            None => String::from("local.toml"),
+        };
+        info!("Reading config from {}", cfg_path);
+        s.merge(File::with_name(&cfg_path))?;
         // Add in settings from the environment (with a prefix of EW)
-        s.merge(Environment::with_prefix("ew")).unwrap();
+        s.merge(Environment::with_prefix("ew"))?;
         s.try_into()
     }
 }

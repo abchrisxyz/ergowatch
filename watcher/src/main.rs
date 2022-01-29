@@ -4,7 +4,9 @@ mod settings;
 mod types;
 mod units;
 
+use clap::Parser;
 use log::debug;
+use log::error;
 use log::info;
 use std::{thread, time};
 
@@ -13,11 +15,42 @@ use settings::Settings;
 // const DB_VERSION: i32 = 1;
 const POLL_INTERVAL_SECONDS: u64 = 5;
 
+#[derive(Parser, Debug)]
+#[clap(version, about, long_about = None)]
+struct Cli {
+    /// Path to config file
+    #[clap(short, long)]
+    config: Option<String>,
+
+    /// Print help information
+    #[clap(short, long)]
+    help: bool,
+
+    /// Print version information
+    #[clap(short, long)]
+    version: bool,
+
+    /// Exit once synced
+    #[clap(short, long)]
+    sync_only: bool,
+}
+
 fn main() {
     env_logger::init();
     info!("Starting Ergo Watcher");
 
-    let cfg = Settings::new().unwrap();
+    let cli = Cli::parse();
+    if cli.sync_only {
+        info!("Found option `--sync-only`, watcher will exit once synced with node")
+    }
+
+    let cfg = match Settings::new(cli.config) {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            error!("{}", err);
+            return;
+        }
+    };
     let node = node::Node::new(cfg.node.url);
 
     // ToDo: check db version
@@ -32,6 +65,10 @@ fn main() {
         let node_height = node.get_height().unwrap();
 
         if node_height <= head.height {
+            if cli.sync_only {
+                debug!("Done syncing, exiting now");
+                return;
+            }
             debug!("No new blocks - waiting {} seconds", POLL_INTERVAL_SECONDS);
             thread::sleep(time::Duration::from_secs(POLL_INTERVAL_SECONDS));
             continue;
