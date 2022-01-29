@@ -3,10 +3,11 @@ Making sure the mock api works as intended.
 """
 import requests
 
-from api import mock_api
+from fixtures import genesis_env
+from fixtures import bootstrapped_env
 
 
-def test_api_fixture_connection(mock_api):
+def test_genesis_env_starts_api(genesis_env):
     """
     Test fixture starts mock api server
     """
@@ -15,16 +16,34 @@ def test_api_fixture_connection(mock_api):
     assert r.text == "working"
 
 
-def test_api_fixture_info(mock_api):
+def test_genesis_info_has_height_1(genesis_env):
     """
-    Test height is set to latest block
+    Test node height is set to 1
+    """
+    r = requests.get(f"http://localhost:9053/info")
+    assert r.status_code == 200
+    assert r.json()["fullHeight"] == 1
+
+
+def test_bootstrapped_env_starts_api(bootstrapped_env):
+    """
+    Test fixture starts mock api server
+    """
+    r = requests.get(f"http://localhost:9053/check")
+    assert r.status_code == 200
+    assert r.text == "working"
+
+
+def test_bootstrapped_info_has_height_600k(bootstrapped_env):
+    """
+    Test node height is set to 600k
     """
     r = requests.get(f"http://localhost:9053/info")
     assert r.status_code == 200
     assert r.json()["fullHeight"] == 600_000
 
 
-def test_api_fixture_blocks_at(mock_api):
+def test_bootstrapped_blocks_at(bootstrapped_env):
     """
     Test api returns right block
     """
@@ -45,7 +64,7 @@ def test_api_fixture_blocks_at(mock_api):
     assert res[0] == "5cacca81066cb5ffd64e26096fd6ad4b6b590e7a3c09208bfda79779a7ab90a4"
 
 
-def test_api_fixture_blocks(mock_api):
+def test_bootstrapped_blocks(bootstrapped_env):
     """
     Test api returns right block
     """

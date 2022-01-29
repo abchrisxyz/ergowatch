@@ -11,11 +11,12 @@ from pathlib import Path
 import json
 
 import bottle
-import pytest
 
 from blocks import genesis_block
 from blocks import bootstrap_block
 from blocks import block_600k
+
+MOCK_NODE_HOST = "localhost:9053"
 
 
 class API(bottle.Bottle):
@@ -113,6 +114,7 @@ class API(bottle.Bottle):
 # API variants
 api_genesis = API([genesis_block])
 api = API([bootstrap_block, block_600k])
+api_bootstrapped = API([bootstrap_block, block_600k])
 api_buffered = API([bootstrap_block, block_600k], buffered=True)
 
 
@@ -122,37 +124,24 @@ class MockApi:
     """
 
     def __init__(self, variant: str):
-        self._variant: str = variant
+        self._api: str = f"api_{variant}"
         self._p: subprocess.Popen = None
 
     def __enter__(self):
         os.chdir(Path(__file__).parent.absolute())
         args = [sys.executable]
-        args.extend(shlex.split(f"-m bottle -b localhost:9053 api:{self._variant}"))
+        args.extend(shlex.split(f"-m bottle -b {MOCK_NODE_HOST} api:{self._api}"))
         print(args)
         self._p = subprocess.Popen(args)
+        # Give it some time to start up before allowing tests to query the api
         try:
             self._p.wait(0.3)
         except subprocess.TimeoutExpired:
             pass
+        # If another api still running, this one won't able to bind and will fail.
+        # Here we check it has indeed started.
+        # If this fails, an orphaned api is likely still running
+        assert self._p.returncode is None
 
     def __exit__(self, exception_type, exception_value, traceback):
         self._p.kill()
-
-
-@pytest.fixture
-def mock_api():
-    with MockApi("api"):
-        yield
-
-
-@pytest.fixture
-def mock_api_genesis():
-    with MockApi("api_genesis"):
-        yield
-
-
-@pytest.fixture
-def mock_api_buffered():
-    with MockApi("api_bufferd"):
-        yield

@@ -1,13 +1,37 @@
 from pathlib import Path
+from collections import namedtuple
+import textwrap
 
 import psycopg as pg
 from psycopg.sql import Identifier, SQL
 import pytest
 
 from local import DB_HOST, DB_USER, DB_PASS
-from blocks import bootstrap_block
+from api import MockApi
+from api import MOCK_NODE_HOST
 
 SCHEMA_PATH = (Path(__file__).parent.absolute() / Path("../db/schema.sql")).absolute()
+
+
+def format_config(db_name: str) -> str:
+    """
+    Returns TOML formatted string.
+    """
+    return textwrap.dedent(
+        f"""
+        debug = false
+
+        [database]
+        host = "{DB_HOST}"
+        port = 5432
+        name = "{db_name}"
+        user = "{DB_USER}"
+        pw = "{DB_PASS}"
+
+        [node]
+        url = "http://{MOCK_NODE_HOST}"
+    """
+    )
 
 
 def conn_str(dbname: str) -> str:
@@ -117,20 +141,44 @@ def bootstrap_sql():
     return sql
 
 
-@pytest.fixture
-def blank_db():
-    with TestDB() as db:
-        with pg.connect(conn_str(db)) as conn:
-            yield conn
+# @pytest.fixture
+# def blank_db():
+#     with TestDB() as db:
+#         with pg.connect(conn_str(db)) as conn:
+#             yield conn
+
+
+# @pytest.fixture
+# def bootstrapped_db():
+#     with TestDB() as db:
+#         with pg.connect(conn_str(db)) as conn:
+#             with conn.cursor() as cur:
+#                 cur.execute(bootstrap_sql())
+#             yield conn
+
+_MockEnv = namedtuple("MockEnv", ["db_conn", "cfg_path"])
+MockEnv = lambda db_conn, cfg_path: _MockEnv(db_conn, str(cfg_path))
 
 
 @pytest.fixture
-def bootstrapped_db():
-    with TestDB() as db:
-        with pg.connect(conn_str(db)) as conn:
+def genesis_env(tmp_path):
+    with TestDB() as db_name:
+        with pg.connect(conn_str(db_name)) as conn:
+            cfg_path = tmp_path / Path("genesis.toml")
+            cfg_path.write_text(format_config(db_name))
+            # env = namedtuple("MockEnv", ["db_conn", "cfg_path"])(conn, str(cfg_path))
+            with MockApi("genesis"):
+                yield MockEnv(conn, cfg_path)
+
+
+@pytest.fixture
+def bootstrapped_env(tmp_path):
+    with TestDB() as db_name:
+        with pg.connect(conn_str(db_name)) as conn:
             with conn.cursor() as cur:
                 cur.execute(bootstrap_sql())
-            yield conn
-
-
-print(bootstrap_sql())
+            cfg_path = tmp_path / Path("bootstrapped.toml")
+            cfg_path.write_text(format_config(db_name))
+            # env = namedtuple("MockEnv", ["db_conn", "cfg_path"])(conn, str(cfg_path))
+            with MockApi("bootstrapped"):
+                yield MockEnv(conn, cfg_path)
