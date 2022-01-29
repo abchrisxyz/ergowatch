@@ -1,17 +1,35 @@
-from fixtures import blank_db
-from api import mock_api_genesis
+from asyncio.subprocess import STDOUT
+import subprocess
+from pathlib import Path
+
+from fixtures import genesis_env
 
 
-def test_first_block(blank_db, mock_api_genesis):
+def test_first_block(genesis_env):
     """
     Check connection works and db is blank
     """
-    # TODO:
-    #   - pass db settings to watcher
-    #   - add option to watcher to exit at sync
-
-    # Run watcher
+    db_conn, cfg_path = genesis_env
+    exe = str(Path(__file__).parent.parent.absolute() / Path("target/release/watcher"))
+    cp = subprocess.run(
+        [exe, "-c", cfg_path, "--sync-only"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env={
+            "RUST_LOG": "INFO",
+        },
+        timeout=10,
+    )
+    assert cp.stderr is None
+    assert cp.returncode == 0
 
     # Read db to verify state
-    with blank_db.cursor() as cur:
-        pass
+    with db_conn.cursor() as cur:
+        cur.execute("select height from core.headers order by 1 desc limit 1;")
+        assert cur.fetchone()[0] == 1
+        cur.execute("select count(*) from core.transactions;")
+        assert cur.fetchone()[0] == 1
+        cur.execute("select count(*) from core.outputs;")
+        assert cur.fetchone()[0] == 2
+        cur.execute("select count(*) from core.inputs;")
+        assert cur.fetchone()[0] == 1
