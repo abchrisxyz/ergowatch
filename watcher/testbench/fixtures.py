@@ -6,7 +6,7 @@ import psycopg as pg
 from psycopg.sql import Identifier, SQL
 import pytest
 
-from local import DB_HOST, DB_USER, DB_PASS
+from local import DB_HOST, DB_PORT, DB_USER, DB_PASS
 from api import MockApi
 from api import MOCK_NODE_HOST
 
@@ -23,7 +23,7 @@ def format_config(db_name: str) -> str:
 
         [database]
         host = "{DB_HOST}"
-        port = 5432
+        port = {DB_PORT}
         name = "{db_name}"
         user = "{DB_USER}"
         pw = "{DB_PASS}"

@@ -4,6 +4,7 @@ In the `testbench` directory create a `local.py` file defining the following var
 
 ```python
 DB_HOST = "localhost"
+DB_PORT = 5432
 DB_USER = "postgres"
 DB_PASS = "example"
 
