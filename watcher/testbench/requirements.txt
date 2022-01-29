@@ -1,4 +1,5 @@
 psycopg
 pytest
+pytest-order
 bottle
 requests

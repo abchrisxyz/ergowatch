@@ -2,11 +2,13 @@
 Making sure the mock node api mimics the real one.
 """
 import requests
+import pytest
 
 from fixtures import bootstrapped_env
 from local import NODE_URL
 
 
+@pytest.mark.order(1)
 def test_block_600k(bootstrapped_env):
     """
     Checks the mocked and real node api's return identical responses.
