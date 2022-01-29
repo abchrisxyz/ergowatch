@@ -53,9 +53,17 @@ fn main() {
     };
     let node = node::Node::new(cfg.node.url);
 
+    let db = db::DB::new(
+        &cfg.database.host,
+        cfg.database.port,
+        &cfg.database.name,
+        &cfg.database.user,
+        &cfg.database.pw,
+    );
+
     // ToDo: check db version
 
-    let mut head = db::get_head().unwrap();
+    let mut head = db.get_head().unwrap();
     info!("Database is currently at block {}", head.height);
 
     // Parsing units
@@ -91,7 +99,7 @@ fn main() {
                 let sql_statements = core.prep(&prepped_block);
 
                 // Execute statements in single transaction
-                db::execute_in_transaction(sql_statements).unwrap();
+                db.execute_in_transaction(sql_statements).unwrap();
 
                 // Move head to latest block
                 head.height = next_height;
