@@ -43,7 +43,7 @@ def conn_str(dbname: str) -> str:
 
 class TestDB:
     def __init__(self):
-        self._dbname: str = "test2"
+        self._dbname: str = "test2"  # TODO: use random name
         with open(SCHEMA_PATH) as f:
             self._sql = f.read()
 

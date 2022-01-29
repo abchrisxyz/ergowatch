@@ -35,6 +35,7 @@ struct Cli {
     sync_only: bool,
 }
 
+// TODO: add return codes (for test bench)
 fn main() {
     env_logger::init();
     info!("Starting Ergo Watcher");
