@@ -1,6 +1,7 @@
 from asyncio.subprocess import STDOUT
 import subprocess
 from pathlib import Path
+import os
 
 from fixtures import genesis_env
 
@@ -15,9 +16,11 @@ def test_first_block(genesis_env):
         [exe, "-c", cfg_path, "--sync-only"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        env={
-            "RUST_LOG": "INFO",
-        },
+        env=dict(
+            os.environ,
+            RUST_LOG="DEBUG",
+            RUST_BACKTRACE="full",
+        ),
         timeout=10,
     )
     assert cp.stderr is None
