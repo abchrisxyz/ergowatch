@@ -36,7 +36,7 @@ struct Cli {
 }
 
 // TODO: add return codes (for test bench)
-fn main() {
+fn main() -> Result<(), &'static str> {
     env_logger::init();
     info!("Starting Ergo Watcher");
 
@@ -49,7 +49,7 @@ fn main() {
         Ok(cfg) => cfg,
         Err(err) => {
             error!("{}", err);
-            return;
+            return Err("Failed loading config");
         }
     };
     let node = node::Node::new(cfg.node.url);
@@ -76,7 +76,7 @@ fn main() {
         if node_height <= head.height {
             if cli.sync_only {
                 debug!("Done syncing, exiting now");
-                return;
+                return Ok(());
             }
             debug!("No new blocks - waiting {} seconds", POLL_INTERVAL_SECONDS);
             thread::sleep(time::Duration::from_secs(POLL_INTERVAL_SECONDS));
