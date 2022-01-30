@@ -1,26 +1,26 @@
 pub mod core;
 
+use log::debug;
 use postgres::{Client, NoTls};
 
 use crate::types::Head;
 
 #[derive(Debug)]
-pub struct DB<'a> {
-    host: &'a str,
-    port: u16,
-    name: &'a str,
-    user: &'a str,
-    pass: &'a str,
+pub struct DB {
+    conn_str: String,
 }
 
-impl<'a> DB<'a> {
-    pub fn new(host: &'a str, port: u16, name: &'a str, user: &'a str, pass: &'a str) -> Self {
+impl DB {
+    pub fn new(host: &str, port: u16, name: &str, user: &str, pass: &str) -> Self {
+        debug!(
+            "Creating DB instance with host: {}, port: {}, name: {}, user: {}, pass: *...*",
+            host, port, name, user
+        );
         DB {
-            host: host,
-            port: port,
-            name: name,
-            user: user,
-            pass: pass,
+            conn_str: format!(
+                "host={} port={} dbname={} user={} password={}",
+                host, port, name, user, pass
+            ),
         }
     }
 }
@@ -58,18 +58,12 @@ impl SQLStatement {
     }
 }
 
-impl DB<'_> {
+impl DB {
     pub fn execute_in_transaction(
         &self,
         statements: Vec<SQLStatement>,
     ) -> Result<(), postgres::Error> {
-        let mut client = Client::connect(
-            &format!(
-                "host={} port={} dbname={} user={} password={}",
-                self.host, self.port, self.name, self.user, self.pass
-            ),
-            NoTls,
-        )?;
+        let mut client = Client::connect(&self.conn_str, NoTls)?;
         let mut transaction = client.transaction()?;
         for stmt in statements {
             stmt.execute(&mut transaction)?;
@@ -87,13 +81,7 @@ impl DB<'_> {
     /// }
     /// ```
     pub fn get_head(&self) -> Result<Head, postgres::Error> {
-        let mut client = Client::connect(
-            &format!(
-                "host={} port={} dbname={} user={} password={}",
-                self.host, self.port, self.name, self.user, self.pass
-            ),
-            NoTls,
-        )?;
+        let mut client = Client::connect(&self.conn_str, NoTls)?;
         // Cast height to oid to allow deserialisation to u32
         let row_opt = client.query_opt(
             "\

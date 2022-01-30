@@ -64,7 +64,13 @@ fn main() -> Result<(), &'static str> {
 
     // ToDo: check db version
 
-    let mut head = db.get_head().unwrap();
+    let mut head = match db.get_head() {
+        Ok(h) => h,
+        Err(e) => {
+            error!("{}", e);
+            return Err("Failed to retrieve db state");
+        }
+    };
     info!("Database is currently at block {}", head.height);
 
     // Parsing units
