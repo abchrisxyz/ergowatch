@@ -141,21 +141,6 @@ def bootstrap_sql():
     return sql
 
 
-# @pytest.fixture
-# def blank_db():
-#     with TestDB() as db:
-#         with pg.connect(conn_str(db)) as conn:
-#             yield conn
-
-
-# @pytest.fixture
-# def bootstrapped_db():
-#     with TestDB() as db:
-#         with pg.connect(conn_str(db)) as conn:
-#             with conn.cursor() as cur:
-#                 cur.execute(bootstrap_sql())
-#             yield conn
-
 _MockEnv = namedtuple("MockEnv", ["db_conn", "cfg_path"])
 MockEnv = lambda db_conn, cfg_path: _MockEnv(db_conn, str(cfg_path))
 
