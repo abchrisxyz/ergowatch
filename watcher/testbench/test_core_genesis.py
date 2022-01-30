@@ -1,9 +1,5 @@
-from asyncio.subprocess import STDOUT
-import subprocess
-from pathlib import Path
-import os
-
 from fixtures import genesis_env
+from utils import run_watcher
 
 
 def test_first_block(genesis_env):
@@ -11,19 +7,7 @@ def test_first_block(genesis_env):
     Check connection works and db is blank
     """
     db_conn, cfg_path = genesis_env
-    exe = str(Path(__file__).parent.parent.absolute() / Path("target/release/watcher"))
-    cp = subprocess.run(
-        [exe, "-c", cfg_path, "--sync-only"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        env=dict(
-            os.environ,
-            RUST_LOG="DEBUG",
-            RUST_BACKTRACE="full",
-        ),
-        timeout=10,
-    )
-    assert cp.stderr is None
+    cp = run_watcher(cfg_path)
     assert cp.returncode == 0
 
     # Read db to verify state
