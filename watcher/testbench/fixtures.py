@@ -123,6 +123,42 @@ def bootstrap_sql():
             '88dhgzEuTXaVTz3coGyrAbJ7DNqH37vUMzpSe2vZaCEeBzA6K2nKTZ2JQJhEFgoWmrCQEQLyZNDYMby5',
             1,
             67500000000
+        ),
+        --
+        -- dummy outputs, spent in block 600k
+        --
+        (
+            'eb1c4a582ba3e8f9d4af389a19f3bc6fa6759fd33956f9902b34dcd4a1d3842f',
+            '{tx_id}',
+            '{header_id}',
+            {height},
+            'dummy_address_1',
+            1,
+            67500000000
+        ), (
+            'c739a3294d592377a131840d491bd2b66c27f51ae2c62c66be7bb41b248f321e',
+            '{tx_id}',
+            '{header_id}',
+            {height},
+            'dummy_address_2',
+            1,
+            67500000000
+        ), (
+            '6ca2a9d63f2f08663c09d99126ec1be7b65ce2e8f34e283c4d5af78485b47c91',
+            '{tx_id}',
+            '{header_id}',
+            {height},
+            'dummy_address_3',
+            1,
+            67500000000
+        ), (
+            '98479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8',
+            '{tx_id}',
+            '{header_id}',
+            {height},
+            'dummy_address_4',
+            1,
+            67500000000
         );
         """
 
