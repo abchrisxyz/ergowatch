@@ -62,9 +62,7 @@ class TestDB:
                 )
 
     def _init_db(self):
-        with pg.connect(
-            f"host={DB_HOST} dbname={self._dbname} user={DB_USER} password={DB_PASS}"
-        ) as conn:
+        with pg.connect(conn_str(self._dbname)) as conn:
             with conn.cursor() as cur:
                 cur.execute(self._sql)
 
