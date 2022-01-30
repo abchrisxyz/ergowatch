@@ -35,7 +35,6 @@ struct Cli {
     sync_only: bool,
 }
 
-// TODO: add return codes (for test bench)
 fn main() -> Result<(), &'static str> {
     env_logger::init();
     info!("Starting Ergo Watcher");
@@ -71,7 +70,10 @@ fn main() -> Result<(), &'static str> {
             return Err("Failed to retrieve db state");
         }
     };
-    info!("Database is currently at block {}", head.height);
+    info!(
+        "Database is currently at height {} with block {}",
+        head.height, head.header_id
+    );
 
     // Parsing units
     let core = units::core::CoreUnit {};
