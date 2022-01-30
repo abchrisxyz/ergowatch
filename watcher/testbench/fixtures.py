@@ -166,7 +166,6 @@ def genesis_env(tmp_path):
         with pg.connect(conn_str(db_name)) as conn:
             cfg_path = tmp_path / Path("genesis.toml")
             cfg_path.write_text(format_config(db_name))
-            # env = namedtuple("MockEnv", ["db_conn", "cfg_path"])(conn, str(cfg_path))
             with MockApi("genesis"):
                 yield MockEnv(conn, cfg_path)
 
@@ -177,8 +176,8 @@ def bootstrapped_env(tmp_path):
         with pg.connect(conn_str(db_name)) as conn:
             with conn.cursor() as cur:
                 cur.execute(bootstrap_sql())
+            conn.commit()
             cfg_path = tmp_path / Path("bootstrapped.toml")
             cfg_path.write_text(format_config(db_name))
-            # env = namedtuple("MockEnv", ["db_conn", "cfg_path"])(conn, str(cfg_path))
             with MockApi("bootstrapped"):
                 yield MockEnv(conn, cfg_path)
