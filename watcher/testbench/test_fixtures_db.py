@@ -18,11 +18,16 @@ class TestGenesisDB:
 
 @pytest.mark.order(1)
 class TestBootsrappedDB:
-    def test_db_is_at_599999(self, bootstrapped_env):
+    def test_db_state(self, bootstrapped_env):
         """
         Check connection works and db is bootstrapped
         """
         with bootstrapped_env.db_conn.cursor() as cur:
             cur.execute("select height from core.headers order by 1 desc limit 1;")
-            row = cur.fetchone()
-        assert row[0] == 599_999
+            assert cur.fetchone()[0] == 599_999
+            cur.execute("select count(*) from core.transactions;")
+            assert cur.fetchone()[0] == 1
+            cur.execute("select count(*) from core.outputs;")
+            assert cur.fetchone()[0] == 6
+            cur.execute("select count(*) from core.inputs;")
+            assert cur.fetchone()[0] == 1
