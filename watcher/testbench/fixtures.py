@@ -172,6 +172,19 @@ def bootstrap_sql():
         );
     """
 
+    sql += f"""
+        insert into core.tokens (id, box_id, emission_amount, name, description, decimals, standard)
+        values (
+            '01e6498911823f4d36deaf49a964e883b2c4ae2a4530926f18b9c1411ab2a2c2',
+            'eb1c4a582ba3e8f9d4af389a19f3bc6fa6759fd33956f9902b34dcd4a1d3842f',
+            20,
+            'ORACLE',
+            'datapoint token',
+            0,
+            'EIP-004'
+        );
+    """
+
     return sql
 
 
