@@ -2,9 +2,6 @@ from fixtures import bootstrapped_env
 from utils import run_watcher
 
 
-import time
-
-
 def test_block_600k(bootstrapped_env):
     """
     Test db state after including block 600k
