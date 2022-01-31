@@ -1,4 +1,5 @@
 pub mod core;
+mod migrations;
 
 use log::debug;
 use postgres::{Client, NoTls};
@@ -22,6 +23,11 @@ impl DB {
                 host, port, name, user, pass
             ),
         }
+    }
+
+    pub fn check_migrations(&self, allow_migrations: bool) -> anyhow::Result<()> {
+        let mut client = Client::connect(&self.conn_str, NoTls)?;
+        migrations::check(&mut client, allow_migrations)
     }
 }
 

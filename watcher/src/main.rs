@@ -12,6 +12,7 @@ use std::{thread, time};
 
 use settings::Settings;
 
+// TODO: move this to config
 // const DB_VERSION: i32 = 1;
 const POLL_INTERVAL_SECONDS: u64 = 5;
 
@@ -25,6 +26,10 @@ struct Cli {
     /// Print help information
     #[clap(short, long)]
     help: bool,
+
+    /// Allow migrations
+    #[clap(short = 'm', long)]
+    allow_migrations: bool,
 
     /// Print version information
     #[clap(short, long)]
@@ -61,8 +66,16 @@ fn main() -> Result<(), &'static str> {
         &cfg.database.pw,
     );
 
-    // ToDo: check db version
+    // Check db version
+    match db.check_migrations(cli.allow_migrations) {
+        Ok(_) => (),
+        Err(e) => {
+            error!("{}", e);
+            return Err("Database not ready");
+        }
+    };
 
+    // Get db state
     let mut head = match db.get_head() {
         Ok(h) => h,
         Err(e) => {
