@@ -31,3 +31,9 @@ class TestBootsrappedDB:
             assert cur.fetchone()[0] == 6
             cur.execute("select count(*) from core.inputs;")
             assert cur.fetchone()[0] == 1
+            cur.execute("select count(*) from core.data_inputs;")
+            assert cur.fetchone()[0] == 0
+            cur.execute("select count(*) from core.tokens;")
+            assert cur.fetchone()[0] == 1
+            cur.execute("select count(*) from core.box_assets;")
+            assert cur.fetchone()[0] == 0

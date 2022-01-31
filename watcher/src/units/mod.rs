@@ -11,6 +11,7 @@ use crate::node;
 ///
 /// - Decodes address bytes to strings.
 /// - Casts unsigned ints to signed (for postgres compatibility)
+#[derive(Debug)]
 pub struct BlockData<'a> {
     height: i32,
     header_id: &'a str,
@@ -37,6 +38,7 @@ impl<'a> BlockData<'a> {
     }
 }
 
+#[derive(Debug)]
 struct Transaction<'a> {
     id: &'a str,
     index: i32,
@@ -61,6 +63,7 @@ impl<'a> Transaction<'a> {
     }
 }
 
+#[derive(Debug)]
 struct Output<'a> {
     box_id: &'a str,
     creation_height: i32,
@@ -80,7 +83,14 @@ impl<'a> Output<'a> {
             index: output.index as i32,
             value: output.value as i64,
             additional_registers: parse_additional_registers(&output.additional_registers),
-            assets: vec![],
+            assets: output
+                .assets
+                .iter()
+                .map(|a| Asset {
+                    token_id: &a.token_id,
+                    amount: a.amount as i64,
+                })
+                .collect(),
         }
     }
 }
@@ -162,6 +172,7 @@ fn decode_register(value: &serde_json::Value, id: i16) -> Option<Register> {
     panic!("Non string value in register: {}", value);
 }
 
+#[derive(Debug)]
 struct Asset<'a> {
     token_id: &'a str,
     amount: i64,
@@ -227,6 +238,13 @@ mod tests {
             &output.R6().as_ref().unwrap().rendered_value,
             "261824656027858"
         );
+    }
+
+    #[test]
+    fn output_assets() {
+        let node_output = &block_600k().block_transactions.transactions[1].outputs[0];
+        let output = Output::from_node_output(&node_output);
+        assert_eq!(output.assets.len(), 1usize);
     }
 }
 
