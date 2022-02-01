@@ -41,7 +41,8 @@ struct Cli {
 }
 
 fn main() -> Result<(), &'static str> {
-    env_logger::init();
+    let env = env_logger::Env::default().filter_or("EW_LOG", "info");
+    env_logger::init_from_env(env);
     info!("Starting Ergo Watcher");
 
     let cli = Cli::parse();
