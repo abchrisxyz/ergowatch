@@ -1,8 +1,5 @@
 debug = false
 
-# Write blocks to db in batches of 
-# batch_size = 10
-
 [database]
 host = "localhost"
 port = 5432

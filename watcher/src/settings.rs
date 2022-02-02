@@ -1,6 +1,7 @@
 use config::{Config, ConfigError, Environment, File};
 use log::info;
 use serde::Deserialize;
+use std::env;
 
 #[derive(Debug, Deserialize)]
 #[allow(unused)]
@@ -35,8 +36,55 @@ impl Settings {
         };
         info!("Reading config from {}", cfg_path);
         s.merge(File::with_name(&cfg_path))?;
-        // Add in settings from the environment (with a prefix of EW)
-        s.merge(Environment::with_prefix("ew"))?;
+
+        match env::var("EW_DB_HOST") {
+            Ok(value) => {
+                info!("Found EW_DB_HOST environment variable");
+                s.set("db.host", value).unwrap();
+            }
+            Err(_) => (),
+        };
+
+        match env::var("EW_DB_PORT") {
+            Ok(value) => {
+                info!("Found EW_DB_PORT environment variable");
+                s.set("db.port", value).unwrap();
+            }
+            Err(_) => (),
+        };
+
+        match env::var("EW_DB_NAME") {
+            Ok(value) => {
+                info!("Found EW_DB_NAME environment variable");
+                s.set("db.name", value).unwrap();
+            }
+            Err(_) => (),
+        };
+
+        match env::var("EW_DB_USER") {
+            Ok(value) => {
+                info!("Found EW_DB_USER environment variable");
+                s.set("db.user", value).unwrap();
+            }
+            Err(_) => (),
+        };
+
+        match env::var("EW_DB_PASS") {
+            Ok(value) => {
+                info!("Found EW_DB_PASS environment variable");
+                s.set("db.pw", value).unwrap();
+            }
+            Err(_) => (),
+        };
+
+        match env::var("EW_NODE_URL") {
+            Ok(value) => {
+                info!("Found EW_NODE_URL environment variable");
+                s.set("node.url", value).unwrap();
+            }
+            Err(_) => (),
+        };
+
         s.try_into()
     }
 }
