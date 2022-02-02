@@ -1,28 +1,23 @@
-## Running the test bench
+## Installation
 
-In the `testbench` directory create a `local.py` file defining the following variables:
+The test bench is python 3 package, so make sure you have python 3 running on your system.
 
-```python
-DB_HOST = "localhost"
-DB_PORT = 5432
-DB_USER = "postgres"
-DB_PASS = "example"
+Install the dependencies listed in `.requirements.txt`. Psycopg can be tricky on some devices, see further instructions below.
 
-# This is a public node, use a local one if available
-NODE_URL = "http://213.239.193.208:9053"
-```
-
-The test bench uses a mocked node api. The `NODE_URL` is only used by single test, ensuring the mock api returns mimics the node correctly.
-
-Build the watcher
+Finally, install the test bench package itself:
 
 ```
-cargo build --release
+cd testbench
+python3 -m pip install -e .
 ```
 
-The run the `pytest` command from within the `testbench` directory.
+To remove it:
 
-## Installing Psycopg
+```
+python3 -m pip uninstall testbench
+```
+
+### Installing Psycopg
 
 Instructions [here](https://www.psycopg.org/psycopg3/docs/basic/install.html), but in short:
 
@@ -38,4 +33,29 @@ brew install libpq
 pip3 install psycopg
 brew link libpq --force
 ```
+## Running the test bench
+
+In the `testbench` directory create a `local.py` file defining the following variables:
+
+```python
+DB_HOST = "localhost"
+DB_PORT = 5432
+DB_USER = "postgres"
+DB_PASS = "example"
+
+# This is a public node, use a local one if available
+NODE_URL = "http://213.239.193.208:9053"
+```
+
+The test bench uses a mocked node API. The `NODE_URL` is only used by a single test ensuring the mock API mimics the node correctly.
+
+Build the watcher
+
+```
+cargo build --release
+```
+
+Then run the `pytest` command from within the `testbench` directory.
+
+
 

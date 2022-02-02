@@ -1,8 +1,6 @@
 # """
 # Node API mockup.
 # """
-from collections import namedtuple
-from multiprocessing import Process
 import shlex
 import subprocess
 import sys
@@ -12,9 +10,9 @@ import json
 
 import bottle
 
-from blocks import genesis_block
-from blocks import bootstrap_block
-from blocks import block_600k
+from fixtures.blocks import genesis_block
+from fixtures.blocks import bootstrap_block
+from fixtures.blocks import block_600k
 
 MOCK_NODE_HOST = "localhost:9053"
 
@@ -131,7 +129,7 @@ class MockApi:
         os.chdir(Path(__file__).parent.absolute())
         args = [sys.executable]
         args.extend(shlex.split(f"-m bottle -b {MOCK_NODE_HOST} api:{self._api}"))
-        print(args)
+        print(f"Subprocess args: {args}")
         self._p = subprocess.Popen(args)
         # Give it some time to start up before allowing tests to query the api
         try:
