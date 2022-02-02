@@ -26,7 +26,7 @@ services:
     build:
       context: ./explorer-backend/db
     environment:
-      POSTGRES_DB: ergo
+      POSTGRES_DB: dev
       POSTGRES_USER: ergo
     env_file:
       # Defines POSTGRES_PASSWORD
@@ -40,61 +40,37 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
- 
-  # Ergo explorer backend chain grabber 
-  grabber:
+
+  # Watcher
+  watcher:
     build:
-      context: ./explorer-backend/9.4.3
-      dockerfile: chain-grabber.Dockerfile
-    env_file:
-      # Defines POSTGRES_PASSWORD
-      - ./explorer-backend/db/db.secret
+      context: ./watcher
     volumes:
-      - ./explorer-backend/conf/explorer-backend.conf:/explorer-backend.conf:ro
-    command: /explorer-backend.conf
+      - ./watcher/docker.toml:/ew/config.toml:ro
     links:
       - "node"
       - "db"
-    restart: unless-stopped
+    # restart: unless-stopped
     logging:
       options:
         max-size: "10m"
         max-file: "3"
-
-  # Syncer - triggers db updates when grabber add new block
-  syncer:
-    build:
-      context: ./syncer
-    environment:
-      DB_HOST: db
-      DB_NAME: ergo
-      DB_USER: ergo
-    env_file:
-      # Defines POSTGRES_PASSWORD
-      - ./explorer-backend/db/db.secret
-    links:
-      - "db"
-    restart: unless-stopped
-    logging:
-      options:
-        max-size: "1m"
-        max-file: "3"
-
+ 
   # API server
-  api:
-    build:
-      context: ./api
-    env_file:
-      # Defines POSTGRES_PASSWORD
-      - ./explorer-backend/db/db.secret
-    links:
-      - "db"
-    ports:
-      - "127.0.0.1:8000:80"
-    restart: unless-stopped
-    volumes:
-      - ./api/src/main:/app
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "3"
+  # api:
+  #   build:
+  #     context: ./api
+  #   env_file:
+  #     # Defines POSTGRES_PASSWORD
+  #     - ./explorer-backend/db/db.secret
+  #   links:
+  #     - "db"
+  #   ports:
+  #     - "127.0.0.1:8000:80"
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./api/src/main:/app
+  #   logging:
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
