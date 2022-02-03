@@ -1,4 +1,5 @@
 use super::BlockData;
+use crate::db::core::header::rollback_statement;
 use crate::db::core::header::HeaderRow;
 use crate::db::SQLStatement;
 
@@ -13,9 +14,14 @@ pub(super) fn extract_header(block: &BlockData) -> SQLStatement {
     .to_statement()
 }
 
+pub(super) fn rollback_header(block: &BlockData) -> SQLStatement {
+    rollback_statement(&block.header_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::extract_header;
+    use super::rollback_header;
     use crate::db;
     use crate::db::SQLArg;
     use crate::units::testing::block_600k;
@@ -24,6 +30,7 @@ mod tests {
     fn header_statement() -> () {
         let stmnt = extract_header(&block_600k());
         assert_eq!(stmnt.sql, db::core::header::INSERT_HEADER);
+        assert_eq!(stmnt.args.len(), 4);
         assert_eq!(stmnt.args[0], SQLArg::Integer(600000));
         assert_eq!(
             stmnt.args[1],
@@ -38,5 +45,18 @@ mod tests {
             ))
         );
         assert_eq!(stmnt.args[3], SQLArg::BigInt(1634511451404));
+    }
+
+    #[test]
+    fn rollback() -> () {
+        let stmnt = rollback_header(&block_600k());
+        assert_eq!(stmnt.sql, db::core::header::DELETE_HEADER);
+        assert_eq!(stmnt.args.len(), 1);
+        assert_eq!(
+            stmnt.args[0],
+            SQLArg::Text(String::from(
+                "5cacca81066cb5ffd64e26096fd6ad4b6b590e7a3c09208bfda79779a7ab90a4"
+            ))
+        );
     }
 }

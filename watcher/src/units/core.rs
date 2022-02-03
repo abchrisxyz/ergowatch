@@ -13,6 +13,7 @@ use data_inputs::extract_data_inputs;
 
 mod headers;
 use headers::extract_header;
+use headers::rollback_header;
 
 mod inputs;
 use inputs::extract_inputs;
@@ -45,11 +46,11 @@ impl CoreUnit {
         statements
     }
 
-    // fn rollback(&self, block: &Block) -> () {
-    //     let header = Header::from(block);
-    //     db::core::delete_header(&header).unwrap();
-    //     info!("Deleted header {} for height {}", header.id, header.height);
-    // }
+    pub fn prep_rollback(&self, block: &BlockData) -> Vec<SQLStatement> {
+        // Enough to delete header only.
+        // Foreigh keys will propagate delete to other core tables.
+        vec![rollback_header(&block)]
+    }
 }
 
 #[cfg(test)]

@@ -8,6 +8,7 @@ use clap::Parser;
 use log::debug;
 use log::error;
 use log::info;
+use log::warn;
 use std::{thread, time};
 
 use settings::Settings;
@@ -128,16 +129,25 @@ fn main() -> Result<(), &'static str> {
                 head.height = next_height;
                 head.header_id = block.header.id;
             } else {
-                panic!("Rollback is not implemented yet");
-                // Rollback block
-                // ToDo retrieve last block to rollback...
-                // This requires all data processed in other units to be available from core unit
-                // to rebuild a block.
-                // info!(
-                //     "Rolling back block {} for height {}",
-                //     block.header.id, block.header.height
-                // );
-                // units.iter().rev().for_each(|u| u.rollback(&block));
+                // New block is not a child of last processed block, need to rollback.
+                warn!(
+                    "Rolling back block {} at height {}",
+                    block.header.id, block.header.height
+                );
+
+                // Retrieve processed block from node
+                let block = node.get_block(head.header_id).unwrap();
+
+                // Collect rollback statements, in reverse order
+                let prepped_block = units::BlockData::new(&block);
+                let sql_statements = core.prep_rollback(&prepped_block);
+
+                // Execute statements in single transaction
+                db.execute_in_transaction(sql_statements).unwrap();
+
+                // Move head to previous block
+                head.height = block.header.height - 1;
+                head.header_id = block.header.parent_id;
             }
         }
     }

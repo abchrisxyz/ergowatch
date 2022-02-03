@@ -5,6 +5,9 @@ pub const INSERT_HEADER: &str = "\
     insert into core.headers (height, id, parent_id, timestamp) \
     values ($1, $2, $3, $4);";
 
+pub const DELETE_HEADER: &str = "\
+    delete from core.headers where id = $1;";
+
 pub struct HeaderRow<'a> {
     pub height: i32,
     pub id: &'a str,
@@ -23,5 +26,12 @@ impl HeaderRow<'_> {
                 SQLArg::BigInt(self.timestamp),
             ],
         }
+    }
+}
+
+pub fn rollback_statement(header_id: &str) -> SQLStatement {
+    SQLStatement {
+        sql: String::from(DELETE_HEADER),
+        args: vec![SQLArg::Text(String::from(header_id))],
     }
 }
