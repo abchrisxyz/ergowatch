@@ -1,4 +1,6 @@
 from pathlib import Path
+from typing import Dict
+from typing import List
 
 import psycopg as pg
 from psycopg.sql import Identifier, SQL
@@ -53,24 +55,33 @@ class TestDB:
         pass
 
 
-def bootstrap_sql():
+def generate_bootstrap_sql(blocks: List[Dict]) -> str:
     """
-    Generates sql to bootstrap db to a valid state.
+    Generate sql statements to prepare a db to accept listed blocks.
 
-    All boxes spent in mock transactions must be included here.
+    Blocks should be dict objects as defined in fixtures.blocks.
+
+    Inserts 1 block, ensures all foreign keys are satisfied.
+    Height and header_id are derived from blocks[0].
     """
-    header_id = "eac9b85b5faca84fda89ed344730488bf11c5689165e04a059bf523776ae39d1"
-    height = 599_999
+    height = blocks[0]["header"]["height"] - 1
+    if height == 0:
+        # Starting with genesis block, keep db empty
+        return None
+
+    header_id = blocks[0]["header"]["parentId"]
+    timestamp = blocks[0]["header"]["timestamp"] - 120_000
     sql = f"""
         insert into core.headers (height, id, parent_id, timestamp)
         values (
             {height},
             '{header_id}',
             '0000000000000000000000000000000000000000000000000000000000000000',
-            1561978977137
+            {timestamp}
         );
     """
 
+    # Adding a single tx that is supposed to have produced any outputs, tokens, etc.
     tx_id = "4c6282be413c6e300a530618b37790be5f286ded758accc2aebd41554a1be308"
     sql += f"""
         insert into core.transactions (id, header_id, height, index)
@@ -82,81 +93,69 @@ def bootstrap_sql():
         );
     """
 
+    # Collect outputs and tokens to be present in bootstrapped db
+    created_outputs = set()
+    existing_outputs = set()
+    minted_tokens = set()
+    existing_tokens = set()
+    for block in blocks:
+        for tx in block["blockTransactions"]["transactions"]:
+            for output in tx["outputs"]:
+                created_outputs.add(output["boxId"])
+                for asset in output["assets"]:
+                    token_id = asset["tokenId"]
+                    if token_id == tx["inputs"][0]["boxId"]:
+                        minted_tokens.add(token_id)
+                    if token_id not in minted_tokens:
+                        existing_tokens.add(token_id)
+            for di in tx["dataInputs"]:
+                if di["boxId"] not in created_outputs:
+                    existing_outputs.add(di["boxId"])
+
+    # First output to have a known box_id we can use should there be any tokens to add.
+    first_output_box_id = (
+        "eb1c4a582ba3e8f9d4af389a19f3bc6fa6759fd33956f9902b34dcd4a1d3842f"
+    )
     sql += f"""
         insert into core.outputs(box_id, tx_id, header_id, creation_height, address, index, value)
         values (
-            '71bc9534d4a4fe8ff67698a5d0f29782836970635de8418da39fee1cd964fcbe',
+            '{first_output_box_id}',
             '{tx_id}',
             '{header_id}',
             {height},
             '2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU',
             0,
             93409065000000000
-        ), (
-            '45dc27302332bcb93604ae63c0a543894b38af31e6aebdb40291e3e8ecaef031',
-            '{tx_id}',
-            '{header_id}',
-            {height},
-            '88dhgzEuTXaVTz3coGyrAbJ7DNqH37vUMzpSe2vZaCEeBzA6K2nKTZ2JQJhEFgoWmrCQEQLyZNDYMby5',
-            1,
-            67500000000
-        ),
-        --
-        -- dummy outputs, spent in block 600k
-        --
-        (
-            'eb1c4a582ba3e8f9d4af389a19f3bc6fa6759fd33956f9902b34dcd4a1d3842f',
-            '{tx_id}',
-            '{header_id}',
-            {height},
-            'dummy_address_1',
-            1,
-            67500000000
-        ), (
-            'c739a3294d592377a131840d491bd2b66c27f51ae2c62c66be7bb41b248f321e',
-            '{tx_id}',
-            '{header_id}',
-            {height},
-            'dummy_address_2',
-            1,
-            67500000000
-        ), (
-            '6ca2a9d63f2f08663c09d99126ec1be7b65ce2e8f34e283c4d5af78485b47c91',
-            '{tx_id}',
-            '{header_id}',
-            {height},
-            'dummy_address_3',
-            1,
-            67500000000
-        ), (
-            '98479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8',
-            '{tx_id}',
-            '{header_id}',
-            {height},
-            'dummy_address_4',
-            1,
-            67500000000
-        );
-        """
-
-    sql += f"""
-        insert into core.inputs (box_id, tx_id, header_id, index)
-        values (
-            'b69575e11c5c43400bfead5976ee0d6245a1168396b2e2a4f384691f275d501c',
-            '{tx_id}',
-            '{header_id}',
-            0
         );
     """
 
-    sql += f"""
+    existing_outputs = list(existing_outputs)
+    existing_outputs.sort()
+    for index, box_id in enumerate(existing_outputs):
+        sql += f"""
+            insert into core.outputs(box_id, tx_id, header_id, creation_height, address, index, value)
+            values (
+                '{box_id}',
+                '{tx_id}',
+                '{header_id}',
+                {height},
+                '2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU',
+                {index + 1},
+                93409065000000000
+            );
+        """
+
+    existing_tokens = list(existing_tokens)
+    existing_tokens.sort()
+    for token_id in existing_tokens:
+        sql += f"""
         insert into core.tokens (id, box_id, emission_amount, name, description, decimals, standard)
         values (
-            '01e6498911823f4d36deaf49a964e883b2c4ae2a4530926f18b9c1411ab2a2c2',
-            'eb1c4a582ba3e8f9d4af389a19f3bc6fa6759fd33956f9902b34dcd4a1d3842f',
+            '{token_id}',
+            '{first_output_box_id}',
             20,
-            'ORACLE',
-            'datapoint token',
+            'name',
+            'description',
             0,
             'EIP-004'
         );

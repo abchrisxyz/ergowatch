@@ -7,11 +7,12 @@ import sys
 import os
 from pathlib import Path
 import json
+from typing import List
+from typing import Dict
 
 import bottle
 
 from fixtures.blocks import genesis_block
-from fixtures.blocks import bootstrap_block
 from fixtures.blocks import block_600k
 
 MOCK_NODE_HOST = "localhost:9053"
@@ -109,16 +110,24 @@ class API(bottle.Bottle):
         return json.dumps(self.blocks[header])
 
 
+BLOCK_COLLECTIONS = {
+    "genesis": [genesis_block],
+    "600k": [block_600k],
+}
+
 # API variants
 api_genesis = API([genesis_block])
-api = API([bootstrap_block, block_600k])
-api_bootstrapped = API([bootstrap_block, block_600k])
-api_buffered = API([bootstrap_block, block_600k], buffered=True)
+api = API(BLOCK_COLLECTIONS["600k"])
+api_600k = API(BLOCK_COLLECTIONS["600k"])
+
+
+def get_api_blocks(api_variant: str) -> List[Dict]:
+    return BLOCK_COLLECTIONS[api_variant]
 
 
 class MockApi:
     """
-    Utility class turning API's as context managers.
+    Utility class turning API's into context managers.
     """
 
     def __init__(self, variant: str):
@@ -136,7 +145,7 @@ class MockApi:
             self._p.wait(0.3)
         except subprocess.TimeoutExpired:
             pass
-        # If another api still running, this one won't able to bind and will fail.
+        # If another api is still running, this one won't be able to bind and will fail.
         # Here we check it has indeed started.
         # If this fails, an orphaned api is likely still running
         assert self._p.returncode is None
