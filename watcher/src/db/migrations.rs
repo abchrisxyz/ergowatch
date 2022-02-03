@@ -29,13 +29,13 @@ pub fn check(client: &mut Client, allow_migrations: bool) -> anyhow::Result<()> 
 }
 
 /// Retrieves current schema version.
-fn get_db_version(client: &mut Client) -> Result<(i32), postgres::Error> {
+fn get_db_version(client: &mut Client) -> Result<i32, postgres::Error> {
     let row = client.query_one("select version from ew.revision;", &[])?;
     Ok(row.get("version"))
 }
 
 /// Retrieves current schema version.
-fn apply_migration(client: &mut Client, migration_id: i32) -> Result<(), postgres::Error> {
+fn apply_migration(_client: &mut Client, migration_id: i32) -> Result<(), postgres::Error> {
     info!("Applying migration {}", migration_id);
     // TODO implement when first migration is ready
     unimplemented!();

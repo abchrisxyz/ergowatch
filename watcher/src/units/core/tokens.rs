@@ -55,12 +55,12 @@ struct EIP4Data {
 
 impl EIP4Data {
     fn from_output<'a, 'b: 'a>(output: &'a Output) -> Option<EIP4Data> {
-        if output.R4().is_none() || output.R5().is_none() || output.R6().is_none() {
+        if output.r4().is_none() || output.r5().is_none() || output.r6().is_none() {
             return None;
         }
-        let r4 = output.R4().as_ref().unwrap();
-        let r5 = output.R5().as_ref().unwrap();
-        let r6 = output.R6().as_ref().unwrap();
+        let r4 = output.r4().as_ref().unwrap();
+        let r5 = output.r5().as_ref().unwrap();
+        let r6 = output.r6().as_ref().unwrap();
 
         if r4.stype != "Coll[SByte]" || r5.stype != "Coll[SByte]" || r6.stype != "Coll[SByte]" {
             return None;

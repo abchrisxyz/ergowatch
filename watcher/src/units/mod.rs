@@ -96,24 +96,25 @@ impl<'a> Output<'a> {
 }
 
 impl Output<'_> {
-    pub fn R4(&self) -> &Option<Register> {
+    pub fn r4(&self) -> &Option<Register> {
         &self.additional_registers[0]
     }
-    pub fn R5(&self) -> &Option<Register> {
+    pub fn r5(&self) -> &Option<Register> {
         &self.additional_registers[1]
     }
-    pub fn R6(&self) -> &Option<Register> {
+    pub fn r6(&self) -> &Option<Register> {
         &self.additional_registers[2]
     }
-    pub fn R7(&self) -> &Option<Register> {
-        &self.additional_registers[3]
-    }
-    pub fn R8(&self) -> &Option<Register> {
-        &self.additional_registers[4]
-    }
-    pub fn R9(&self) -> &Option<Register> {
-        &self.additional_registers[5]
-    }
+    // Enable when needed
+    // pub fn r7(&self) -> &Option<Register> {
+    //     &self.additional_registers[3]
+    // }
+    // pub fn r8(&self) -> &Option<Register> {
+    //     &self.additional_registers[4]
+    // }
+    // pub fn r9(&self) -> &Option<Register> {
+    //     &self.additional_registers[5]
+    // }
 }
 
 #[derive(Debug)]
@@ -227,15 +228,15 @@ mod tests {
         let node_output = &block_600k().block_transactions.transactions[1].outputs[0];
         let output = Output::from_node_output(&node_output);
         assert_eq!(
-            &output.R4().as_ref().unwrap().rendered_value,
+            &output.r4().as_ref().unwrap().rendered_value,
             "03553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8"
         );
         assert_eq!(
-            &output.R5().as_ref().unwrap().rendered_value,
+            &output.r5().as_ref().unwrap().rendered_value,
             "98479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8"
         );
         assert_eq!(
-            &output.R6().as_ref().unwrap().rendered_value,
+            &output.r6().as_ref().unwrap().rendered_value,
             "261824656027858"
         );
     }
