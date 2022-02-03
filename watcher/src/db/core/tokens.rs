@@ -2,11 +2,11 @@ use crate::db::SQLArg;
 use crate::db::SQLStatement;
 
 pub const INSERT_TOKEN: &str = "\
-    insert into core.tokens (token_id, box_id, emission_amount) \
+    insert into core.tokens (id, box_id, emission_amount) \
     values ($1, $2, $3);";
 
 pub const INSERT_TOKEN_EIP4: &str = "\
-    insert into core.tokens (token_id, box_id, emission_amount, name, description, decimals, standard) \
+    insert into core.tokens (id, box_id, emission_amount, name, description, decimals, standard) \
     values ($1, $2, $3, $4, $5, $6, $7);";
 
 const TOKEN_STANDARD_EIP4: &str = "EIP-004";
