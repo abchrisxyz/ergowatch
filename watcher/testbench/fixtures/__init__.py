@@ -42,3 +42,19 @@ def block_600k_env(tmp_path):
             cfg_path.write_text(format_config(db_name))
             with mock_api:
                 yield MockEnv(conn, cfg_path)
+
+
+@pytest.fixture
+def token_minting_env(tmp_path):
+    api = "token_minting"
+    mock_api = MockApi(api)
+    blocks = get_api_blocks(api)
+    with TestDB() as db_name:
+        with pg.connect(conn_str(db_name)) as conn:
+            with conn.cursor() as cur:
+                cur.execute(generate_bootstrap_sql(blocks))
+            conn.commit()
+            cfg_path = tmp_path / Path("token-minting.toml")
+            cfg_path.write_text(format_config(db_name))
+            with mock_api:
+                yield MockEnv(conn, cfg_path)

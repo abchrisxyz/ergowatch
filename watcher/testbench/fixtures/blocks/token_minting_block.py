@@ -47,7 +47,12 @@ token_minting_block = {
                         "boxId": "5410f440002d0f350781463633ff6be869c54149cebeaeb935eb2968918e846b",
                         "value": 100000,
                         "ergoTree": "0008cd031d6a3105341a734909ef5a7f4da60d06ef7ffe45b4fa39283008965c6be66927",
-                        "assets": [],
+                        "assets": [
+                            {
+                                "tokenId": "34d14f73cc1d5342fb06bc1185bd1335e8119c90b1795117e2874ca6ca8dd2c5",
+                                "amount": 5000,
+                            }
+                        ],
                         "creationHeight": 600001,
                         "additionalRegisters": {
                             "R4": "0e0462657374",

@@ -14,6 +14,7 @@ import bottle
 
 from fixtures.blocks import genesis_block
 from fixtures.blocks import block_600k
+from fixtures.blocks import token_minting_block
 
 MOCK_NODE_HOST = "localhost:9053"
 
@@ -113,12 +114,13 @@ class API(bottle.Bottle):
 BLOCK_COLLECTIONS = {
     "genesis": [genesis_block],
     "600k": [block_600k],
+    "token_minting": [token_minting_block],
 }
 
 # API variants
 api_genesis = API([genesis_block])
-api = API(BLOCK_COLLECTIONS["600k"])
 api_600k = API(BLOCK_COLLECTIONS["600k"])
+api_token_minting = API(BLOCK_COLLECTIONS["token_minting"])
 
 
 def get_api_blocks(api_variant: str) -> List[Dict]:
