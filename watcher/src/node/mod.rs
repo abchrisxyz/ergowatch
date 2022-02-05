@@ -8,16 +8,13 @@ use models::HeaderID;
 use models::Height;
 use models::NodeInfo;
 
-
 pub struct Node {
-    url: String
+    url: String,
 }
 
 impl Node {
     pub fn new(url: String) -> Self {
-        Node {
-            url: url
-        }
+        Node { url: url }
     }
 
     pub fn get_height(&self) -> Result<Height, reqwest::Error> {
@@ -26,7 +23,7 @@ impl Node {
         let node_info: NodeInfo = reqwest::blocking::get(url)?.json()?;
         Ok(node_info.full_height)
     }
-    
+
     pub fn get_block_at(&self, height: Height) -> Result<HeaderID, reqwest::Error> {
         let url = format!("{}/blocks/at/{}", self.url, height);
         debug!("URL: {}", url);
@@ -34,7 +31,7 @@ impl Node {
         assert_eq!(json.len(), 1);
         Ok(json[0].to_owned())
     }
-    
+
     pub fn get_block(&self, header_id: HeaderID) -> Result<Block, reqwest::Error> {
         let url = format!("{}/blocks/{}", self.url, header_id);
         debug!("URL: {}", url);
