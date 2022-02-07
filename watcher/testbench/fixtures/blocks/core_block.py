@@ -1,6 +1,6 @@
 # Fictive block containing data for all core tables.
 # Based off block 600k and adding a fourth tx minting a token.
-# Modified (dummy) header id to distinguish it in the logs if needed.
+# Modified (dummy) header id to distinguish it from block 600k.
 core_block = {
     "header": {
         "extensionId": "cd5d15ce2a17d557ed1f87e5fc03a76de6e67e79dfbe41750b69c21409938454",
