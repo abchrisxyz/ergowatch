@@ -9,6 +9,7 @@ from pathlib import Path
 import json
 from typing import List
 from typing import Dict
+import copy
 
 import bottle
 
@@ -16,6 +17,9 @@ from fixtures.blocks import genesis_block
 from fixtures.blocks import block_600k
 from fixtures.blocks import token_minting_block
 from fixtures.blocks import core_block
+from fixtures.blocks.fork import block_672220
+from fixtures.blocks.fork import block_672220_fork
+from fixtures.blocks.fork import block_672221
 
 MOCK_NODE_HOST = "localhost:9053"
 
@@ -25,30 +29,54 @@ class API(bottle.Bottle):
     Configurable mock node API.
 
     Pass collections of blocks to be returned by block request.
-
-    Set buffered to true to have the node height increase, after each
-    block request, untill last block. Default is false, meaning node
-    will report height from last block.
     """
 
-    def __init__(self, blocks, buffered=False) -> None:
+    def __init__(self, blocks) -> None:
         super().__init__()
-        self.counter = 0
-        self.blocks = {b["header"]["id"]: b for b in blocks}
-        self.heights = [b["header"]["height"] for b in blocks]
+
+        # Full series of blocks.
+        self._blocks = blocks
+
+        # The index of the last visible block.
+        # Used to implement stepping. Incremented through step() calls.
+        self.index = len(blocks) - 1
 
         # Ensure heights are continuous (allowing for duplicates)
-        assert self.heights[-1] - self.heights[0] == len(set(self.heights)) - 1
+        heights = [b["header"]["height"] for b in blocks]
+        assert heights[-1] - heights[0] == len(set(heights)) - 1
 
         self.add_route(bottle.Route(self, "/check", "GET", self.check))
+        self.add_route(
+            bottle.Route(self, "/enable_stepping", "GET", self.enable_stepping)
+        )
+        self.add_route(bottle.Route(self, "/step", "GET", self.step))
         self.add_route(bottle.Route(self, "/info", "GET", self.get_info))
         self.add_route(
             bottle.Route(self, "/blocks/at/:height", "GET", self.get_blocks_at)
         )
         self.add_route(bottle.Route(self, "/blocks/:header", "GET", self.get_blocks))
 
+    @property
+    def heights(self):
+        blocks = self._blocks[0 : self.index + 1]
+        return [b["header"]["height"] for b in blocks]
+
+    @property
+    def blocks(self):
+        blocks = self._blocks[0 : self.index + 1]
+        return {b["header"]["id"]: b for b in blocks}
+
     def check(self):
         return "working"
+
+    def enable_stepping(self):
+        # Make sure this doesn't get called while stepping half way through blocks.
+        # Index should be set to last block when this is called.
+        assert self.index == len(self._blocks) - 1
+        self.index = 0
+
+    def step(self):
+        self.index = min(len(self._blocks), self.index + 1)
 
     def get_info(self):
         """
@@ -112,18 +140,24 @@ class API(bottle.Bottle):
         return json.dumps(self.blocks[header])
 
 
+# Dummy block used to indicate block 600k is main chain
+rollback_600_001 = copy.deepcopy(block_600k)
+rollback_600_001["header"]["parent_id"] = block_600k["header"]["id"]
+rollback_600_001["header"]["height"] = 600_001
+
 BLOCK_COLLECTIONS = {
     "genesis": [genesis_block],
     "600k": [block_600k],
     "token_minting": [token_minting_block],
-    "core_rollback": [core_block, block_600k],
+    "core_rollback": [core_block, block_600k, rollback_600_001],
+    "fork": [block_672220_fork, block_672220, block_672221],
 }
 
 # API variants
 api_genesis = API([genesis_block])
 api_600k = API(BLOCK_COLLECTIONS["600k"])
 api_token_minting = API(BLOCK_COLLECTIONS["token_minting"])
-api_core_rollback = API(BLOCK_COLLECTIONS["core_rollback"])
+api_fork = API(BLOCK_COLLECTIONS["fork"])
 
 
 def get_api_blocks(api_variant: str) -> List[Dict]:

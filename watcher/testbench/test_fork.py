@@ -1,0 +1,93 @@
+import requests
+
+from fixtures import fork_env
+from utils import run_watcher
+
+
+def test_side_chain_is_ignored(fork_env):
+    """
+    Test watcher picks main_chain block
+    """
+    db_conn, cfg_path = fork_env
+    cp = run_watcher(cfg_path)
+    assert cp.returncode == 0
+
+    # Read db to verify state
+    with db_conn.cursor() as cur:
+        cur.execute("select height from core.headers order by 1 desc limit 1;")
+        assert cur.fetchone()[0] == 672_221
+
+        cur.execute("select height, id from core.headers order by 1;")
+        rows = cur.fetchall()
+        # Heights
+        assert [r[0] for r in rows] == [672_219, 672_220, 672_221]
+        # Header id's
+        assert [r[1] for r in rows] == [
+            "63be0d9eb0ed2bb466898b0a11d73bdab5d645b1f289e5f9c2304d966ae7a2f5",
+            "8487755bf634497f4693f43e36ffc43dc0b1db9c0a317dd2952a94e7d5aa61e9",
+            "4d47f7871609a26a7f18a4591d14c2098dbeda4e278c90da11167152a90ea694",
+        ]
+
+
+def test_forked_chain_is_rolled_back(fork_env):
+    """
+    Test watcher rolls back forked blocks
+    """
+    db_conn, cfg_path = fork_env
+
+    r = requests.get(f"http://localhost:9053/enable_stepping")
+    assert r.status_code == 200
+
+    # First run. This will include block 672220_fork
+    cp = run_watcher(cfg_path)
+    assert cp.returncode == 0
+
+    with db_conn.cursor() as cur:
+        cur.execute("select height, id from core.headers order by 1;")
+        rows = cur.fetchall()
+        # Heights
+        assert [r[0] for r in rows] == [672_219, 672_220]
+        # Header id's
+        assert [r[1] for r in rows] == [
+            "63be0d9eb0ed2bb466898b0a11d73bdab5d645b1f289e5f9c2304d966ae7a2f5",
+            "6c48253ece1c7a7e832ef37f9366448f43f47ec0d16f86d91b3fab48ac53816a",
+        ]
+
+    # Step
+    r = requests.get(f"http://localhost:9053/step")
+    assert r.status_code == 200
+
+    # Second run. Should change nothing as node is still at height 672220.
+    cp = run_watcher(cfg_path)
+    assert cp.returncode == 0
+
+    with db_conn.cursor() as cur:
+        cur.execute("select height, id from core.headers order by 1;")
+        rows = cur.fetchall()
+        # Heights
+        assert [r[0] for r in rows] == [672_219, 672_220]
+        # Header id's
+        assert [r[1] for r in rows] == [
+            "63be0d9eb0ed2bb466898b0a11d73bdab5d645b1f289e5f9c2304d966ae7a2f5",
+            "6c48253ece1c7a7e832ef37f9366448f43f47ec0d16f86d91b3fab48ac53816a",
+        ]
+
+    # Step
+    r = requests.get(f"http://localhost:9053/step")
+    assert r.status_code == 200
+
+    # Third run. Should roll back 672220_fork, include 672220 instead, and then 672221.
+    cp = run_watcher(cfg_path)
+    assert cp.returncode == 0
+
+    with db_conn.cursor() as cur:
+        cur.execute("select height, id from core.headers order by 1;")
+        rows = cur.fetchall()
+        # Heights
+        assert [r[0] for r in rows] == [672_219, 672_220, 672_221]
+        # Header id's
+        assert [r[1] for r in rows] == [
+            "63be0d9eb0ed2bb466898b0a11d73bdab5d645b1f289e5f9c2304d966ae7a2f5",
+            "8487755bf634497f4693f43e36ffc43dc0b1db9c0a317dd2952a94e7d5aa61e9",
+            "4d47f7871609a26a7f18a4591d14c2098dbeda4e278c90da11167152a90ea694",
+        ]

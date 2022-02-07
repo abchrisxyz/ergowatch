@@ -61,8 +61,8 @@ def token_minting_env(tmp_path):
 
 
 @pytest.fixture
-def core_rollback_env(tmp_path):
-    api = "core_rollback"
+def fork_env(tmp_path):
+    api = "fork"
     mock_api = MockApi(api)
     blocks = get_api_blocks(api)
     with TestDB() as db_name:
@@ -70,7 +70,7 @@ def core_rollback_env(tmp_path):
             with conn.cursor() as cur:
                 cur.execute(generate_bootstrap_sql(blocks))
             conn.commit()
-            cfg_path = tmp_path / Path("core-rollback.toml")
+            cfg_path = tmp_path / Path("fork.toml")
             cfg_path.write_text(format_config(db_name))
             with mock_api:
                 yield MockEnv(conn, cfg_path)
