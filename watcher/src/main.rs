@@ -109,8 +109,7 @@ fn main() -> Result<(), &'static str> {
         while head.height < node_height {
             let next_height = head.height + 1;
             // Fetch next block from node
-            let header_id = node.get_block_at(next_height).unwrap();
-            let block = node.get_block(header_id).unwrap();
+            let block = node.get_main_chain_block_at(next_height).unwrap();
 
             if block.header.parent_id == head.header_id {
                 info!(
@@ -132,11 +131,11 @@ fn main() -> Result<(), &'static str> {
                 // New block is not a child of last processed block, need to rollback.
                 warn!(
                     "Rolling back block {} at height {}",
-                    block.header.id, block.header.height
+                    head.header_id, head.height
                 );
 
                 // Retrieve processed block from node
-                let block = node.get_block(head.header_id).unwrap();
+                let block = node.get_block(&head.header_id).unwrap();
 
                 // Collect rollback statements, in reverse order
                 let prepped_block = units::BlockData::new(&block);
