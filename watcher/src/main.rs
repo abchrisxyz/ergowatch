@@ -90,7 +90,7 @@ fn main() -> Result<(), &'static str> {
         head.height, head.header_id
     );
 
-    // Parsing units
+    // Init parsing units (just one for now)
     let core = units::core::CoreUnit {};
 
     loop {
