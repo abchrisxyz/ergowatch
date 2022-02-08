@@ -173,27 +173,3 @@ alter table core.box_assets	add constraint core_box_assets_box_id__fk_core_outpu
 	on delete cascade;
 alter table core.box_assets add constraint core_box_assets__positive_amount_check
 	check (amount > 0);
-
-
--------------------------------------------------------------------------------
--- Balances
-------------------------------------------------------------------------------- 
-drop schema if exists bal cascade;
-create schema bal;
-
--- Changes in ERG balances
-create table bal.erg (
-	address text,
-	height int,
-	change bigint
-);
-
--- alter table bal.erg add primary key (address, height);
-
--- Changes in token balances
-create table bal.tokens (
-	address text,
-	token_id text,
-	height int,
-	value numeric
-);
