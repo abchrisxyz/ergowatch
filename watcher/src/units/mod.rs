@@ -179,8 +179,20 @@ struct Asset<'a> {
     amount: i64,
 }
 
+impl std::ops::Add for Asset<'_> {
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        assert_eq!(self.token_id, other.token_id);
+        Self {
+            token_id: self.token_id,
+            amount: self.amount + other.amount,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::Asset;
     use super::BlockData;
     use super::Output;
     use super::Transaction;
@@ -246,6 +258,36 @@ mod tests {
         let node_output = &block_600k().block_transactions.transactions[1].outputs[0];
         let output = Output::from_node_output(&node_output);
         assert_eq!(output.assets.len(), 1usize);
+    }
+
+    #[test]
+    fn test_assets_with_same_token_id_can_be_added() {
+        let bag_a = Asset {
+            token_id: "token_id",
+            amount: 1000,
+        };
+        let bag_b = Asset {
+            token_id: "token_id",
+            amount: 2000,
+        };
+        let total = bag_a + bag_b;
+        assert_eq!(total.token_id, "token_id");
+        assert_eq!(total.amount, 3000);
+    }
+
+    #[test]
+    #[should_panic]
+    #[allow(unused)]
+    fn test_adding_assets_with_different_token_id_panics() {
+        let bag_a = Asset {
+            token_id: "token_id",
+            amount: 1000,
+        };
+        let bag_b = Asset {
+            token_id: "other_token_id",
+            amount: 2000,
+        };
+        bag_a + bag_b;
     }
 }
 
