@@ -1,12 +1,15 @@
 use crate::db::core::tokens::TokenRow;
 use crate::db::core::tokens::TokenRowEIP4;
 use crate::db::SQLStatement;
+use crate::units::Asset;
 use crate::units::BlockData;
 use crate::units::Output;
 use log::warn;
 
 // Handle newly minted tokes.
 // New tokens have the same id as the first input box of the tx.
+// New tokens can be minted into more than one asset record within the same box.
+// New tokens can be minted into more than one output box.
 // EIP-4 asset standard: https://github.com/ergoplatform/eips/blob/master/eip-0004.md
 pub(super) fn extract_new_tokens(block: &BlockData) -> Vec<SQLStatement> {
     block
@@ -16,34 +19,31 @@ pub(super) fn extract_new_tokens(block: &BlockData) -> Vec<SQLStatement> {
             tx.outputs.iter().flat_map(|op| {
                 op.assets
                     .iter()
-                    .map(|a| match a.token_id == tx.input_box_ids[0] {
-                        true => match EIP4Data::from_output(op) {
-                            Some(eip4_data) => Some(
-                                TokenRowEIP4 {
-                                    token_id: &a.token_id,
-                                    box_id: op.box_id,
-                                    emission_amount: a.amount,
-                                    name: eip4_data.name,
-                                    description: eip4_data.description,
-                                    decimals: eip4_data.decimals,
-                                }
-                                .to_statement(),
-                            ),
-                            None => Some(
-                                TokenRow {
-                                    token_id: &a.token_id,
-                                    box_id: &op.box_id,
-                                    emission_amount: a.amount,
-                                }
-                                .to_statement(),
-                            ),
-                        },
-                        false => None,
+                    .filter(|a| a.token_id == tx.input_box_ids[0])
+                    .map(|a| Asset {
+                        token_id: a.token_id,
+                        amount: a.amount,
+                    })
+                    .reduce(|a, b| a + b)
+                    .map(|a| match EIP4Data::from_output(op) {
+                        Some(eip4_data) => TokenRowEIP4 {
+                            token_id: &a.token_id,
+                            box_id: op.box_id,
+                            emission_amount: a.amount,
+                            name: eip4_data.name,
+                            description: eip4_data.description,
+                            decimals: eip4_data.decimals,
+                        }
+                        .to_statement(),
+                        None => TokenRow {
+                            token_id: &a.token_id,
+                            box_id: &op.box_id,
+                            emission_amount: a.amount,
+                        }
+                        .to_statement(),
                     })
             })
         })
-        .filter(|opt| opt.is_some())
-        .map(|opt| opt.unwrap())
         .collect()
 }
 
@@ -100,7 +100,7 @@ mod tests {
     use crate::db;
     use crate::units::testing::block_600k;
     use crate::units::testing::block_minting_tokens;
-    use crate::units::testing::block_multi_box_mint;
+    use crate::units::testing::block_multi_asset_mint;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -118,11 +118,11 @@ mod tests {
     }
 
     #[test]
-    fn transaction_with_multiple_minting_boxes() {
-        let statements = extract_new_tokens(&block_multi_box_mint());
+    fn multi_asset_mint() {
+        let statements = extract_new_tokens(&block_multi_asset_mint());
         assert_eq!(statements.len(), 1);
         assert_eq!(statements[0].sql, db::core::tokens::INSERT_TOKEN);
         // Emission amount should be total of minting boxes
-        assert_eq!(statements[0].args[2], db::SQLArg::BigInt(1000 + 10000000));
+        assert_eq!(statements[0].args[2], db::SQLArg::BigInt(10 + 10));
     }
 }
