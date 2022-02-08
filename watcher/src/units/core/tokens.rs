@@ -100,6 +100,8 @@ mod tests {
     use crate::db;
     use crate::units::testing::block_600k;
     use crate::units::testing::block_minting_tokens;
+    use crate::units::testing::block_multi_box_mint;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn block_without_minting_transactions() -> () {
@@ -113,5 +115,14 @@ mod tests {
         assert_eq!(statements.len(), 2);
         assert_eq!(statements[0].sql, db::core::tokens::INSERT_TOKEN_EIP4);
         assert_eq!(statements[1].sql, db::core::tokens::INSERT_TOKEN);
+    }
+
+    #[test]
+    fn transaction_with_multiple_minting_boxes() {
+        let statements = extract_new_tokens(&block_multi_box_mint());
+        assert_eq!(statements.len(), 1);
+        assert_eq!(statements[0].sql, db::core::tokens::INSERT_TOKEN);
+        // Emission amount should be total of minting boxes
+        assert_eq!(statements[0].args[2], db::SQLArg::BigInt(1000 + 10000000));
     }
 }

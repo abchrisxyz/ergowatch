@@ -502,4 +502,74 @@ mod testing {
             ],
         }
     }
+
+    /// Based on tx 0f778e5c5c2ecb8b26d2b7f739456e8942f3785ea1228ecfc0edda62e86b9177
+    /// Contains a tx minting a token into multiple assets within same box
+    pub fn block_multi_asset_mint<'a>() -> BlockData<'a> {
+        let tx_1_multi_asset_mint = Transaction {
+            id: "0f778e5c5c2ecb8b26d2b7f739456e8942f3785ea1228ecfc0edda62e86b9177",
+            index: 0,
+            outputs: vec![
+                Output {
+                    box_id: "e9ad4b744b96abc9244287b21c21720622f57b72d8fb2995c1fe4b4afe63f9d2",
+                    creation_height: 500114,
+                    address: String::from("9hz1B19M44TNpmVe8MS4xvXyycehh5uP5aCfj4a6iAowj88hkd2"),
+                    index: 0,
+                    value: 1000000,
+                    additional_registers: [None, None, None, None, None, None],
+                    assets: vec![
+                        Asset {
+                            token_id:
+                                "a342ae8776207b9a7529b93450187a33538ce86b68d11483758debffea667c25",
+                            amount: 10,
+                        }, Asset {
+                            token_id:
+                                "a342ae8776207b9a7529b93450187a33538ce86b68d11483758debffea667c25",
+                            amount: 10,
+                        },
+                    ],
+                },
+                Output {
+                    box_id: "9291258a91ccf04ed8e906484733d561cc3eaabdcb518426343e9b8d3a604660",
+                    creation_height: 500114,
+                    address: String::from("2iHkR7CWvD1R4j1yZg5bkeDRQavjAaVPeTDFGGLZduHyfWMuYpmhHocX8GJoaieTx78FntzJbCBVL6rf96ocJoZdmWBL2fci7NqWgAirppPQmZ7fN9V6z13Ay6brPriBKYqLp1bT2Fk4FkFLCfdPpe"),
+                    index: 1,
+                    value: 1000000,
+                    additional_registers: [None, None, None, None, None, None],
+                    assets: vec![],
+                },
+                Output {
+                    box_id: "e879169e8a393ae3f803e863bb4519983eea3ca0c5b6e8aa54cd25121a14ea9d",
+                    creation_height: 500114,
+                    address: String::from("9hz1B19M44TNpmVe8MS4xvXyycehh5uP5aCfj4a6iAowj88hkd2"),
+                    index: 2,
+                    value: 16554330866,
+                    additional_registers: [None, None, None, None, None, None],
+                    assets: vec![
+                        Asset {
+                            token_id:
+                                "2fc8abf612bc8b36af382e8c10a8e9df6227afdbe508c9b08b0a575fc4937b5e",
+                            amount: 100,
+                        }, Asset {
+                            token_id:
+                                "749fe0b8c63213be3451af2578eacabd620a9e687f5c55c54f1ec571b17c9c85",
+                            amount: 2,
+                        }
+                    ],
+                },
+            ],
+            input_box_ids: vec![
+                "a342ae8776207b9a7529b93450187a33538ce86b68d11483758debffea667c25",
+                "78c70fb676d29e9ae9b90706cac55cd63d2e4519eaff5981291b56895511c929",
+            ],
+            data_input_box_ids: vec![],
+        };
+        BlockData {
+            height: 500117,
+            header_id: "bdecd56368e9c62ac51802b5cc5bb2446852227a7dd9448db817f9d5335c05ec",
+            parent_header_id: "c2b3b5905965ebbf023dc092622e02301e711b346cf2459de9efe29c47c47ad5",
+            timestamp: 1622328822475,
+            transactions: vec![tx_1_multi_asset_mint],
+        }
+    }
 }
