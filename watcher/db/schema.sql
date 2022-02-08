@@ -148,7 +148,7 @@ create table core.tokens (
 	standard text
 );
 
-alter table core.tokens add primary key (id);
+alter table core.tokens add primary key (id, box_id);
 alter table core.tokens alter column box_id set not null;
 alter table core.tokens	add constraint core_tokens_box_id__fk_core_outputs_box_id
 	foreign key (box_id)
@@ -170,10 +170,6 @@ alter table core.box_assets alter column token_id set not null;
 alter table core.box_assets	add constraint core_box_assets_box_id__fk_core_outputs_box_id
 	foreign key (box_id)
 	references core.outputs (box_id)
-	on delete cascade;
-alter table core.box_assets	add constraint core_box_assets_token_id__fk_core_tokens_id
-	foreign key (token_id)
-	references core.tokens (id)
 	on delete cascade;
 alter table core.box_assets add constraint core_box_assets__positive_amount_check
 	check (amount > 0);
