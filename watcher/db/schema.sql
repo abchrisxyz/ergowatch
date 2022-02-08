@@ -104,8 +104,7 @@ create table core.data_inputs (
 	index int
 );
 
-alter table core.data_inputs add primary key (box_id);
-alter table core.data_inputs alter column tx_id set not null;
+alter table core.data_inputs add primary key (box_id, tx_id);
 alter table core.data_inputs alter column header_id set not null;
 alter table core.data_inputs add constraint core_data_inputs_tx_id__fk_core_transactions_id
 	foreign key (tx_id)
