@@ -333,7 +333,6 @@ mod tests {
     }
 
     #[test]
-    // SBoolean
     fn render_register_boolean() {
         let base16_str = "0101";
         let rr = render_register_value(base16_str);
