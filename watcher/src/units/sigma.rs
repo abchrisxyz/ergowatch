@@ -1,4 +1,3 @@
-use base16;
 use ergotree_ir::chain::address::Address;
 use ergotree_ir::chain::address::AddressEncoder;
 use ergotree_ir::chain::address::NetworkPrefix;
