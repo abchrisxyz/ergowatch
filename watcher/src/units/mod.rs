@@ -166,7 +166,7 @@ fn decode_register(value: &serde_json::Value, id: i16) -> Option<Register> {
         return Some(Register {
             id: id,
             stype: rendered_register.value_type,
-            serialized_value: String::new(),
+            serialized_value: s.to_string(),
             rendered_value: rendered_register.value,
         });
     }
@@ -239,18 +239,24 @@ mod tests {
     fn output_registers() {
         let node_output = &block_600k().block_transactions.transactions[1].outputs[0];
         let output = Output::from_node_output(&node_output);
-        assert_eq!(
-            &output.r4().as_ref().unwrap().rendered_value,
-            "03553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8"
-        );
-        assert_eq!(
-            &output.r5().as_ref().unwrap().rendered_value,
-            "98479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8"
-        );
-        assert_eq!(
-            &output.r6().as_ref().unwrap().rendered_value,
-            "261824656027858"
-        );
+        
+        let r4 = &output.r4().as_ref().unwrap();
+        assert_eq!(r4.id, 4);
+        assert_eq!(r4.stype, "SGroupElement");
+        assert_eq!(r4.serialized_value, "0703553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8");
+        assert_eq!(r4.rendered_value, "03553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8");
+        
+        let r5 = &output.r5().as_ref().unwrap();
+        assert_eq!(r5.id, 5);
+        assert_eq!(r5.stype, "Coll[SByte]");
+        assert_eq!(r5.serialized_value, "0e2098479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8");
+        assert_eq!(r5.rendered_value, "98479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8");
+        
+        let r6 = &output.r6().as_ref().unwrap();
+        assert_eq!(r6.id, 6);
+        assert_eq!(r6.stype, "SLong");
+        assert_eq!(r6.serialized_value, "05a4c3edd9998877");
+        assert_eq!(r6.rendered_value, "261824656027858");
     }
 
     #[test]
