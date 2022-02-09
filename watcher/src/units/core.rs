@@ -58,6 +58,7 @@ mod tests {
     use super::CoreUnit;
     use crate::db;
     use crate::units::testing::block_600k;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn statements_order() -> () {
