@@ -87,11 +87,10 @@ fn render_register_val(val: &Value) -> RenderedRegister {
                 },
             }
         }
-        // TODO: tentative AvlTree parsing - needs validation
-        // Value::AvlTree(tree) => RenderedRegister {
-        //     value_type: String::from("SAvlTree"),
-        //     value: base16::encode_lower(&tree.sigma_serialize_bytes().unwrap()),
-        // },
+        Value::AvlTree(tree) => RenderedRegister {
+            value_type: String::from("SAvlTree"),
+            value: base16::encode_lower(&tree.sigma_serialize_bytes().unwrap()),
+        },
         Value::CBox(ergo_box) => {
             let eb = ergo_box.as_ref();
             let s = serde_json::to_string(eb).unwrap();
@@ -389,31 +388,31 @@ mod tests {
         );
     }
 
-    // TODO: validate AvlTree test
-    // #[test]
-    // fn render_register_avltree() {
-    //     // https://explorer.ergoplatform.com/en/transactions/82018eef5de2df5298cfe7de17bec4ab9c3d1d1596cf7f48091ce114503066b7
-    //     // According to https://github.com/ergoplatform/ergo-jde/blob/main/kiosk/src/test/scala/kiosk/avltree/AvlTrees.md
-    //     // R4 and R5 are of type AvlTre
-    //     ///
-    //     // "additionalRegisters": {
-    //     //     "R4": "64aebde47e15b6bfb577265ea5a819f5779328085286d86e7e1089636641dae9b80007200108",
-    //     //     "R5": "64da041b2cfe44c3e34bcf0accd22dd7c52d2c278bef80587ab3d4e49b5dba86c10107200108",
-    //     //     "R6": "0e200a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a",
-    //     //     "R7": "0e081414141414141414",
-    //     //     "R8": "0e4a020000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff000000000000000004"
-    //     //   },
-    //     //   "transactionId": "82018eef5de2df5298cfe7de17bec4ab9c3d1d1596cf7f48091ce114503066b7",
-    //     //
-    //     let base16_str =
-    //         "64aebde47e15b6bfb577265ea5a819f5779328085286d86e7e1089636641dae9b80007200108";
-    //     let rr = render_register_value(base16_str);
-    //     assert_eq!(rr.value_type, "SAvlTree");
-    //     assert_eq!(
-    //         rr.value,
-    //         "aebde47e15b6bfb577265ea5a819f5779328085286d86e7e1089636641dae9b80007200108"
-    //     );
-    // }
+    #[test]
+    fn render_register_avltree() {
+        // https://explorer.ergoplatform.com/en/transactions/82018eef5de2df5298cfe7de17bec4ab9c3d1d1596cf7f48091ce114503066b7
+        // According to https://github.com/ergoplatform/ergo-jde/blob/main/kiosk/src/test/scala/kiosk/avltree/AvlTrees.md
+        // R4 and R5 are of type AvlTree
+        //
+        // "additionalRegisters": {
+        //     "R4": "64aebde47e15b6bfb577265ea5a819f5779328085286d86e7e1089636641dae9b80007200108",
+        //     "R5": "64da041b2cfe44c3e34bcf0accd22dd7c52d2c278bef80587ab3d4e49b5dba86c10107200108",
+        //     "R6": "0e200a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a",
+        //     "R7": "0e081414141414141414",
+        //     "R8": "0e4a020000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff000000000000000004"
+        //   },
+        //   "transactionId": "82018eef5de2df5298cfe7de17bec4ab9c3d1d1596cf7f48091ce114503066b7",
+        //
+        let base16_str =
+            "64aebde47e15b6bfb577265ea5a819f5779328085286d86e7e1089636641dae9b80007200108";
+        let rr = render_register_value(base16_str);
+        assert_eq!(rr.value_type, "SAvlTree");
+        assert_eq!(
+            rr.value,
+            "aebde47e15b6bfb577265ea5a819f5779328085286d86e7e1089636641dae9b80007200108"
+        );
+    }
+
     // Second output of this tx fe61c57a2a360bfd4bebe8f3e5702fdb42a709d822ad88dcc81606a7be94360e
     // has a CBox in R4.
     // Explorer doesn't seem to handle CBox registers (yet), so use node api to look up the tx.
