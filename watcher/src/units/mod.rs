@@ -337,21 +337,21 @@ mod testing {
                     additional_registers: [
                         Some(Register {
                             id: 4,
-                            stype: String::from("SLong"),
-                            serialized_value: String::from("05a4c3edd9998877"),
-                            rendered_value: String::from("261824656027858"),
-                        }),
-                        Some(Register {
-                            id: 5,
                             stype: String::from("SGroupElement"),
                             serialized_value: String::from("0703553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8"),
                             rendered_value: String::from("03553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8"),
-                        }),
+                        }),    
                         Some(Register {
-                            id: 6,
+                            id: 5,
                             stype: String::from("Coll[SByte]"),
                             serialized_value: String::from("0e2098479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8"),
                             rendered_value: String::from("98479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8"),
+                        }),
+                        Some(Register {
+                            id: 6,
+                            stype: String::from("SLong"),
+                            serialized_value: String::from("05a4c3edd9998877"),
+                            rendered_value: String::from("261824656027858"),
                         }),
                         None, None, None],
                     assets: vec![
