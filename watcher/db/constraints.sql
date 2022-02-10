@@ -83,6 +83,16 @@ alter table core.box_assets add check (amount > 0);
 
 
 -------------------------------------------------------------------------------
+-- Balances
+-------------------------------------------------------------------------------
+alter table bal.erg add primary key(address);
+alter table bal.erg_diffs add primary key(address, height);
+alter table bal.tokens add primary key(address, token_id);
+alter table bal.tokens_diffs add primary key(address, token_id, height);
+
+
+-------------------------------------------------------------------------------
 -- Finally
 ------------------------------------------------------------------------------- 
+update ew.revision set constraints_set = true;
 update ew.revision set constraints_set = true;

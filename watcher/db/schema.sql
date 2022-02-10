@@ -79,3 +79,37 @@ create table core.box_assets (
 	token_id text,
 	amount bigint
 );
+
+
+-------------------------------------------------------------------------------
+-- Balances
+------------------------------------------------------------------------------- 
+create schema bal;
+
+-- Running ERG balances
+create table bal.erg (
+	address text,
+	value bigint
+);
+
+-- Changes in ERG balances
+create table bal.erg_diffs (
+	address text,
+	height int,
+	change bigint
+);
+
+-- Running token balances
+create table bal.tokens (
+	address text,
+	token_id text,
+	value bigint
+);
+
+-- Changes in token balances
+create table bal.tokens_diffs (
+	address text,
+	token_id text,
+	height int,
+	value bigint
+);
