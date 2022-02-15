@@ -79,3 +79,9 @@ alter table core.box_assets	add foreign key (box_id)
 	references core.outputs (box_id)
 	on delete cascade;
 alter table core.box_assets add check (amount > 0);
+
+
+-------------------------------------------------------------------------------
+-- Finally
+------------------------------------------------------------------------------- 
+update ew.revision set constraints_set = true;
