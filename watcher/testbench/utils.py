@@ -21,7 +21,7 @@ def run_watcher(
         env["RUST_BACKTRACE"] = "full"
 
     cp = subprocess.run(
-        [exe, "-c", cfg_path, "--sync-only"],
+        args,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         env=env,
