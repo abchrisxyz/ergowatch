@@ -68,25 +68,20 @@ fn main() -> Result<(), &'static str> {
     );
 
     // Check db constraints
-    match db.has_constraints() {
-        Ok(set) => {
-            if !set {
-                warn!("Database is unconstrained");
-                if !cli.sync_only {
-                    warn!(
-                        "Watcher cannot be run on an unconstrained database without the -s option."
-                    );
-                    warn!(
-                        "If almost synced, please set the db contraints using `constraints.sql`."
-                    );
-                    warn!("Otherwise, go ahead and rerun with the -s option.");
-                    return Err("Cannot run on unconstrained database without --sync-only option.");
-                }
-            }
-        }
+    let db_constraints_set = match db.has_constraints() {
+        Ok(set) => set,
         Err(e) => {
             error!("{}", e);
-            return Err("Database not ready");
+            return Err("Database is not ready");
+        }
+    };
+    if !db_constraints_set {
+        warn!("Database is unconstrained");
+        if !cli.sync_only {
+            warn!("Watcher cannot be run on an unconstrained database without the -s option.");
+            warn!("If almost synced, please set the db contraints defined in `constraints.sql`.");
+            warn!("Otherwise, go ahead and rerun with the -s option.");
+            return Err("Cannot run on unconstrained database without --sync-only option.");
         }
     }
 
@@ -155,6 +150,14 @@ fn main() -> Result<(), &'static str> {
                     "Rolling back block {} at height {}",
                     head.header_id, head.height
                 );
+
+                // Rollbacks may rely on database constraints to propagate
+                if !db_constraints_set {
+                    warn!("Preventing a rollback on an unconstrained database.");
+                    warn!("Rollbacks may rely on database constraints to propagate.");
+                    warn!("Please set the database contraints defined in `constraints.sql`.");
+                    return Err("Preventing a rollback on an unconstrained database.");
+                }
 
                 // Retrieve processed block from node
                 let block = node.get_block(&head.header_id).unwrap();
