@@ -67,6 +67,29 @@ fn main() -> Result<(), &'static str> {
         &cfg.database.pw,
     );
 
+    // Check db constraints
+    match db.has_constraints() {
+        Ok(set) => {
+            if !set {
+                warn!("Database is unconstrained");
+                if !cli.sync_only {
+                    warn!(
+                        "Watcher cannot be run on an unconstrained database without the -s option."
+                    );
+                    warn!(
+                        "If almost synced, please set the db contraints using `constraints.sql`."
+                    );
+                    warn!("Otherwise, go ahead and rerun with the -s option.");
+                    return Err("Cannot run on unconstrained database without --sync-only option.");
+                }
+            }
+        }
+        Err(e) => {
+            error!("{}", e);
+            return Err("Database not ready");
+        }
+    }
+
     // Check db version
     match db.check_migrations(cli.allow_migrations) {
         Ok(_) => (),

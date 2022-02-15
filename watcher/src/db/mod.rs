@@ -29,6 +29,14 @@ impl DB {
         let mut client = Client::connect(&self.conn_str, NoTls)?;
         migrations::check(&mut client, allow_migrations)
     }
+
+    /// Returns true if db constraints are set.
+    pub fn has_constraints(&self) -> anyhow::Result<bool> {
+        let mut client = Client::connect(&self.conn_str, NoTls)?;
+        let row = client.query_one("select constraints_set from ew.revision;", &[])?;
+        let set: bool = row.get("constraints_set");
+        Ok(set)
+    }
 }
 
 #[derive(Debug, PartialEq)]

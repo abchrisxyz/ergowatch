@@ -4,6 +4,7 @@ from fixtures import fork_env, genesis_env
 from fixtures import block_600k_env
 from fixtures import token_minting_env
 from fixtures import fork_env
+from fixtures import unconstrained_db_env
 
 
 @pytest.mark.order(1)
@@ -124,3 +125,52 @@ class TestForkDB:
             # No assets
             cur.execute("select count(*) from core.box_assets;")
             assert cur.fetchone()[0] == 0
+
+
+@pytest.mark.order(1)
+class TestUnconstrainedDB:
+    def test_db_state(self, unconstrained_db_env):
+        """
+        Check connection works and db is bootstrapped
+        """
+        with unconstrained_db_env.db_conn.cursor() as cur:
+            # Height is set to previous block
+            cur.execute("select height from core.headers order by 1 desc limit 1;")
+            assert cur.fetchone()[0] == 672_219
+
+            # Single tx
+            cur.execute("select count(*) from core.transactions;")
+            assert cur.fetchone()[0] == 1
+
+            # 2 pre-existing outputs (1 for a minted token, one for a data-input)
+            cur.execute("select count(*) from core.outputs;")
+            assert cur.fetchone()[0] == 1
+
+            # No inputs (impossible in real life, but ok here)
+            cur.execute("select count(*) from core.inputs;")
+            assert cur.fetchone()[0] == 0
+
+            # No data-inputs
+            cur.execute("select count(*) from core.data_inputs;")
+            assert cur.fetchone()[0] == 0
+
+            # No pre-existing token
+            cur.execute("select count(*) from core.tokens;")
+            assert cur.fetchone()[0] == 0
+
+            # No assets
+            cur.execute("select count(*) from core.box_assets;")
+            assert cur.fetchone()[0] == 0
+
+    def test_db_constraints_not_set(self, unconstrained_db_env):
+        """
+        Check db constraints are not set.
+        """
+        with unconstrained_db_env.db_conn.cursor() as cur:
+            # Height is set to previous block
+            cur.execute(
+                "insert into core.headers (height, id, parent_id, timestamp) values (1, 'header', 'header', 123456789);"
+            )
+            cur.execute(
+                "insert into core.headers (height, id, parent_id, timestamp) values (1, 'header', 'header', 123456789);"
+            )

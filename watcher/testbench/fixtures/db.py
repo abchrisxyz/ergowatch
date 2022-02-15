@@ -12,6 +12,10 @@ SCHEMA_PATH = (
     Path(__file__).parent.parent.absolute() / Path("../db/schema.sql")
 ).absolute()
 
+CONSTRAINTS_PATH = (
+    Path(__file__).parent.parent.absolute() / Path("../db/constraints.sql")
+).absolute()
+
 
 def conn_str(dbname: str) -> str:
     """
@@ -21,10 +25,13 @@ def conn_str(dbname: str) -> str:
 
 
 class TestDB:
-    def __init__(self):
+    def __init__(self, set_constraints=True):
         self._dbname: str = "test2"  # TODO: use random name
         with open(SCHEMA_PATH) as f:
             self._sql = f.read()
+        if set_constraints:
+            with open(CONSTRAINTS_PATH) as f:
+                self._sql += f.read()
 
     def _create_db(self):
         with pg.connect(conn_str("postgres"), autocommit=True) as conn:
