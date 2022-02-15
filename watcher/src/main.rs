@@ -14,7 +14,6 @@ use std::{thread, time};
 use settings::Settings;
 
 // TODO: move this to config
-// const DB_VERSION: i32 = 1;
 const POLL_INTERVAL_SECONDS: u64 = 5;
 
 #[derive(Parser, Debug)]
