@@ -14,7 +14,7 @@ pub fn check(client: &mut Client, allow_migrations: bool) -> anyhow::Result<()> 
             "Database was created by a more recent version of this program."
         ));
     } else if db_version == CURRENT_VERSION {
-        info!("Database is up to date");
+        info!("Database version is up to date");
         return Ok(());
     }
 
