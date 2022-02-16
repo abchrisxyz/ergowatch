@@ -1,11 +1,11 @@
 use crate::db::SQLArg;
 use crate::db::SQLStatement;
 
-pub const INSERT_HEADER: &str = "\
-    insert into core.headers (height, id, parent_id, timestamp) \
+pub const INSERT_HEADER: &str = "
+    insert into core.headers (height, id, parent_id, timestamp)
     values ($1, $2, $3, $4);";
 
-pub const DELETE_HEADER: &str = "\
+pub const DELETE_HEADER: &str = "
     delete from core.headers where id = $1;";
 
 pub struct HeaderRow<'a> {
