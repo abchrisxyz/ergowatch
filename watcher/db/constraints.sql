@@ -83,16 +83,21 @@ alter table core.box_assets add check (amount > 0);
 
 
 -------------------------------------------------------------------------------
+-- Unpent boxes
+-------------------------------------------------------------------------------
+alter table usb.boxes add primary key (box_id, address);
+
+
+-------------------------------------------------------------------------------
 -- Balances
 -------------------------------------------------------------------------------
 alter table bal.erg add primary key(address);
-alter table bal.erg_diffs add primary key(address, height);
+alter table bal.erg_diffs add primary key(address, height, tx_id);
 alter table bal.tokens add primary key(address, token_id);
-alter table bal.tokens_diffs add primary key(address, token_id, height);
+alter table bal.tokens_diffs add primary key(address, token_id, height, tx_id);
 
 
 -------------------------------------------------------------------------------
 -- Finally
 ------------------------------------------------------------------------------- 
-update ew.revision set constraints_set = true;
 update ew.revision set constraints_set = true;

@@ -188,8 +188,9 @@ fn main() -> Result<(), &'static str> {
         head.height, head.header_id
     );
 
-    // Init parsing units (just one for now)
-    let core = units::core::CoreUnit {};
+    // Init parsing units
+    let ucore = units::core::CoreUnit {};
+    let ubal = units::balances::BalancesUnit {};
 
     loop {
         let node_height = node.get_height().unwrap();
@@ -217,7 +218,7 @@ fn main() -> Result<(), &'static str> {
 
                 // Collect statements
                 let prepped_block = units::BlockData::new(&block);
-                let sql_statements = core.prep(&prepped_block);
+                let sql_statements = ucore.prep(&prepped_block);
 
                 // Execute statements in single transaction
                 db.execute_in_transaction(sql_statements).unwrap();
@@ -246,7 +247,7 @@ fn main() -> Result<(), &'static str> {
 
                 // Collect rollback statements, in reverse order
                 let prepped_block = units::BlockData::new(&block);
-                let sql_statements = core.prep_rollback(&prepped_block);
+                let sql_statements = ucore.prep_rollback(&prepped_block);
 
                 // Execute statements in single transaction
                 db.execute_in_transaction(sql_statements).unwrap();

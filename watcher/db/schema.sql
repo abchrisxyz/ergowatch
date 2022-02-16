@@ -82,6 +82,17 @@ create table core.box_assets (
 
 
 -------------------------------------------------------------------------------
+-- Unpent boxes
+-------------------------------------------------------------------------------
+create schema usb;
+
+create table usb.boxes (
+	box_id text,
+	address text
+);
+
+
+-------------------------------------------------------------------------------
 -- Balances
 ------------------------------------------------------------------------------- 
 create schema bal;
@@ -96,7 +107,8 @@ create table bal.erg (
 create table bal.erg_diffs (
 	address text,
 	height int,
-	change bigint
+	tx_id text,
+	value bigint
 );
 
 -- Running token balances
@@ -111,5 +123,6 @@ create table bal.tokens_diffs (
 	address text,
 	token_id text,
 	height int,
+	tx_id text,
 	value bigint
 );
