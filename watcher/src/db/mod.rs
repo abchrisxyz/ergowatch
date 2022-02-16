@@ -30,6 +30,17 @@ impl DB {
         migrations::check(&mut client, allow_migrations)
     }
 
+    /// Returns true if db is empty
+    pub fn is_empty(&self) -> anyhow::Result<bool> {
+        let mut client = Client::connect(&self.conn_str, NoTls)?;
+        let row = client.query_one(
+            "select not exists (select * from core.headers limit 1);",
+            &[],
+        )?;
+        let empty: bool = row.get(0);
+        Ok(empty)
+    }
+
     /// Returns true if db constraints are set.
     pub fn has_constraints(&self) -> anyhow::Result<bool> {
         let mut client = Client::connect(&self.conn_str, NoTls)?;

@@ -44,12 +44,6 @@ def test_side_chain_is_ignored(fork_env):
         ]
 
 
-# normal: 6b3eb09041bf1759f300c3a1209406504c3b301eb7a445d7cfe719b0bca6132c
-# fork: cd536290bc4ea4e63af9c4da19b60f7dcbaadb59570dfc7e659f45759f5ec15f
-# next:  546591655290f20359637468d275c822d6fd6ba784e65e58b6e6914a6ebe929a
-#        e211bf9d7a070d0c2b65031426404f3a62aee45a48b3f7cea541060344a1513a
-
-
 def test_forked_chain_is_rolled_back(fork_env):
     """
     Test watcher rolls back forked blocks
@@ -153,20 +147,30 @@ def test_forked_chain_is_rolled_back(fork_env):
         ]
 
 
-def test_watcher_exits_on_unconstrained_db_without_sync_only_option(
+def test_watcher_exits_on_unconstrained_db_without_bootstrap_option(
     unconstrained_db_env,
 ):
     """
     Rollbacks rely partly on foreign keys to propagate through the db.
 
-    The watcher should only be run without constraints when using the -s option,
-    which guarantees there will be no rollbacks when starting from scratch.
+    The watcher should only be run without constraints when using the -b option.
 
-    This test checks the watcher exits when omitting the -s option
+    This test checks the watcher exits when omitting the -b option
     with an unconstrained db.
     """
     db_conn, cfg_path = unconstrained_db_env
-    cp = run_watcher(cfg_path, sync_only=False)
+    cp = run_watcher(cfg_path)
+    assert cp.returncode != 0
+
+
+def test_watcher_exits_with_both_bootstrap_and_sync_only_options(
+    unconstrained_db_env,
+):
+    """
+    Options -b and -s should not be used together
+    """
+    db_conn, cfg_path = unconstrained_db_env
+    cp = run_watcher(cfg_path, bootstrap=True)
     assert cp.returncode != 0
 
 
@@ -176,10 +180,11 @@ def test_rollback_is_prevented_on_unconstrained_db(
     """
     Rollbacks rely partly on foreign keys to propagate through the db.
 
-    Running repeatedly in sync-only mode could lead to rollback to be hit.
+    Running repeatedly in bootsrap mode could lead to a rollback to be hit.
     Check it is prevented if the database constraints are not set.
 
     This is mostly repeating the `test_forked_chain_is_rolled_back` test
+    but in bootstrap mode.
     """
     db_conn, cfg_path = unconstrained_db_env
 
@@ -187,7 +192,7 @@ def test_rollback_is_prevented_on_unconstrained_db(
     assert r.status_code == 200
 
     # First run. This will include block 672220_fork
-    cp = run_watcher(cfg_path)
+    cp = run_watcher(cfg_path, bootstrap=True, sync_only=False)
     assert cp.returncode == 0
 
     with db_conn.cursor() as cur:
@@ -218,7 +223,7 @@ def test_rollback_is_prevented_on_unconstrained_db(
     assert r.status_code == 200
 
     # Second run. Should change nothing as node is still at height 672220.
-    cp = run_watcher(cfg_path)
+    cp = run_watcher(cfg_path, bootstrap=True, sync_only=False)
     assert cp.returncode == 0
 
     with db_conn.cursor() as cur:
@@ -249,7 +254,7 @@ def test_rollback_is_prevented_on_unconstrained_db(
     assert r.status_code == 200
 
     # Third run. Should trigger rollback of 672220_fork and break.
-    cp = run_watcher(cfg_path)
+    cp = run_watcher(cfg_path, bootstrap=True, sync_only=False)
     assert cp.returncode != 0
 
     # DB is same as before

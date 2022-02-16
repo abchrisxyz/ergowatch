@@ -4,7 +4,7 @@ import subprocess
 
 
 def run_watcher(
-    cfg_path: Path, target="release", sync_only=True, backtrace=False
+    cfg_path: Path, target="release", sync_only=True, bootstrap=False, backtrace=False
 ) -> subprocess.CompletedProcess:
     exe = str(
         Path(__file__).parent.parent.absolute() / Path(f"target/{target}/watcher")
@@ -12,6 +12,8 @@ def run_watcher(
     args = [exe, "-c", cfg_path]
     if sync_only:
         args.append("--sync-only")
+    if bootstrap:
+        args.append("--bootstrap")
 
     env = dict(
         os.environ,
