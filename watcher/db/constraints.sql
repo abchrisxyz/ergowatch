@@ -12,6 +12,7 @@ alter table core.transactions add primary key (id);
 alter table core.transactions add foreign key (header_id)
 	references core.headers (id)
 	on delete cascade;
+create index on core.transactions(height);
 
 alter table core.outputs add primary key (box_id);
 alter table core.outputs alter column tx_id set not null;
