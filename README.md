@@ -42,13 +42,14 @@ The `docker-compose.yml` might also be a good place to look at to see how things
 
 #### Bootstrapping (wip - partly implemented)
 
-When syncing from scratch, the watcher will start in bootstrap mode. This mode can also be invoked by passing the `-b` or `--bootstrap` option. Bootstrap mode does the following:
+When syncing from scratch (i.e. empty database), the watcher will start in bootstrap mode. This mode can also be invoked by passing the `-b` or `--bootstrap` option, provided database constraints haven't been set yet. Bootstrap mode does the following:
 
 1. Check no database constraints are set
-2. Delay the processing of bootstrappable units until current height is reached
-3. Stop syncing once current height is reaches
+2. Skip processing of bootstrappable units until current height is reached
+3. Stop syncing once current height is reached
 4. Apply database constraints defined in `watcher/db/constraints.sql`
 5. Run bootstrapping queries.
+5. Exit.
 
 In bootstrap mode, the watcher will exit when done. It should be pretty close to current height when finished, but there will always be some lag due to the time taken by the bootstrapping queries (step 5).
 
@@ -65,10 +66,10 @@ When a new block is available, the watcher will query it from the node. Once obt
 List of units:
 
 - [x] **Core unit**: The first unit a block goes through, writing all core tables (headers, transactions, outputs etc.). If you're familiar with the explorer backend database you will recognise a similar schema, minus some tables and columns that aren't relevant for the statistics we're interested in. Notably, at this stage, we don't store raw ergo trees or AD proofs for instance. This helps keeping the database size to a minimum.
-- [ ] Uspent unit: Maintains a set of unspent boxes.
-- [ ] Balance unit: Tracks address balances and balance changes for both ERG and native tokens.
-- [ ] Oracle pool units: Anything related to known oracle pools.
-- [ ] SigmaUSD unit: Monitors SigmaUSD related transactions.
+- [ ] **Unspent unit**: Maintains a set of unspent boxes.
+- [ ] **Balance unit**: Tracks address balances and balance changes for both ERG and native tokens.
+- [ ] **Oracle pools** units: Anything related to known oracle pools.
+- [ ] **SigmaUSD unit**: Monitors SigmaUSD related transactions.
 
 And more to come.
 
