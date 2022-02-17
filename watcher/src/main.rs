@@ -271,7 +271,13 @@ fn main() -> Result<(), &'static str> {
                     return Err("Could not read constraints file after bootstrapping");
                 }
             };
-            db.apply_constraints(sql);
+            match db.apply_constraints(sql) {
+                Ok(()) => info!("Database constraints have been loaded"),
+                Err(e) => {
+                    error!("{}", e);
+                    return Err("Failed to set database constraints.");
+                }
+            };
 
             // Run bootstrapping queries
             // TODO
