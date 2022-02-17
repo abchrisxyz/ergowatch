@@ -48,6 +48,16 @@ impl DB {
         let set: bool = row.get("constraints_set");
         Ok(set)
     }
+
+    pub fn apply_constraints(&self, sql: String) -> anyhow::Result<()> {
+        let mut client = Client::connect(&self.conn_str, NoTls)?;
+        let mut transaction = client.transaction()?;
+        for statement in sql.split(";") {
+            transaction.execute(statement, &[])?;
+        }
+        transaction.commit()?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq)]

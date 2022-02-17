@@ -1,4 +1,5 @@
 import requests
+import pytest
 
 from fixtures import fork_env
 from fixtures import unconstrained_db_env
@@ -174,6 +175,9 @@ def test_watcher_exits_with_both_bootstrap_and_sync_only_options(
     assert cp.returncode != 0
 
 
+# TODO: create env that triggers a rollback immediately
+# and test rollback is prevented on unconstrained db
+@pytest.mark.skip("Unreachable, needs other env fixture")
 def test_rollback_is_prevented_on_unconstrained_db(
     unconstrained_db_env,
 ):

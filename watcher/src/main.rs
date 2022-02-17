@@ -9,6 +9,7 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
+use std::fs;
 use std::{thread, time};
 
 use settings::Settings;
@@ -35,13 +36,17 @@ struct Cli {
     #[clap(short = 'b', long)]
     bootstrap: bool,
 
+    /// Path to constraints sql
+    #[clap(short = 'k', long)]
+    constraints_file: Option<String>,
+
     /// Print version information
     #[clap(short, long)]
     version: bool,
 
     /// Exit once synced (mostly for integration tests)
     #[clap(short, long)]
-    sync_only: bool,
+    sync_once: bool,
 }
 
 /// Session parameters
@@ -50,7 +55,8 @@ struct Session {
     db_constraints_set: bool,
     node: node::Node,
     bootstrapping: bool,
-    sync_only: bool,
+    sync_once: bool,
+    constraints_path: String,
 }
 
 /// Preflight tasks
@@ -64,10 +70,10 @@ fn prepare_session() -> Result<Session, &'static str> {
 
     // Parse command line args
     let cli = Cli::parse();
-    if cli.sync_only && cli.bootstrap {
-        return Err("--sync-only and --bootstrap options cannot be used together");
-    } else if cli.sync_only {
-        info!("Found option `--sync-only`, watcher will exit once synced with node")
+    if cli.sync_once && cli.bootstrap {
+        return Err("--sync-once and --bootstrap options cannot be used together");
+    } else if cli.sync_once {
+        info!("Found option `--sync-once`, watcher will exit once synced with node")
     } else if cli.bootstrap {
         info!("Found option `--bootstrap`, watcher will start in bootstrap mode")
     }
@@ -141,12 +147,26 @@ fn prepare_session() -> Result<Session, &'static str> {
         }
     };
 
+    // Ensure constraints file is accessible if needed
+    let constraints_path = match cli.constraints_file {
+        Some(path) => String::from(&path),
+        None => String::from("constraints.sql"),
+    };
+    if bootstrapping {
+        if let Err(e) = fs::read_to_string(&constraints_path) {
+            error!("{}", e);
+            error!("Could not read constraints file '{}'", &constraints_path);
+            return Err("Could not read constraints file");
+        }
+    }
+
     Ok(Session {
         db,
         db_constraints_set,
         node: node,
         bootstrapping,
-        sync_only: cli.sync_only,
+        sync_once: cli.sync_once,
+        constraints_path: constraints_path,
     })
 }
 
@@ -175,7 +195,7 @@ fn main() -> Result<(), &'static str> {
         let node_height = node.get_height().unwrap();
 
         if node_height <= head.height {
-            if session.sync_only {
+            if session.sync_once {
                 debug!("Done syncing, exiting now");
                 return Ok(());
             }
@@ -240,6 +260,18 @@ fn main() -> Result<(), &'static str> {
         if session.bootstrapping {
             // Load db constraints
             // TODO
+            let sql = match fs::read_to_string(&session.constraints_path) {
+                Ok(sql) => sql,
+                Err(e) => {
+                    error!("{}", e);
+                    error!(
+                        "Could not read constraints file '{}'",
+                        &session.constraints_path
+                    );
+                    return Err("Could not read constraints file after bootstrapping");
+                }
+            };
+            db.apply_constraints(sql);
 
             // Run bootstrapping queries
             // TODO

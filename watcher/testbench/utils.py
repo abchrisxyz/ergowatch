@@ -11,9 +11,11 @@ def run_watcher(
     )
     args = [exe, "-c", cfg_path]
     if sync_only:
-        args.append("--sync-only")
+        args.append("--sync-once")
     if bootstrap:
+        sql = Path(__file__).parent.parent.absolute() / Path(f"db/constraints.sql")
         args.append("--bootstrap")
+        args.extend(["-k", str(sql)])
 
     env = dict(
         os.environ,
