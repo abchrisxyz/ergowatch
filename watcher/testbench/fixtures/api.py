@@ -140,16 +140,10 @@ class API(bottle.Bottle):
         return json.dumps(self.blocks[header])
 
 
-# Dummy block used to indicate block 600k is main chain
-rollback_600_001 = copy.deepcopy(block_600k)
-rollback_600_001["header"]["parent_id"] = block_600k["header"]["id"]
-rollback_600_001["header"]["height"] = 600_001
-
 BLOCK_COLLECTIONS = {
     "genesis": [genesis_block],
     "600k": [block_600k],
     "token_minting": [token_minting_block],
-    "core_rollback": [core_block, block_600k, rollback_600_001],
     "fork": [block_672220_fork, block_672220, block_672221],
 }
 
