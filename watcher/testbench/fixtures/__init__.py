@@ -90,3 +90,16 @@ def unconstrained_db_env(tmp_path):
             cfg_path.write_text(format_config(db_name))
             with mock_api:
                 yield MockEnv(conn, cfg_path)
+
+
+@pytest.fixture
+def bootstrap_empty_db_env(tmp_path):
+    api = "bootstrap"
+    mock_api = MockApi(api)
+    blocks = get_api_blocks(api)
+    with TestDB(set_constraints=False) as db_name:
+        with pg.connect(conn_str(db_name)) as conn:
+            cfg_path = tmp_path / Path("bootstrap.toml")
+            cfg_path.write_text(format_config(db_name))
+            with mock_api:
+                yield MockEnv(conn, cfg_path)

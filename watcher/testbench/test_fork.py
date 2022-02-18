@@ -148,33 +148,6 @@ def test_forked_chain_is_rolled_back(fork_env):
         ]
 
 
-def test_watcher_exits_on_unconstrained_db_without_bootstrap_option(
-    unconstrained_db_env,
-):
-    """
-    Rollbacks rely partly on foreign keys to propagate through the db.
-
-    The watcher should only be run without constraints when using the -b option.
-
-    This test checks the watcher exits when omitting the -b option
-    with an unconstrained db.
-    """
-    db_conn, cfg_path = unconstrained_db_env
-    cp = run_watcher(cfg_path)
-    assert cp.returncode != 0
-
-
-def test_watcher_exits_with_both_bootstrap_and_sync_only_options(
-    unconstrained_db_env,
-):
-    """
-    Options -b and -s should not be used together
-    """
-    db_conn, cfg_path = unconstrained_db_env
-    cp = run_watcher(cfg_path, bootstrap=True)
-    assert cp.returncode != 0
-
-
 # TODO: create env that triggers a rollback immediately
 # and test rollback is prevented on unconstrained db
 @pytest.mark.skip("Unreachable, needs other env fixture")

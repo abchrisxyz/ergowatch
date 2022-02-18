@@ -5,6 +5,7 @@ from fixtures import block_600k_env
 from fixtures import token_minting_env
 from fixtures import fork_env
 from fixtures import unconstrained_db_env
+from fixtures import bootstrap_empty_db_env
 
 
 @pytest.mark.order(1)
@@ -174,3 +175,39 @@ class TestUnconstrainedDB:
             cur.execute(
                 "insert into core.headers (height, id, parent_id, timestamp) values (1, 'header', 'header', 123456789);"
             )
+
+
+@pytest.mark.order(1)
+class TestBootstrapEmptyDB:
+    def test_db_state(self, bootstrap_empty_db_env):
+        """
+        Check db is empty
+        """
+        with bootstrap_empty_db_env.db_conn.cursor() as cur:
+            # No headers
+            cur.execute("select count(*) from core.headers;")
+            assert cur.fetchone()[0] == 0
+
+            # No tx
+            cur.execute("select count(*) from core.transactions;")
+            assert cur.fetchone()[0] == 0
+
+            # No outputs
+            cur.execute("select count(*) from core.outputs;")
+            assert cur.fetchone()[0] == 0
+
+            # No inputs
+            cur.execute("select count(*) from core.inputs;")
+            assert cur.fetchone()[0] == 0
+
+            # No data-inputs
+            cur.execute("select count(*) from core.data_inputs;")
+            assert cur.fetchone()[0] == 0
+
+            # No pre-existing token
+            cur.execute("select count(*) from core.tokens;")
+            assert cur.fetchone()[0] == 0
+
+            # No assets
+            cur.execute("select count(*) from core.box_assets;")
+            assert cur.fetchone()[0] == 0
