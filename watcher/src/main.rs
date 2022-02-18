@@ -172,8 +172,8 @@ fn prepare_session() -> Result<Session, &'static str> {
 
 fn main() -> Result<(), &'static str> {
     let session = prepare_session()?;
-    let node = session.node;
-    let db = session.db;
+    let node = &session.node;
+    let db = &session.db;
 
     // Get db sync state
     let mut head = match db.get_head() {
@@ -218,10 +218,7 @@ fn main() -> Result<(), &'static str> {
 
                 // Collect statements
                 let prepped_block = units::BlockData::new(&block);
-                let sql_statements = ucore.prep(&prepped_block);
-
-                // Execute statements in single transaction
-                db.execute_in_transaction(sql_statements).unwrap();
+                session.include_block(&prepped_block);
 
                 // Move head to latest block
                 head.height = next_height;
@@ -247,10 +244,7 @@ fn main() -> Result<(), &'static str> {
 
                 // Collect rollback statements, in reverse order
                 let prepped_block = units::BlockData::new(&block);
-                let sql_statements = ucore.prep_rollback(&prepped_block);
-
-                // Execute statements in single transaction
-                db.execute_in_transaction(sql_statements).unwrap();
+                session.rollback_block(&prepped_block);
 
                 // Move head to previous block
                 head.height = block.header.height - 1;
@@ -259,33 +253,68 @@ fn main() -> Result<(), &'static str> {
         }
 
         if session.bootstrapping {
-            // Load db constraints
-            // TODO
-            let sql = match fs::read_to_string(&session.constraints_path) {
-                Ok(sql) => sql,
-                Err(e) => {
-                    error!("{}", e);
-                    error!(
-                        "Could not read constraints file '{}'",
-                        &session.constraints_path
-                    );
-                    return Err("Could not read constraints file after bootstrapping");
-                }
-            };
-            match db.apply_constraints(sql) {
-                Ok(()) => info!("Database constraints have been loaded"),
-                Err(e) => {
-                    error!("{}", e);
-                    return Err("Failed to set database constraints.");
-                }
-            };
-
-            // Run bootstrapping queries
-            // TODO
-
-            // Exit
+            session.load_db_constraints()?;
+            session.run_bootstrapping_queries()?;
             info!("Done bootstrapping, exiting now");
             return Ok(());
         }
+    }
+}
+
+impl Session {
+    fn include_genesis_blocks(&self) -> Result<(), &'static str> {
+        todo!()
+    }
+
+    fn include_block(&self, block: &units::BlockData) {
+        // Init parsing units
+        let ucore = units::core::CoreUnit {};
+        let ubal = units::balances::BalancesUnit {};
+        let sql_statements = ucore.prep(block);
+
+        // Execute statements in single transaction
+        self.db.execute_in_transaction(sql_statements).unwrap();
+    }
+
+    fn rollback_block(&self, block: &units::BlockData) {
+        // Init parsing units
+        let ucore = units::core::CoreUnit {};
+        let ubal = units::balances::BalancesUnit {};
+        let sql_statements = ucore.prep(block);
+
+        // Collect rollback statements, in reverse order
+        let sql_statements = ucore.prep_rollback(block);
+
+        // Execute statements in single transaction
+        self.db.execute_in_transaction(sql_statements).unwrap();
+    }
+
+    fn load_db_constraints(&self) -> Result<(), &'static str> {
+        assert_eq!(self.bootstrapping, true);
+        // Load db constraints
+        let sql = match fs::read_to_string(&self.constraints_path) {
+            Ok(sql) => sql,
+            Err(e) => {
+                error!("{}", e);
+                error!(
+                    "Could not read constraints file '{}'",
+                    &self.constraints_path
+                );
+                return Err("Could not read constraints file after bootstrapping");
+            }
+        };
+        match self.db.apply_constraints(sql) {
+            Ok(()) => info!("Database constraints have been loaded"),
+            Err(e) => {
+                error!("{}", e);
+                return Err("Failed to set database constraints.");
+            }
+        };
+        Ok(())
+    }
+
+    fn run_bootstrapping_queries(&self) -> Result<(), &'static str> {
+        // TODO
+        Ok(())
     }
 }
