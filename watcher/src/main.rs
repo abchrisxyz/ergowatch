@@ -173,24 +173,16 @@ fn prepare_session() -> Result<Session, &'static str> {
 fn main() -> Result<(), &'static str> {
     let session = prepare_session()?;
     let node = &session.node;
-    let db = &session.db;
 
-    // Get db sync state
-    let mut head = match db.get_head() {
-        Ok(h) => h,
-        Err(e) => {
-            error!("{}", e);
-            return Err("Failed to retrieve db state");
-        }
-    };
+    let mut head = session.get_db_sync_state()?;
     info!(
         "Database is currently at height {} with block {}",
         head.height, head.header_id
     );
 
-    // Init parsing units
-    let ucore = units::core::CoreUnit {};
-    let ubal = units::balances::BalancesUnit {};
+    if head.height == 0 {
+        session.include_genesis_boxes().unwrap();
+    }
 
     loop {
         let node_height = node.get_height().unwrap();
@@ -262,8 +254,30 @@ fn main() -> Result<(), &'static str> {
 }
 
 impl Session {
-    fn include_genesis_blocks(&self) -> Result<(), &'static str> {
-        todo!()
+    /// Get db sync state
+    fn get_db_sync_state(&self) -> Result<types::Head, &'static str> {
+        let head = match self.db.get_head() {
+            Ok(h) => h,
+            Err(e) => {
+                error!("{}", e);
+                return Err("Failed to retrieve db state");
+            }
+        };
+        Ok(head)
+    }
+
+    fn include_genesis_boxes(&self) -> Result<(), &'static str> {
+        info!("Retrieving genesis boxes");
+        let boxes = match self.node.get_genesis_blocks() {
+            Ok(boxes) => boxes,
+            Err(e) => {
+                error!("{}", e);
+                return Err("Failed to retrieve genesis boxes from node");
+            }
+        };
+        let sql_statements = units::core::genesis::prep(boxes);
+        self.db.execute_in_transaction(sql_statements).unwrap();
+        Ok(())
     }
 
     fn include_block(&self, block: &units::BlockData) {

@@ -1,4 +1,4 @@
-# 1. Actual genesis block
+# 1. Actual mainnet first block
 genesis_block = {
     "header": {
         "extensionId": "af4c9de8106960b47964d21e6eb2acdad7e3e168791e595f0806ebfb036ee7de",

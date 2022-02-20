@@ -11,6 +11,8 @@ use assets::extract_assets;
 mod data_inputs;
 use data_inputs::extract_data_inputs;
 
+pub mod genesis;
+
 mod headers;
 use headers::extract_header;
 use headers::rollback_header;

@@ -8,6 +8,7 @@ use models::Block;
 use models::HeaderID;
 use models::Height;
 use models::NodeInfo;
+use models::Output;
 
 pub struct Node {
     url: String,
@@ -23,6 +24,12 @@ impl Node {
         debug!("URL: {}", url);
         let node_info: NodeInfo = reqwest::blocking::get(url)?.json()?;
         Ok(node_info.full_height)
+    }
+
+    pub fn get_genesis_blocks(&self) -> Result<Vec<Output>, reqwest::Error> {
+        let url = format!("{}/utxo/genesis", self.url);
+        let boxes: Vec<Output> = reqwest::blocking::get(url)?.json()?;
+        Ok(boxes)
     }
 
     fn get_blocks_at(&self, height: Height) -> Result<Vec<HeaderID>, reqwest::Error> {

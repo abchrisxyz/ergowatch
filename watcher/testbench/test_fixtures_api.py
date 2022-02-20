@@ -28,6 +28,27 @@ class TestGenesisApi:
         assert r.status_code == 200
         assert r.json()["fullHeight"] == 1
 
+    def test_genesis_boxes(self, genesis_env):
+        """
+        Test genesis boxes are returned
+        """
+        r = requests.get(f"http://localhost:9053/utxo/genesis")
+        assert r.status_code == 200
+        boxes = r.json()
+        assert len(boxes) == 3
+        assert (
+            boxes[0]["boxId"]
+            == "b69575e11c5c43400bfead5976ee0d6245a1168396b2e2a4f384691f275d501c"
+        )
+        assert (
+            boxes[1]["boxId"]
+            == "b8ce8cfe331e5eadfb0783bdc375c94413433f65e1e45857d71550d42e4d83bd"
+        )
+        assert (
+            boxes[2]["boxId"]
+            == "5527430474b673e4aafb08e0079c639de23e6a17e87edd00f78662b43c88aeda"
+        )
+
 
 @pytest.mark.order(1)
 class Test600kApi:
