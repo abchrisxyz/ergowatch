@@ -3,6 +3,7 @@
 //! Process blocks into balance tables data.
 
 use super::BlockData;
+use crate::db;
 use crate::db::SQLStatement;
 
 pub struct BalancesUnit;
@@ -17,6 +18,12 @@ impl BalancesUnit {
 fn extract_transferred_value(block: &BlockData) -> Vec<SQLStatement> {
     // let tx = block.transactions[0];
     vec![]
+}
+
+pub fn prep_bootstrap() -> Vec<SQLStatement> {
+    let mut statements: Vec<SQLStatement> = vec![];
+    statements.append(&mut db::bal::erg::bootstrap_statements());
+    statements
 }
 
 #[cfg(test)]

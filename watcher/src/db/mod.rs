@@ -1,3 +1,4 @@
+pub mod bal;
 pub mod core;
 mod migrations;
 
@@ -53,7 +54,7 @@ impl DB {
         let mut client = Client::connect(&self.conn_str, NoTls)?;
         let mut transaction = client.transaction()?;
         for statement in sql.split(";") {
-            transaction.execute(statement, &[])?;
+            transaction.execute(statement.trim(), &[])?;
         }
         transaction.commit()?;
         Ok(())

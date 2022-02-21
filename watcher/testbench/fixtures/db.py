@@ -26,7 +26,7 @@ def conn_str(dbname: str) -> str:
 
 class TestDB:
     def __init__(self, set_constraints=True):
-        self._dbname: str = "test2"  # TODO: use random name
+        self._dbname: str = "ew_pytest"  # TODO: use random name
         with open(SCHEMA_PATH) as f:
             self._sql = f.read()
         if set_constraints:
@@ -123,6 +123,7 @@ def generate_bootstrap_sql(blocks: List[Dict]) -> str:
     first_output_box_id = (
         "eb1c4a582ba3e8f9d4af389a19f3bc6fa6759fd33956f9902b34dcd4a1d3842f"
     )
+
     sql += f"""
         insert into core.outputs(box_id, tx_id, header_id, creation_height, address, index, value)
         values (

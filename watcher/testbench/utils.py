@@ -4,7 +4,12 @@ import subprocess
 
 
 def run_watcher(
-    cfg_path: Path, target="release", sync_only=True, bootstrap=False, backtrace=False
+    cfg_path: Path,
+    target="release",
+    sync_only=True,
+    bootstrap=False,
+    backtrace=False,
+    timeout=10,
 ) -> subprocess.CompletedProcess:
     exe = str(
         Path(__file__).parent.parent.absolute() / Path(f"target/{target}/watcher")
@@ -29,7 +34,12 @@ def run_watcher(
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         env=env,
-        timeout=10,
+        timeout=timeout,
     )
     print(cp.stdout.decode())
     return cp
+
+
+def extract_db_conn_str(db_conn) -> str:
+    db_info = db_conn.info
+    return f"host={db_info.host} port={db_info.port} dbname={db_info.dbname} user={db_info.user} password={db_info.password}"

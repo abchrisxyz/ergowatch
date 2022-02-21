@@ -120,7 +120,7 @@ fn prepare_session() -> Result<Session, &'static str> {
     }
 
     if cli.bootstrap && db_constraints_set {
-        return Err("Bootstrap mode cannot be use anymore because database constraints have already been set.");
+        return Err("Bootstrap mode cannot be used anymore because database constraints have already been set.");
     }
 
     if !db_is_empty && !db_constraints_set && !cli.bootstrap {
@@ -245,6 +245,7 @@ fn main() -> Result<(), &'static str> {
         }
 
         if session.bootstrapping {
+            info!("Staring bootstrap process");
             session.load_db_constraints()?;
             session.run_bootstrapping_queries()?;
             info!("Done bootstrapping, exiting now");
@@ -304,8 +305,11 @@ impl Session {
     }
 
     fn load_db_constraints(&self) -> Result<(), &'static str> {
+        info!(
+            "Loading database constraints - close any other db connections to avoid relation locks"
+        );
         assert_eq!(self.bootstrapping, true);
-        // Load db constraints
+        // Load db constraints from file
         let sql = match fs::read_to_string(&self.constraints_path) {
             Ok(sql) => sql,
             Err(e) => {
@@ -328,7 +332,9 @@ impl Session {
     }
 
     fn run_bootstrapping_queries(&self) -> Result<(), &'static str> {
-        // TODO
+        info!("Running bootstrapping queries");
+        let sql_statements = units::balances::prep_bootstrap();
+        self.db.execute_in_transaction(sql_statements).unwrap();
         Ok(())
     }
 }

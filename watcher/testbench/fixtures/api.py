@@ -21,6 +21,8 @@ from fixtures.blocks.fork import block_672220_fork
 from fixtures.blocks.fork import block_672221
 from fixtures.blocks.bootstrap import block_672220 as bootstrap_672220
 from fixtures.blocks.bootstrap import block_672221 as bootstrap_672221
+from fixtures.blocks.balances import block_619221 as bal_619221
+from fixtures.blocks.balances import block_619222 as bal_619222
 
 MOCK_NODE_HOST = "localhost:9053"
 
@@ -196,6 +198,7 @@ BLOCK_COLLECTIONS = {
     "token_minting": [token_minting_block],
     "fork": [block_672220_fork, block_672220, block_672221],
     "bootstrap": [bootstrap_672220, bootstrap_672221],
+    "balances": [bal_619221, bal_619222],
 }
 
 # API variants
@@ -204,6 +207,7 @@ api_600k = API(BLOCK_COLLECTIONS["600k"])
 api_token_minting = API(BLOCK_COLLECTIONS["token_minting"])
 api_fork = API(BLOCK_COLLECTIONS["fork"])
 api_bootstrap = API(BLOCK_COLLECTIONS["bootstrap"])
+api_balances = API(BLOCK_COLLECTIONS["balances"])
 
 
 def get_api_blocks(api_variant: str) -> List[Dict]:
