@@ -1,5 +1,6 @@
 use crate::db::core::header::HeaderRow;
 use crate::db::core::outputs::OutputRow;
+use crate::db::core::registers::BoxRegisterRow;
 use crate::db::core::transaction::TransactionRow;
 use crate::db::SQLStatement;
 
@@ -23,6 +24,7 @@ pub fn prep(node_boxes: Vec<crate::node::models::Output>) -> Vec<SQLStatement> {
         }
         .to_statement(),
     ];
+    // Outputs
     statements.append(
         &mut node_boxes
             .iter()
@@ -41,6 +43,16 @@ pub fn prep(node_boxes: Vec<crate::node::models::Output>) -> Vec<SQLStatement> {
             })
             .collect(),
     );
+    // Additional registers
+    statements.append(
+        &mut node_boxes
+            .iter()
+            .flat_map(|node_box| {
+                let output = super::super::Output::from_node_output(node_box);
+                super::additional_registers::extract_from_output(&output)
+            })
+            .collect(),
+    );
     statements
 }
 
@@ -53,12 +65,18 @@ mod tests {
     #[test]
     fn statement() -> () {
         let statements: Vec<db::SQLStatement> = prep(genesis_boxes());
-        assert_eq!(statements.len(), 5);
+        assert_eq!(statements.len(), 11);
         assert_eq!(statements[0].sql, db::core::header::INSERT_HEADER);
         assert_eq!(statements[1].sql, db::core::transaction::INSERT_TRANSACTION);
         assert_eq!(statements[2].sql, db::core::outputs::INSERT_OUTPUT);
         assert_eq!(statements[3].sql, db::core::outputs::INSERT_OUTPUT);
         assert_eq!(statements[4].sql, db::core::outputs::INSERT_OUTPUT);
+        assert_eq!(statements[5].sql, db::core::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[6].sql, db::core::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[7].sql, db::core::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[8].sql, db::core::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[9].sql, db::core::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[10].sql, db::core::registers::INSERT_BOX_REGISTER);
 
         // First box statement
         let statement = &statements[2];

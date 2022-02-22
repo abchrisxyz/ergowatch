@@ -1,83 +1,101 @@
 use crate::db::SQLArg;
 use crate::db::SQLStatement;
 
-// TODO include tx details (for age calcs, not so much for balance)
-
-pub const INSERT_DIFF: &str = "\
-    with inputs as (
-        select tx.height
-            , tx.id as tx_id
-            , op.address
-            , sum(op.value) as value
-        from core.transactions tx
-        join core.inputs ip on ip.tx_id = tx.id
-        join core.outputs op on op.box_id = ip.box_id
-        where tx.id = $1
-        group by 1, 2, 3
-    ), outputs as (
-        select tx.height
-            , tx.id as tx_id
-            , op.address
-            , sum(op.value) as value
-        from core.transactions tx
-        join core.outputs op on op.tx_id = tx.id
-        where tx.id = $1
-        group by 1, 2, 3
+// Updates balances for known addresses
+pub const UPDATE_BALANCES: &str = "
+    with new_diffs as (
+        select address
+            , sum(value) as value
+        from bal.erg_diffs
+        where height = $1
+        group by 1
     )
-    insert into bal.erg_diffs (address, height, tx_id, value)
-    select coalesce(i.address, o.address) as address
-        , coalesce(i.height, o.height) as height
-        , coalesce(i.tx_id, o.tx_id) as tx_id
-        , sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0))
-    from inputs i
-    full outer join outputs o on o.address = i.address
-    group by 1, 2, 3 having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) <> 0";
+    update bal.erg b
+    set value = b.value + d.value
+    from new_diffs d
+    where d.address = b.address;";
 
-// pub const BOOTSTRAP_DIFF: &str = "
-//     with transactions as (
-//         select id
-//             , height
-//         from core.transactions
-//     ), inputs as (
-//         select tx.height
-//             , tx.id as tx_id
-//             , op.address
-//             , sum(op.value) as value
-//         from transactions tx
-//         join core.inputs ip on ip.tx_id = tx.id
-//         join core.outputs op on op.box_id = ip.box_id
-//         group by 1, 2, 3
-//     ), outputs as (
-//         select tx.height
-//             , tx.id as tx_id
-//             , op.address
-//             , sum(op.value) as value
-//         from transactions tx
-//         join core.outputs op on op.tx_id = tx.id
-//         group by 1, 2, 3
-//     )
-//     insert into bal.erg_diffs (address, height, tx_id, value)
-//     select left(coalesce(i.address, o.address), 20) as address
-//         , coalesce(i.height, o.height) as height
-//         , coalesce(i.tx_id, o.tx_id) as tx_id
-//         , sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0))
-//     from inputs i
-//     full outer join outputs o on o.address = i.address and o.tx_id = i.tx_id
-//     group by 1, 2, 3
-//     having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) <> 0
-//     ;";
+// Inserts balances for new addresses
+pub const INSERT_BALANCES: &str = "
+    with new_addresses as (
+        select d.address
+            , sum(d.value) as value
+        from bal.erg_diffs d
+        left join bal.erg b on b.address = d.address
+        where d.height = $1
+            and b.address is null
+        group by 1
+    )
+    insert into bal.erg(address, value)
+    select address
+        , value
+    from new_addresses;";
 
-pub struct ErgDiffQuery<'a> {
-    pub tx_id: &'a str,
-}
+// Undo balance updates
+pub const ROLLBACK_BALANCE_UPDATES: &str = "
+    with new_diffs as (
+        select address
+            , sum(value) as value
+        from bal.erg_diffs
+        where height = $1
+        group by 1
+    )
+    update bal.erg b
+    set value = b.value - d.value
+    from new_diffs d
+    where d.address = b.address;";
 
-impl ErgDiffQuery<'_> {
-    pub fn to_statement(&self) -> SQLStatement {
-        SQLStatement {
-            sql: String::from(INSERT_DIFF),
-            args: vec![SQLArg::Text(String::from(self.tx_id))],
-        }
+pub const DELETE_ZERO_BALANCES: &str = "
+    delete from bal.erg
+    where value = 0;";
+
+pub const TRUNCATE_BALANCES: &str = "truncate bal.erg;";
+
+pub const BOOTSTRAP_BALANCES: &str = "
+    insert into bal.erg (address, value)
+    select address
+        , sum(value)
+    from bal.erg_diffs
+    group by 1;";
+
+pub fn update_statement(height: i32) -> SQLStatement {
+    SQLStatement {
+        sql: String::from(UPDATE_BALANCES),
+        args: vec![SQLArg::Integer(height)],
     }
 }
 
-Reuse diffs to update balances...
+pub fn insert_statement(height: i32) -> SQLStatement {
+    SQLStatement {
+        sql: String::from(INSERT_BALANCES),
+        args: vec![SQLArg::Integer(height)],
+    }
+}
+
+pub fn rollback_update_statement(height: i32) -> SQLStatement {
+    SQLStatement {
+        sql: String::from(ROLLBACK_BALANCE_UPDATES),
+        args: vec![SQLArg::Integer(height)],
+    }
+}
+
+pub fn delete_zero_balances_statement() -> SQLStatement {
+    SQLStatement {
+        sql: String::from(DELETE_ZERO_BALANCES),
+        args: vec![],
+    }
+}
+
+pub fn truncate_statement() -> SQLStatement {
+    SQLStatement {
+        sql: String::from(TRUNCATE_BALANCES),
+        args: vec![],
+    }
+}
+
+pub fn bootstrap_statement() -> SQLStatement {
+    SQLStatement {
+        sql: String::from(BOOTSTRAP_BALANCES),
+        args: vec![],
+    }
+}

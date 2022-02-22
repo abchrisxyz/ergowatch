@@ -92,8 +92,15 @@ alter table usb.boxes add primary key (box_id, address);
 -- Balances
 -------------------------------------------------------------------------------
 alter table bal.erg add primary key(address);
+alter table bal.erg add check (value >= 0);
+create index on bal.erg(value);
+
 alter table bal.erg_diffs add primary key(address, height, tx_id);
+
 alter table bal.tokens add primary key(address, token_id);
+alter table bal.tokens add check (value >= 0);
+create index on bal.tokens(value);
+
 alter table bal.tokens_diffs add primary key(address, token_id, height, tx_id);
 
 

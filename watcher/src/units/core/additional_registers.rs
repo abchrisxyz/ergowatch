@@ -1,3 +1,4 @@
+use super::super::Output;
 use super::BlockData;
 use crate::db::core::registers::BoxRegisterRow;
 use crate::db::SQLStatement;
@@ -6,23 +7,24 @@ pub(super) fn extract_additional_registers(block: &BlockData) -> Vec<SQLStatemen
     block
         .transactions
         .iter()
-        .flat_map(|tx| {
-            tx.outputs.iter().flat_map(|op| {
-                op.additional_registers
-                    .iter()
-                    .filter(|r| r.is_some())
-                    .map(|r| r.as_ref().unwrap())
-                    .map(|r| {
-                        BoxRegisterRow {
-                            id: r.id,
-                            box_id: &op.box_id,
-                            stype: &r.stype,
-                            serialized_value: &r.serialized_value,
-                            rendered_value: &r.rendered_value,
-                        }
-                        .to_statement()
-                    })
-            })
+        .flat_map(|tx| tx.outputs.iter().flat_map(|op| extract_from_output(op)))
+        .collect()
+}
+
+pub(super) fn extract_from_output(op: &Output) -> Vec<SQLStatement> {
+    op.additional_registers
+        .iter()
+        .filter(|r| r.is_some())
+        .map(|r| r.as_ref().unwrap())
+        .map(|r| {
+            BoxRegisterRow {
+                id: r.id,
+                box_id: &op.box_id,
+                stype: &r.stype,
+                serialized_value: &r.serialized_value,
+                rendered_value: &r.rendered_value,
+            }
+            .to_statement()
         })
         .collect()
 }

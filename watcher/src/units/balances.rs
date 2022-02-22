@@ -4,38 +4,79 @@
 
 use super::BlockData;
 use crate::db;
+use crate::db::bal;
 use crate::db::SQLStatement;
 
-pub struct BalancesUnit;
-
-impl BalancesUnit {
-    pub fn prep(&self, block: &BlockData) -> Vec<SQLStatement> {
-        todo!();
-    }
+pub fn prep(block: &BlockData) -> Vec<SQLStatement> {
+    let mut sql_statements: Vec<SQLStatement> = block
+        .transactions
+        .iter()
+        .map(|tx| bal::erg_diff::ErgDiffQuery { tx_id: &tx.id }.to_statement())
+        .collect();
+    sql_statements.push(bal::erg::update_statement(block.height));
+    sql_statements.push(bal::erg::insert_statement(block.height));
+    sql_statements.push(bal::erg::delete_zero_balances_statement());
+    sql_statements
 }
 
-///
-fn extract_transferred_value(block: &BlockData) -> Vec<SQLStatement> {
-    // let tx = block.transactions[0];
-    vec![]
+pub fn prep_rollback(block: &BlockData) -> Vec<SQLStatement> {
+    let mut sql_statements: Vec<SQLStatement> = vec![];
+    sql_statements.push(bal::erg::rollback_update_statement(block.height));
+    sql_statements.push(bal::erg::delete_zero_balances_statement());
+    sql_statements.append(
+        &mut block
+            .transactions
+            .iter()
+            .map(|tx| bal::erg_diff::rollback_statement(&tx.id))
+            .collect(),
+    );
+    sql_statements
 }
 
 pub fn prep_bootstrap() -> Vec<SQLStatement> {
-    let mut statements: Vec<SQLStatement> = vec![];
-    statements.append(&mut db::bal::erg::bootstrap_statements());
-    statements
+    vec![
+        db::bal::erg_diff::truncate_statement(),
+        db::bal::erg_diff::bootstrap_statement(),
+        db::bal::erg::truncate_statement(),
+        db::bal::erg::bootstrap_statement(),
+    ]
 }
 
 #[cfg(test)]
 mod tests {
-    use super::extract_transferred_value;
     use crate::db;
     use crate::units::testing::block_600k;
 
     #[test]
-    fn statements() -> () {
-        let statements = extract_transferred_value(&block_600k());
-        assert_eq!(statements.len(), 0);
-        // assert_eq!(statements[0].sql, db::bal::INSERT_ERG_DIFF);
+    fn check_prep_statements() -> () {
+        let statements = super::prep(&block_600k());
+        assert_eq!(statements.len(), 6);
+        assert_eq!(statements[0].sql, db::bal::erg_diff::INSERT_DIFFS);
+        assert_eq!(statements[1].sql, db::bal::erg_diff::INSERT_DIFFS);
+        assert_eq!(statements[2].sql, db::bal::erg_diff::INSERT_DIFFS);
+        assert_eq!(statements[3].sql, db::bal::erg::UPDATE_BALANCES);
+        assert_eq!(statements[4].sql, db::bal::erg::INSERT_BALANCES);
+        assert_eq!(statements[5].sql, db::bal::erg::DELETE_ZERO_BALANCES);
+    }
+
+    #[test]
+    fn check_rollback_statements() -> () {
+        let statements = super::prep_rollback(&block_600k());
+        assert_eq!(statements.len(), 5);
+        assert_eq!(statements[0].sql, db::bal::erg::ROLLBACK_BALANCE_UPDATES);
+        assert_eq!(statements[1].sql, db::bal::erg::DELETE_ZERO_BALANCES);
+        assert_eq!(statements[2].sql, db::bal::erg_diff::DELETE_DIFFS);
+        assert_eq!(statements[3].sql, db::bal::erg_diff::DELETE_DIFFS);
+        assert_eq!(statements[4].sql, db::bal::erg_diff::DELETE_DIFFS);
+    }
+
+    #[test]
+    fn check_bootstrap_statements() -> () {
+        let statements = super::prep_bootstrap();
+        assert_eq!(statements.len(), 4);
+        assert_eq!(statements[0].sql, db::bal::erg_diff::TRUNCATE_DIFFS);
+        assert_eq!(statements[1].sql, db::bal::erg_diff::BOOTSTRAP_DIFFS);
+        assert_eq!(statements[2].sql, db::bal::erg::TRUNCATE_BALANCES);
+        assert_eq!(statements[3].sql, db::bal::erg::BOOTSTRAP_BALANCES);
     }
 }

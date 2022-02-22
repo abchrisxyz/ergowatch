@@ -18,9 +18,11 @@ def run_watcher(
     if sync_only:
         args.append("--sync-once")
     if bootstrap:
-        sql = Path(__file__).parent.parent.absolute() / Path(f"db/constraints.sql")
         args.append("--bootstrap")
-        args.extend(["-k", str(sql)])
+
+    # Path to constraints definitions
+    sql = Path(__file__).parent.parent.absolute() / Path(f"db/constraints.sql")
+    args.extend(["-k", str(sql)])
 
     env = dict(
         os.environ,
@@ -29,6 +31,7 @@ def run_watcher(
     if backtrace:
         env["RUST_BACKTRACE"] = "full"
 
+    print(args)
     cp = subprocess.run(
         args,
         stdout=subprocess.PIPE,

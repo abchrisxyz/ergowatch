@@ -118,6 +118,14 @@ fn prepare_session() -> Result<Session, &'static str> {
     if db_is_empty {
         info!("Database is empty");
     }
+    if db_is_empty && db_constraints_set {
+        // It makes little sense not to use bootstrap mode when starting from scratch,
+        // so forbid running on an empty database with constraints set (constraints prevent bootstrap mode).
+        // This also avoids having to write custom handling of genesis boxes for some units.
+        warn!("Found constraints on empty database.");
+        error!("Starting from scratch in normal mode is not supported.");
+        return Err("Reinitialise the database without constraints to allow bootstrap mode.");
+    }
 
     if cli.bootstrap && db_constraints_set {
         return Err("Bootstrap mode cannot be used anymore because database constraints have already been set.");
@@ -284,8 +292,12 @@ impl Session {
     fn include_block(&self, block: &units::BlockData) {
         // Init parsing units
         let ucore = units::core::CoreUnit {};
-        let ubal = units::balances::BalancesUnit {};
-        let sql_statements = ucore.prep(block);
+        let mut sql_statements = ucore.prep(block);
+
+        // Skip bootstrappable units if bootstrapping
+        if !self.bootstrapping {
+            sql_statements.append(&mut units::balances::prep(block));
+        }
 
         // Execute statements in single transaction
         self.db.execute_in_transaction(sql_statements).unwrap();
@@ -294,11 +306,11 @@ impl Session {
     fn rollback_block(&self, block: &units::BlockData) {
         // Init parsing units
         let ucore = units::core::CoreUnit {};
-        let ubal = units::balances::BalancesUnit {};
-        let sql_statements = ucore.prep(block);
 
         // Collect rollback statements, in reverse order
-        let sql_statements = ucore.prep_rollback(block);
+        let mut sql_statements: Vec<db::SQLStatement> = vec![];
+        sql_statements.append(&mut units::balances::prep_rollback(block));
+        sql_statements.append(&mut ucore.prep_rollback(block));
 
         // Execute statements in single transaction
         self.db.execute_in_transaction(sql_statements).unwrap();

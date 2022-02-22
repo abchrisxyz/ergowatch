@@ -21,7 +21,18 @@ def genesis_env(tmp_path):
     mock_api = MockApi(api)
     with TestDB() as db_name:
         with pg.connect(conn_str(db_name)) as conn:
-            conn.commit()
+            cfg_path = tmp_path / Path("genesis.toml")
+            cfg_path.write_text(format_config(db_name))
+            with mock_api:
+                yield MockEnv(conn, cfg_path)
+
+
+@pytest.fixture
+def genesis_unconstrained_env(tmp_path):
+    api = "genesis"
+    mock_api = MockApi(api)
+    with TestDB(set_constraints=False) as db_name:
+        with pg.connect(conn_str(db_name)) as conn:
             cfg_path = tmp_path / Path("genesis.toml")
             cfg_path.write_text(format_config(db_name))
             with mock_api:

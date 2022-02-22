@@ -101,6 +101,8 @@ def generate_bootstrap_sql(blocks: List[Dict]) -> str:
     """
 
     # Collect outputs and tokens to be present in bootstrapped db
+    # Doesn't collect all spent outputs, only the ones to satisfy
+    # FK on data inputs.
     created_outputs = set()
     existing_outputs = set()
     minted_tokens = set()
@@ -131,9 +133,14 @@ def generate_bootstrap_sql(blocks: List[Dict]) -> str:
             '{tx_id}',
             '{header_id}',
             {height},
-            '2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU',
+            'dummy-address-0',
             0,
-            93409065000000000
+            93000000000000000
+        );
+        insert into bal.erg(address, value)
+        values (
+            'dummy-address-0',
+            93000000000000000
         );
     """
 
@@ -147,9 +154,15 @@ def generate_bootstrap_sql(blocks: List[Dict]) -> str:
                 '{tx_id}',
                 '{header_id}',
                 {height},
-                '2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU',
+                -- Each box has a unique address, so we don't have to compute balances (see below)
+                'dummy-address-{index+1}',
                 {index + 1},
-                93409065000000000
+                67500000000
+            );
+            insert into bal.erg(address, value)
+            values (
+                'dummy-address-{index+1}',
+                67500000000
             );
         """
 
