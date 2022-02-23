@@ -1,6 +1,7 @@
 pub mod bal;
 pub mod core;
 mod migrations;
+pub mod usp;
 
 use log::debug;
 use postgres::{Client, NoTls};

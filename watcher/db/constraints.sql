@@ -85,7 +85,7 @@ alter table core.box_assets add check (amount > 0);
 -------------------------------------------------------------------------------
 -- Unpent boxes
 -------------------------------------------------------------------------------
-alter table usb.boxes add primary key (box_id, address);
+alter table usp.boxes add primary key (box_id);
 
 
 -------------------------------------------------------------------------------

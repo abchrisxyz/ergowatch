@@ -296,6 +296,7 @@ impl Session {
 
         // Skip bootstrappable units if bootstrapping
         if !self.bootstrapping {
+            sql_statements.append(&mut units::unspent::prep(block));
             sql_statements.append(&mut units::balances::prep(block));
         }
 
@@ -310,6 +311,7 @@ impl Session {
         // Collect rollback statements, in reverse order
         let mut sql_statements: Vec<db::SQLStatement> = vec![];
         sql_statements.append(&mut units::balances::prep_rollback(block));
+        sql_statements.append(&mut units::unspent::prep_rollback(block));
         sql_statements.append(&mut ucore.prep_rollback(block));
 
         // Execute statements in single transaction
@@ -345,7 +347,9 @@ impl Session {
 
     fn run_bootstrapping_queries(&self) -> Result<(), &'static str> {
         info!("Running bootstrapping queries");
-        let sql_statements = units::balances::prep_bootstrap();
+        let mut sql_statements: Vec<db::SQLStatement> = vec![];
+        sql_statements.append(&mut units::balances::prep_bootstrap());
+        sql_statements.append(&mut units::unspent::prep_bootstrap());
         self.db.execute_in_transaction(sql_statements).unwrap();
         Ok(())
     }

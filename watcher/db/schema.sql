@@ -84,11 +84,10 @@ create table core.box_assets (
 -------------------------------------------------------------------------------
 -- Unpent boxes
 -------------------------------------------------------------------------------
-create schema usb;
+create schema usp;
 
-create table usb.boxes (
-	box_id text,
-	address text
+create table usp.boxes (
+	box_id text
 );
 
 

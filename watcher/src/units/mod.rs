@@ -1,6 +1,7 @@
 pub mod core;
 pub mod sigma;
 pub mod balances;
+pub mod unspent;
 // pub mod oracle_pools;
 // pub mod metrics;
 
