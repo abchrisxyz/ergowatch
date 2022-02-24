@@ -1,6 +1,5 @@
 use crate::db::core::header::HeaderRow;
 use crate::db::core::outputs::OutputRow;
-use crate::db::core::registers::BoxRegisterRow;
 use crate::db::core::transaction::TransactionRow;
 use crate::db::SQLStatement;
 
