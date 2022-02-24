@@ -2,9 +2,8 @@ pub mod core;
 pub mod sigma;
 pub mod balances;
 pub mod unspent;
-// pub mod oracle_pools;
-// pub mod metrics;
 
+use log::debug;
 use crate::node;
 
 /// A preprocessed version of block data provided by the node.
@@ -51,6 +50,7 @@ struct Transaction<'a> {
 
 impl<'a> Transaction<'a> {
     fn from_node_transaction(tx: &'a node::models::Transaction, index: usize) -> Self {
+        debug!("Processing transaction {}", &tx.id);
         Transaction {
             id: &tx.id,
             index: index as i32,
@@ -78,6 +78,7 @@ struct Output<'a> {
 
 impl<'a> Output<'a> {
     fn from_node_output(output: &'a node::models::Output) -> Self {
+        debug!("Processing output {}", &output.box_id);
         Output {
             box_id: &output.box_id,
             creation_height: output.creation_height as i32,
