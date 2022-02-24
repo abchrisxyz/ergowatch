@@ -258,6 +258,8 @@ fn main() -> Result<(), &'static str> {
             session.run_bootstrapping_queries()?;
             info!("Done bootstrapping, exiting now");
             return Ok(());
+        } else {
+            info!("Database is synced - waiting for next block")
         }
     }
 }
