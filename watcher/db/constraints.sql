@@ -96,6 +96,7 @@ alter table bal.erg add check (value >= 0);
 create index on bal.erg(value);
 
 alter table bal.erg_diffs add primary key(address, height, tx_id);
+create index on bal.erg_diffs(height);
 
 alter table bal.tokens add primary key(address, token_id);
 alter table bal.tokens add check (value >= 0);
