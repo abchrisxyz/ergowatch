@@ -24,13 +24,13 @@ services:
   # Postgresql database
   db:
     build:
-      context: ./explorer-backend/db
+      context: ./watcher/db
     environment:
       POSTGRES_DB: dev
       POSTGRES_USER: ergo
     env_file:
       # Defines POSTGRES_PASSWORD
-      - ./explorer-backend/db/db.secret
+      - ./watcher/db/db.secret
     volumes:
       - /var/lib/ergowatch_pg/14/data:/var/lib/postgresql/data
     ports:
