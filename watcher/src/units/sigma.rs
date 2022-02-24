@@ -104,6 +104,17 @@ fn render_register_val(val: &Value) -> RenderedRegister {
         // // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
         Value::Coll(coll) => {
             let raw_values = coll.as_vec();
+            // Handle empty collections
+            if raw_values.is_empty() {
+                return RenderedRegister {
+                    // Turn SColl(...) into Coll[...]
+                    value_type: format!("Coll[{:?}]", coll.elem_tpe())
+                        .replace("SColl", "Coll")
+                        .replace("(", "[")
+                        .replace(")", "]"),
+                    value: String::from("[]"),
+                };
+            }
             let rendered_values: Vec<RenderedRegister> =
                 raw_values.iter().map(|v| render_register_val(v)).collect();
             let contains_bytes = match coll {
@@ -113,10 +124,12 @@ fn render_register_val(val: &Value) -> RenderedRegister {
                     _ => false,
                 },
             };
+            // Value type
             let vt = match contains_bytes {
                 true => "SByte",
                 false => &rendered_values.first().unwrap().value_type,
             };
+            // Rendered value
             let rv = match contains_bytes {
                 true => format!(
                     "{}",
@@ -240,6 +253,14 @@ mod tests {
             rr.value,
             "[537570706f72742074686520726166666c6527732055492f555820646576656c6f706d656e742c206279206d68735f73616d,417320796f752063616e20736565207468652055492f5558206f662074686973207365727669636520697320766572792062617369632e20497420697320626f74686572696e6720626f746820796f7520616e642075732e204c6574277320737461727420746869732073657276696365207769746820796f757220646f6e6174696f6e7320666f722055492f555820646576656c6f706d656e742e0a0a5765206e65656420746f207261697365203135302045524720666f72207468697320707572706f736520616e642074686520726169736564206d6f6e65792077696c6c20626520646f6e6174656420746f20636f6d6d756e697479206465767320746f206372656174652061207375697461626c6520616e64206f70656e20736f757263652055492f555820666f72207468697320736572766963652e200a0a4966207261697365642066756e64732077657265206d6f7265207468616e20313530204552472c207468652065786365737320616d6f756e742077696c6c206265207573656420666f722055492f555820616e642f6f72206f7468657220646576656c6f706d656e74732072656c6174656420746f204572676f20526166666c652e0a0a49276d206d68735f73616d2c204572676f20466f756e646174696f6e20426f617264204d656d62657220616e642074686520666f756e646572206f66204572676f20526166666c652e200a0a546869732066756e6472616973696e6720697320706572736f6e616c20616e6420666f7220746865206d656e74696f6e656420676f616c20616e6420686173206e6f7468696e6720746f20646f2077697468204572676f20466f756e646174696f6e2e0a0a596f752063616e2066696e64206d652061743a2068747470733a2f2f747769747465722e636f6d2f6d68735f73616d,1eca1d77eebdb0e9096fdecb6e047ee2169e7c9aef97b0721ad96662f9504bce]"
         );
+    }
+
+    #[test]
+    fn render_register_empty_coll_of_coll_byte() {
+        let base16_str = "1a00";
+        let rr = render_register_value(base16_str);
+        assert_eq!(rr.value_type, "Coll[Coll[SByte]]");
+        assert_eq!(rr.value, "[]");
     }
 
     #[test]
