@@ -4,6 +4,7 @@ use ergotree_ir::chain::address::NetworkPrefix;
 use ergotree_ir::ergo_tree::ErgoTree;
 use ergotree_ir::mir::constant::Constant;
 use ergotree_ir::mir::value::CollKind;
+use ergotree_ir::mir::value::NativeColl;
 use ergotree_ir::mir::value::Value;
 use ergotree_ir::serialization::SigmaSerializable;
 use ergotree_ir::sigma_protocol::sigma_boolean::SigmaBoolean;
@@ -11,7 +12,6 @@ use ergotree_ir::sigma_protocol::sigma_boolean::SigmaProofOfKnowledgeTree;
 use ergotree_ir::types::stype::SType;
 
 pub(super) fn base16_to_address(base16_str: &str) -> String {
-    // let base16_str = "0008cd027304abbaebe8bb3a9e963dfa9fa4964d7d001e6a1bd225eadc84048ae49b627c";
     let tree_bytes = base16::decode(base16_str.as_bytes()).unwrap();
     let tree = ErgoTree::sigma_parse_bytes(&tree_bytes).unwrap();
     let recreated = Address::recreate_from_ergo_tree(&tree).unwrap();
@@ -106,13 +106,22 @@ fn render_register_val(val: &Value) -> RenderedRegister {
             let raw_values = coll.as_vec();
             // Handle empty collections
             if raw_values.is_empty() {
+                let elem_type = match &coll {
+                    CollKind::NativeColl(ncoll) => match ncoll {
+                        NativeColl::CollByte(_) => &SType::SByte,
+                    },
+                    CollKind::WrappedColl { elem_tpe, .. } => elem_tpe,
+                };
                 return RenderedRegister {
-                    // Turn SColl(...) into Coll[...]
-                    value_type: format!("Coll[{:?}]", coll.elem_tpe())
+                    value_type: format!("Coll[{:?}]", elem_type)
+                        // Turn SColl(...) into Coll[...]
                         .replace("SColl", "Coll")
                         .replace("(", "[")
                         .replace(")", "]"),
-                    value: String::from("[]"),
+                    value: match elem_type {
+                        SType::SByte => String::from(""),
+                        _ => String::from("[]"),
+                    },
                 };
             }
             let rendered_values: Vec<RenderedRegister> =
@@ -224,6 +233,14 @@ mod tests {
             rr.value,
             "98479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8"
         );
+    }
+
+    #[test]
+    fn render_register_empty_coll_of_byte() {
+        let base16_str = "0e00";
+        let rr = render_register_value(base16_str);
+        assert_eq!(rr.value_type, "Coll[SByte]");
+        assert_eq!(rr.value, "");
     }
 
     // Following tests are based on serialized and rendered values obtained from
