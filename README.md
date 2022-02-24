@@ -7,21 +7,35 @@ If looking for the frontend of https://ergo.watch see https://github.com/abchris
 
 ## Watcher
 
-An indexer that queries the node and populates the database.
+An indexer that queries a node's API and populates the database.
 
-### Build
+### Installation
 
-For a local build, install rust and then run `cargo build --release` from within the `watcher` directory.
+#### Build
 
-### Test
+For a local build, install [Rust](https://www.rust-lang.org/tools/install) and then run `cargo build --release` from within the `watcher` directory.
+
+#### Test
 
 Unit tests can be run with `cargo test`.
 
 There is also a testbench performing a number of integration tests that need access to a Postgres server. Make sure you run `cargo build --release` before running the testbench. Refer to the README in the `testbench` directory for more details.
 
+#### Database
+
+The watcher expects a database with the schema defined in `watcher/db/schema.sql`.
+
+> When syncing from scratch, it is recommended to only load `schema.sql` and not `constraints.sql`. This allows the watcher to run in bootstrap mode for a faster initial sync.  It'll take care of applying `constraints.sql` to the database once done. Specify the path to that sql file using the `-k` option.
+
+If using the Dockerfiles, all of the above will be preconfigured.
+
 ### Usage
 
-To run the watcher, execute the following command `watcher -c <path/to/config.toml`.
+Basic usage is like so `watcher -c <path/to/config.toml>`.
+
+> If running from scratch or with the `--bootstrap` option, add the following option:
+>
+> `-k <path/to/constaints.sql`> 
 
 Run `watcher -h` or `watcher --help` for more options.
 
@@ -40,7 +54,7 @@ Some config file settings can be overwritten through environment variables:
 
 The `docker-compose.yml` might also be a good place to look at to see how things ought to be configured.
 
-#### Bootstrapping (wip - partly implemented)
+#### Bootstrapping
 
 When syncing from scratch (i.e. empty database), the watcher will start in bootstrap mode. This mode can also be invoked by passing the `-b` or `--bootstrap` option, provided database constraints haven't been set yet. Bootstrap mode does the following:
 
