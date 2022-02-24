@@ -8,5 +8,4 @@ FROM debian:bullseye-slim
 WORKDIR /ew
 COPY --from=builder /usr/local/cargo/bin/watcher /ew/watcher
 COPY ./db/constraints.sql /ew/constraints.sql
-ENTRYPOINT ["./watcher", "-c", "/ew/config.toml"]
-CMD ["-k", "/ew/constraints.sql"]
+ENTRYPOINT ["./watcher", "-c", "/ew/config.toml", "-k", "/ew/constraints.sql"]
