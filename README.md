@@ -80,7 +80,7 @@ When a new block is available, the watcher will query it from the node. Once obt
 List of units:
 
 - [x] **Core unit**: The first unit a block goes through, writing all core tables (headers, transactions, outputs etc.). If you're familiar with the explorer backend database you will recognise a similar schema, minus some tables and columns that aren't relevant for the statistics we're interested in. Notably, at this stage, we don't store raw ergo trees or AD proofs for instance. This helps keeping the database size to a minimum.
-- [ ] **Unspent unit**: Maintains a set of unspent boxes.
+- [x] **Unspent unit**: Maintains a set of unspent boxes.
 - [ ] **Balance unit**: Tracks address balances and balance changes for both ERG and native tokens.
 - [ ] **Oracle pools** units: Anything related to known oracle pools.
 - [ ] **SigmaUSD unit**: Monitors SigmaUSD related transactions.
