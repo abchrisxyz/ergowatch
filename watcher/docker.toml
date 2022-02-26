@@ -3,7 +3,7 @@ debug = false
 [database]
 host = "db"
 port = 5432
-name = "dev"
+name = "ergo"
 user = "ergo"
 pw = "ergo"
 

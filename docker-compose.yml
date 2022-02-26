@@ -10,7 +10,7 @@ services:
     build:
       context: ./watcher/db
     environment:
-      POSTGRES_DB: dev
+      POSTGRES_DB: ergo
       POSTGRES_USER: ergo
     env_file:
       # Defines POSTGRES_PASSWORD
