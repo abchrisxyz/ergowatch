@@ -1,26 +1,10 @@
 version: "3.8"
 
-volumes:
-  ew_node:
+networks:
+  ergo-node:
     external: true
 
 services:
-  # Ergo blockchain node
-  node:
-    image: ergoplatform/ergo:v4.0.21
-    command: --mainnet -c /etc/ergo.conf
-    volumes:
-      - ew_node:/home/ergo/.ergo
-      - ./node/ergo.conf:/etc/ergo.conf:ro
-    ports:
-      - "127.0.0.1:9053:9053"
-      - "9030:9030"
-    restart: unless-stopped
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "3"
-
   # Postgresql database
   db:
     build:
@@ -48,8 +32,10 @@ services:
     volumes:
       - ./watcher/docker.toml:/ew/config.toml:ro
     links:
-      - "node"
       - "db"
+    networks:
+      - default
+      - ergo-node
     # restart: unless-stopped
     logging:
       options:
