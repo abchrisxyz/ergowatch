@@ -1,3 +1,5 @@
+use crate::db::bal;
+use crate::db::bal::erg_diff::ErgDiffQuery;
 use crate::db::core::header::HeaderRow;
 use crate::db::core::outputs::OutputRow;
 use crate::db::core::transaction::TransactionRow;
@@ -6,6 +8,7 @@ use crate::db::SQLStatement;
 /// Helper function to include genesis boxes in db.
 ///
 /// Includes dummy header and tx to satisfy FK's.
+/// Also affects depending schemas.
 pub fn prep(node_boxes: Vec<crate::node::models::Output>) -> Vec<SQLStatement> {
     let mut statements: Vec<SQLStatement> = vec![
         HeaderRow {
@@ -52,6 +55,17 @@ pub fn prep(node_boxes: Vec<crate::node::models::Output>) -> Vec<SQLStatement> {
             })
             .collect(),
     );
+    // TODO: refactor genesis out of core unit since it affects multiple schemas
+    // Erg balance diffs
+    statements.push(
+        ErgDiffQuery {
+            tx_id: "0000000000000000000000000000000000000000000000000000000000000000",
+        }
+        .to_statement(),
+    );
+    // Erg balance
+    statements.push(bal::erg::insert_statement(0));
+
     statements
 }
 
@@ -64,7 +78,7 @@ mod tests {
     #[test]
     fn statement() -> () {
         let statements: Vec<db::SQLStatement> = prep(genesis_boxes());
-        assert_eq!(statements.len(), 11);
+        assert_eq!(statements.len(), 13);
         assert_eq!(statements[0].sql, db::core::header::INSERT_HEADER);
         assert_eq!(statements[1].sql, db::core::transaction::INSERT_TRANSACTION);
         assert_eq!(statements[2].sql, db::core::outputs::INSERT_OUTPUT);
@@ -76,6 +90,8 @@ mod tests {
         assert_eq!(statements[8].sql, db::core::registers::INSERT_BOX_REGISTER);
         assert_eq!(statements[9].sql, db::core::registers::INSERT_BOX_REGISTER);
         assert_eq!(statements[10].sql, db::core::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[11].sql, db::bal::erg_diff::INSERT_DIFFS);
+        assert_eq!(statements[12].sql, db::bal::erg::INSERT_BALANCES);
 
         // First box statement
         let statement = &statements[2];
