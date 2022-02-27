@@ -122,9 +122,14 @@ fn prepare_session() -> Result<Session, &'static str> {
         // It makes little sense not to use bootstrap mode when starting from scratch,
         // so forbid running on an empty database with constraints set (constraints prevent bootstrap mode).
         // This also avoids having to write custom handling of genesis boxes for some units.
+        //
+        // EDIT: Bootstrap mode requires some extra disk space, so tempted to allow
+        // initial sync in normal mode. Let's see how it compares.
+        // TODO: Depending on how it performs, add messages indicating what to do and when.
         warn!("Found constraints on empty database.");
-        error!("Starting from scratch in normal mode is not supported.");
-        return Err("Reinitialise the database without constraints to allow bootstrap mode.");
+        info!("Starting from scratch in normal mode.");
+        // error!("Starting from scratch in normal mode is not supported.");
+        // return Err("Reinitialise the database without constraints to allow bootstrap mode.");
     }
 
     if cli.bootstrap && db_constraints_set {
@@ -188,6 +193,7 @@ fn main() -> Result<(), &'static str> {
         head.height, head.header_id
     );
 
+    // TODO: avoid doing potentially more than once on rerun
     if head.height == 0 {
         session.include_genesis_boxes().unwrap();
     }
