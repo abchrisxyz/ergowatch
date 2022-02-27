@@ -36,7 +36,7 @@ services:
     networks:
       - default
       - ergo-node
-    # restart: unless-stopped
+    restart: unless-stopped
     logging:
       options:
         max-size: "10m"
