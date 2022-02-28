@@ -99,9 +99,11 @@ fn render_register_val(val: &Value) -> RenderedRegister {
                 value: s,
             }
         }
-        // // TODO >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-        // Value::Opt(opt) => unimplemented!("Unhandled Opt variant: {:?}", opt),
-        // // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+        // TODO: don't rely on Debug trait
+        Value::Opt(opt) => RenderedRegister {
+            value_type: String::from("Opt"),
+            value: format!("{:?}", opt),
+        },
         Value::Coll(coll) => {
             let raw_values = coll.as_vec();
             // Handle empty collections
@@ -186,7 +188,11 @@ fn render_register_val(val: &Value) -> RenderedRegister {
         }
         // Value comes from a Constant, so remaining Value variants (Context,
         // Header, PreHeader, Global and Lambda) should not occur.
-        _ => unimplemented!("Unhandled Value variant: {:?}", val),
+        // If unhandled values were to occur, they can be handled retroactively through migrations.
+        _ => RenderedRegister {
+            value_type: String::from("unhandled"),
+            value: String::from("unhandled"),
+        },
     }
 }
 
