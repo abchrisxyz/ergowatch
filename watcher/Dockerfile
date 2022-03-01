@@ -1,11 +1,25 @@
-FROM rust as builder
-WORKDIR /usr/src/watcher
-COPY ./src ./src
-COPY ./Cargo.toml ./Cargo.toml
-RUN cargo install --path .
+# Based on https://github.com/LukeMathWalker/cargo-chef
+FROM rust AS chef 
+# We only pay the installation cost once, 
+# it will be cached from the second build onwards
+RUN cargo install cargo-chef 
+WORKDIR app
 
-FROM debian:bullseye-slim
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare  --recipe-path recipe.json
+
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+# Build dependencies - this is the caching Docker layer!
+RUN cargo chef cook --release --recipe-path recipe.json
+# Build application
+COPY . .
+RUN cargo build --release --bin watcher
+
+# We do not need the Rust toolchain to run the binary!
+FROM debian:bullseye-slim AS runtime
 WORKDIR /ew
-COPY --from=builder /usr/local/cargo/bin/watcher /ew/watcher
+COPY --from=builder /app/target/release/watcher /ew/watcher
 COPY ./db/constraints.sql /ew/constraints.sql
-ENTRYPOINT ["./watcher", "-c", "/ew/config.toml", "-k", "/ew/constraints.sql"]
+ENTRYPOINT ["/ew/watcher", "-c", "/ew/config.toml", "-k", "/ew/constraints.sql"]
