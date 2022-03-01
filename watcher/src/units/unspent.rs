@@ -9,7 +9,7 @@ use crate::db::usp::insert_new_box_statement;
 use crate::db::usp::truncate_statement;
 use crate::db::SQLStatement;
 
-/// Delete intput boxes and insert output boxes
+/// Delete input boxes, then insert output boxes
 pub fn prep(block: &BlockData) -> Vec<SQLStatement> {
     let mut sql_statements: Vec<SQLStatement> = block
         .transactions
@@ -34,15 +34,15 @@ pub fn prep(block: &BlockData) -> Vec<SQLStatement> {
     sql_statements
 }
 
-/// Delete output boxes and insert input boxes
+/// Delete output boxes, then insert input boxes
 pub fn prep_rollback(block: &BlockData) -> Vec<SQLStatement> {
     let mut sql_statements: Vec<SQLStatement> = block
         .transactions
         .iter()
         .flat_map(|tx| {
-            tx.input_box_ids
+            tx.outputs
                 .iter()
-                .map(|box_id| insert_new_box_statement(box_id))
+                .map(|op| delete_spent_box_statement(op.box_id))
         })
         .collect();
     sql_statements.append(
@@ -50,9 +50,9 @@ pub fn prep_rollback(block: &BlockData) -> Vec<SQLStatement> {
             .transactions
             .iter()
             .flat_map(|tx| {
-                tx.outputs
+                tx.input_box_ids
                     .iter()
-                    .map(|op| delete_spent_box_statement(op.box_id))
+                    .map(|box_id| insert_new_box_statement(box_id))
             })
             .collect(),
     );
@@ -105,17 +105,17 @@ mod tests {
     #[test]
     fn check_rollback_statements() -> () {
         let statements = super::prep_rollback(&block_600k());
-        assert_eq!(statements.len(), 4 + 6);
-        assert_eq!(statements[0].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[1].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[2].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[3].sql, db::usp::INSERT_NEW_BOX);
+        assert_eq!(statements.len(), 6 + 4);
+        assert_eq!(statements[0].sql, db::usp::DELETE_SPENT_BOX);
+        assert_eq!(statements[1].sql, db::usp::DELETE_SPENT_BOX);
+        assert_eq!(statements[2].sql, db::usp::DELETE_SPENT_BOX);
+        assert_eq!(statements[3].sql, db::usp::DELETE_SPENT_BOX);
         assert_eq!(statements[4].sql, db::usp::DELETE_SPENT_BOX);
         assert_eq!(statements[5].sql, db::usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[6].sql, db::usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[7].sql, db::usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[8].sql, db::usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[9].sql, db::usp::DELETE_SPENT_BOX);
+        assert_eq!(statements[6].sql, db::usp::INSERT_NEW_BOX);
+        assert_eq!(statements[7].sql, db::usp::INSERT_NEW_BOX);
+        assert_eq!(statements[8].sql, db::usp::INSERT_NEW_BOX);
+        assert_eq!(statements[9].sql, db::usp::INSERT_NEW_BOX);
     }
 
     #[test]
