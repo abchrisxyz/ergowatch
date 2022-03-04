@@ -43,20 +43,22 @@ services:
         max-file: "3"
  
   # API server
-  # api:
-  #   build:
-  #     context: ./api
-  #   env_file:
-  #     # Defines POSTGRES_PASSWORD
-  #     - ./explorer-backend/db/db.secret
-  #   links:
-  #     - "db"
-  #   ports:
-  #     - "127.0.0.1:8000:80"
-  #   restart: unless-stopped
-  #   volumes:
-  #     - ./api/src/main:/app
-  #   logging:
-  #     options:
-  #       max-size: "10m"
-  #       max-file: "3"
+  api:
+    build:
+      context: ./api
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: ergo
+      POSTGRES_USER: ergo
+    env_file:
+      # Defines POSTGRES_PASSWORD
+      - ./watcher/db/db.secret
+    links:
+      - "db"
+    ports:
+      - "127.0.0.1:8001:80"
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
