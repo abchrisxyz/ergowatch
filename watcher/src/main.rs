@@ -199,7 +199,15 @@ fn main() -> Result<(), &'static str> {
     }
 
     loop {
-        let node_height = node.get_height().unwrap();
+        let node_height = match node.get_height() {
+            Ok(h) => h,
+            Err(e) => {
+                error!("{}", e);
+                info!("Retrying in {} seconds", POLL_INTERVAL_SECONDS);
+                thread::sleep(time::Duration::from_secs(POLL_INTERVAL_SECONDS));
+                continue;
+            }
+        };
 
         if node_height <= head.height {
             if session.sync_once {
