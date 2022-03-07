@@ -29,6 +29,8 @@ services:
   watcher:
     build:
       context: ./watcher
+    environment:
+      EW_LOG: INFO
     volumes:
       - ./watcher/docker.toml:/ew/config.toml:ro
     links:
