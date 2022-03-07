@@ -21,6 +21,9 @@ pub fn prep(block: &BlockData) -> Vec<SQLStatement> {
 
 pub fn prep_rollback(block: &BlockData) -> Vec<SQLStatement> {
     let mut sql_statements: Vec<SQLStatement> = vec![];
+    sql_statements.push(bal::erg::rollback_delete_zero_balances_statement(
+        block.height,
+    ));
     sql_statements.push(bal::erg::rollback_update_statement(block.height));
     sql_statements.push(bal::erg::delete_zero_balances_statement());
     sql_statements.append(
@@ -46,6 +49,7 @@ pub fn prep_bootstrap() -> Vec<SQLStatement> {
 mod tests {
     use crate::db;
     use crate::units::testing::block_600k;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn check_prep_statements() -> () {
@@ -62,12 +66,16 @@ mod tests {
     #[test]
     fn check_rollback_statements() -> () {
         let statements = super::prep_rollback(&block_600k());
-        assert_eq!(statements.len(), 5);
-        assert_eq!(statements[0].sql, db::bal::erg::ROLLBACK_BALANCE_UPDATES);
-        assert_eq!(statements[1].sql, db::bal::erg::DELETE_ZERO_BALANCES);
-        assert_eq!(statements[2].sql, db::bal::erg_diff::DELETE_DIFFS);
+        assert_eq!(statements.len(), 6);
+        assert_eq!(
+            statements[0].sql,
+            db::bal::erg::ROLLBACK_DELETE_ZERO_BALANCES
+        );
+        assert_eq!(statements[1].sql, db::bal::erg::ROLLBACK_BALANCE_UPDATES);
+        assert_eq!(statements[2].sql, db::bal::erg::DELETE_ZERO_BALANCES);
         assert_eq!(statements[3].sql, db::bal::erg_diff::DELETE_DIFFS);
         assert_eq!(statements[4].sql, db::bal::erg_diff::DELETE_DIFFS);
+        assert_eq!(statements[5].sql, db::bal::erg_diff::DELETE_DIFFS);
     }
 
     #[test]
