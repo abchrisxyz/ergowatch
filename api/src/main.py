@@ -8,12 +8,13 @@ from api.routes.p2pk import p2pk_router
 from api.routes.contracts import contracts_router
 from api.routes.ranking import ranking_router
 
-description = """
+root_path = "/api/v0"
+description = f"""
 ErgoWatch API docs.
 
 All ERG values expressed in nanoERG.
 
-[Swagger](/docs) | [ReDoc](/redoc)
+[Swagger]({root_path}/docs) | [ReDoc]({root_path}/redoc)
 """
 # TODO: explain history vs series
 
@@ -37,7 +38,7 @@ app = FastAPI(
     version="0.1.0-alpha",
     description=description,
     openapi_tags=tags_metadata,
-    root_path="/api/v0",
+    root_path=root_path,
 )
 
 if "DEVMODE" in os.environ:
