@@ -24,7 +24,7 @@ class RankResponse(BaseModel):
 @r.get("/{p2pk_address}", response_model=RankResponse, name="P2PK address rank")
 async def p2pk_address_rank(
     request: Request,
-    address: P2PKAddress,
+    p2pk_address: P2PKAddress,
 ):
     """
     Get the rank of a P2PK address by current balance.
@@ -78,7 +78,7 @@ async def p2pk_address_rank(
         ) under
     """
     async with request.app.state.db.acquire() as conn:
-        rows = await conn.fetch(query, address)
+        rows = await conn.fetch(query, p2pk_address)
         return {
             row["label"]: {
                 "rank": row["rank"],
