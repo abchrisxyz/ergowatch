@@ -1,14 +1,42 @@
-import asyncpg
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import asyncpg
 
-from api.v0.routes.addresses import addresses_router
+from api.routes.addresses import addresses_router
+from api.routes.p2pk import p2pk_router
+from api.routes.contracts import contracts_router
+from api.routes.ranking import ranking_router
+
+description = """
+ErgoWatch API docs.
+
+All ERG values expressed in nanoERG.
+
+[Swagger](/docs) | [ReDoc](/redoc)
+"""
+# TODO: explain history vs series
+
+tags_metadata = [
+    {
+        "name": "addresses",
+        "description": "Address specific data",
+    },
+    {
+        "name": "p2pk",
+        "description": "P2PK address stats",
+    },
+    {
+        "name": "contracts",
+        "description": "P2S & P2SH address stats",
+    },
+]
 
 app = FastAPI(
     title="ErgoWatch",
-    version="0.1.0",
-    description="ErgoWatch API docs",
+    version="0.1.0-alpha",
+    description=description,
+    openapi_tags=tags_metadata,
     root_path="/api/v0",
 )
 
@@ -28,4 +56,7 @@ async def startup_event():
     app.state.db = await asyncpg.create_pool(dsn)
 
 
-app.include_router(addresses_router, prefix="/api/v0/addresses", tags=["Addresses"])
+app.include_router(addresses_router, prefix="/api/v0/addresses", tags=["addresses"])
+app.include_router(p2pk_router, prefix="/api/v0/p2pk", tags=["p2pk"])
+app.include_router(contracts_router, prefix="/api/v0/contracts", tags=["contracts"])
+app.include_router(ranking_router, prefix="/api/v0/ranking", tags=["misc"])

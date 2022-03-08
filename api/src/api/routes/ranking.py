@@ -1,8 +1,12 @@
-from fastapi import APIRouter, Request, Path
+from fastapi import APIRouter, Request, Query
 from pydantic import BaseModel
+from pydantic import constr
 
 
-addresses_router = r = APIRouter()
+ranking_router = r = APIRouter()
+
+
+P2PKAddress = constr(regex="^9[a-zA-Z0-9]{50}")
 
 
 class AddressRank(BaseModel):
@@ -17,10 +21,10 @@ class RankResponse(BaseModel):
     under: None | AddressRank
 
 
-@r.get("/p2pk/rank/{address}", response_model=RankResponse)
-async def get_p2pk_address_rank(
+@r.get("/{p2pk_address}", response_model=RankResponse, name="P2PK address rank")
+async def p2pk_address_rank(
     request: Request,
-    address: str = Path(..., title="P2PK address", regex="^9[a-zA-Z0-9]{50}"),
+    address: P2PKAddress,
 ):
     """
     Get the rank of a P2PK address by current balance.
