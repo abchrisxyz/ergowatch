@@ -57,7 +57,7 @@ async def startup_event():
     app.state.db = await asyncpg.create_pool(dsn)
 
 
-app.include_router(addresses_router, prefix="/api/v0/addresses", tags=["addresses"])
-app.include_router(p2pk_router, prefix="/api/v0/p2pk", tags=["p2pk"])
-app.include_router(contracts_router, prefix="/api/v0/contracts", tags=["contracts"])
-app.include_router(ranking_router, prefix="/api/v0/ranking", tags=["misc"])
+app.include_router(addresses_router, prefix="/addresses", tags=["addresses"])
+app.include_router(p2pk_router, prefix="/p2pk", tags=["p2pk"])
+app.include_router(contracts_router, prefix="/contracts", tags=["contracts"])
+app.include_router(ranking_router, prefix="/ranking", tags=["misc"])
