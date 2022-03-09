@@ -2,6 +2,7 @@ pub mod models;
 
 use log::debug;
 use log::info;
+use log::warn;
 use reqwest;
 
 use models::Block;
@@ -21,7 +22,6 @@ impl Node {
 
     pub fn get_height(&self) -> Result<Height, reqwest::Error> {
         let url = format!("{}/info", self.url);
-        debug!("URL: {}", url);
         let node_info: NodeInfo = reqwest::blocking::get(url)?.json()?;
         Ok(node_info.full_height)
     }
@@ -34,16 +34,28 @@ impl Node {
 
     fn get_blocks_at(&self, height: Height) -> Result<Vec<HeaderID>, reqwest::Error> {
         let url = format!("{}/blocks/at/{}", self.url, height);
-        debug!("URL: {}", url);
         let json: Vec<String> = reqwest::blocking::get(url)?.json()?;
         Ok(json.to_owned())
     }
 
-    pub fn get_block(&self, header_id: &HeaderID) -> Result<Block, reqwest::Error> {
+    pub fn get_block(&self, header_id: &HeaderID) -> Option<Block> {
         let url = format!("{}/blocks/{}", self.url, header_id);
-        debug!("URL: {}", url);
-        let json: Block = reqwest::blocking::get(url)?.json()?;
-        Ok(json)
+        let res = match reqwest::blocking::get(url) {
+            Ok(res) => res,
+            Err(e) => {
+                warn!("Failed requesting block from node.");
+                warn!("{}", e);
+                return None;
+            }
+        };
+        match res.json() {
+            Ok(json) => Some(json),
+            Err(e) => {
+                warn!("Failed deserializing block data");
+                warn!("{}", e);
+                None
+            }
+        }
     }
 
     pub fn get_main_chain_block_at(&self, height: Height) -> Option<Block> {
@@ -59,15 +71,28 @@ impl Node {
                     header_ids.len(),
                     height
                 );
-                self.get_block(&header_ids[self.resolve(height, &header_ids)])
-                    .unwrap()
+                // Attempt to identify main chain block.
+                match self.resolve(height, &header_ids) {
+                    Some(idx) => self.get_block(&header_ids[idx]).unwrap(),
+                    None => {
+                        // If not possible to tell blocks appart yet, then pick first one that is valid.
+                        // If it turns out no to be the main chain, it'll get rolled back eventually.
+                        // Process headers in alphabetical orders for consistency (nodes can return headers
+                        // in different order).
+                        info!("Picking first valid block");
+                        match itertools::sorted(&header_ids).find_map(|hid| self.get_block(&hid)) {
+                            Some(block) => block,
+                            None => panic!("No valid blocks available out of {}", header_ids.len()),
+                        }
+                    }
+                }
             }
         };
         Some(block)
     }
 
     /// Returns the index of the header that belongs to the main chain
-    fn resolve<'a>(&self, height: Height, header_ids: &'a [HeaderID]) -> usize {
+    fn resolve<'a>(&self, height: Height, header_ids: &'a [HeaderID]) -> Option<usize> {
         // Look ahead to determine which block is on the main chain
         let next_height = height + 1;
         info!(
@@ -77,24 +102,27 @@ impl Node {
         let next_header_ids = self.get_blocks_at(next_height).unwrap();
 
         if next_header_ids.is_empty() {
-            // We can't tell blocks appart yet, take first one for now.
-            // If it turns out no to be the main chain, it'll get rolled back eventually.
-            info!("Next block is not available yet - assuming first header is main chain for now");
-            return 0;
+            // We can't tell blocks appart yet.
+            info!("Next block is not available yet");
+            return None;
         } else if next_header_ids.len() == 1 {
             debug!("Found main chain child at height {}", next_height);
         } else {
             let index = self.resolve(next_height, &next_header_ids);
-            debug!(
-                "Using header {} at index {} for height {}",
-                &header_ids[index], index, height
-            );
+            if let Some(idx) = index {
+                debug!(
+                    "Using header {} at index {} for height {}",
+                    &header_ids[idx], idx, height
+                );
+            }
         }
 
+        // At this point next_header_ids is guaranteed to have exactly 1 element.
         let next_block = self.get_block(&next_header_ids[0]).unwrap();
-        return header_ids
+        let index = header_ids
             .iter()
             .position(|h| h == &next_block.header.parent_id)
             .unwrap();
+        Some(index)
     }
 }
