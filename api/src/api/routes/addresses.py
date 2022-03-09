@@ -3,7 +3,7 @@ from pydantic import constr
 
 addresses_router = r = APIRouter()
 
-Address = constr(regex="^[a-zA-Z0-9]+")
+Address = constr(regex="^[a-zA-Z0-9]+$")
 
 
 @r.get("/{address}/balance", response_model=int)
@@ -18,11 +18,16 @@ async def address_balance(
     query = """
         select value
         from bal.erg
-        where address = $1
+        where address = $1;
     """
     async with request.app.state.db.acquire() as conn:
         row = await conn.fetchrow(query, address)
         return row["value"] if row is not None else None
+
+
+# TODO:
+# @r.get("/{address}/balance/at/height/{height}", response_model=int)
+# @r.get("/{address}/balance/at/height/{timestamp}", response_model=int)
 
 
 @r.get("/{address}/balance/history")
@@ -53,7 +58,7 @@ async def address_balance_history(
         if flat:
             return {
                 "heights": [r["height"] for r in rows],
-                "timestamps": [r["height"] for r in rows],
+                "timestamps": [r["timestamp"] for r in rows],
                 "balances": [r["balance"] for r in rows],
             }
         else:

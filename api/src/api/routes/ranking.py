@@ -6,7 +6,7 @@ from pydantic import constr
 ranking_router = r = APIRouter()
 
 
-P2PKAddress = constr(regex="^9[a-zA-Z0-9]{50}")
+P2PKAddress = constr(regex="^9[a-zA-Z0-9]{50}$")
 
 
 class AddressRank(BaseModel):
@@ -61,7 +61,7 @@ async def p2pk_address_rank(
                 , p.address
             from ranked_p2pk p, target t
             where p.rank < t.rank
-            order by p.rank desc
+            order by p.rank desc, p.address
             limit 1
         ) above
         union
@@ -73,7 +73,7 @@ async def p2pk_address_rank(
                 , p.address
             from ranked_p2pk p, target t
             where p.rank > t.rank
-            order by p.rank
+            order by p.rank, p.address
             limit 1
         ) under
     """

@@ -3,10 +3,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import asyncpg
 
-from api.routes.addresses import addresses_router
-from api.routes.p2pk import p2pk_router
-from api.routes.contracts import contracts_router
-from api.routes.ranking import ranking_router
+try:
+    # Normal use case
+    from api.routes.addresses import addresses_router
+    from api.routes.p2pk import p2pk_router
+    from api.routes.contracts import contracts_router
+    from api.routes.ranking import ranking_router
+except ImportError:
+    # When running pytest
+    from .api.routes.addresses import addresses_router
+    from .api.routes.p2pk import p2pk_router
+    from .api.routes.contracts import contracts_router
+    from .api.routes.ranking import ranking_router
 
 root_path = "/api/v0"
 description = f"""
@@ -53,7 +61,12 @@ if "DEVMODE" in os.environ:
 
 @app.on_event("startup")
 async def startup_event():
-    dsn = f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@{os.getenv('POSTGRES_HOST')}/{os.getenv('POSTGRES_DB')}"
+    host = os.getenv("POSTGRES_HOST", "localhost")
+    port = os.getenv("POSTGRES_PORT", "5432")
+    db = os.getenv("POSTGRES_DB", "ergo")
+    user = os.getenv("POSTGRES_USER", "ergo")
+    pw = os.getenv("POSTGRES_PASSWORD")
+    dsn = f"postgresql://{user}:{pw}@{host}:{port}/{db}"
     app.state.db = await asyncpg.create_pool(dsn)
 
 
