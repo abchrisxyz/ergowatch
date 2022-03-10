@@ -1,5 +1,11 @@
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter
+from fastapi import Path
+from fastapi import Query
+from fastapi import Request
+from pydantic import BaseModel
 from pydantic import constr
+from typing import List
+from typing import Union
 
 addresses_router = r = APIRouter()
 
@@ -60,18 +66,19 @@ async def address_balance_at_timestamp(
 async def address_balance_history(
     request: Request,
     address: Address,
-    limit: int | None = Query(50, ge=0),
+    # token_id: str = Query(None, description="Optional token id"),
+    timestamps: bool = Query(False, description="Timestamps instead of heights"),
+    flat: bool | None = Query(True, description="Return data as flat arrays."),
+    limit: int | None = Query(50, gt=0, le=10000),
     offset: int | None = Query(0, ge=0),
     desc: bool | None = Query(True, description="Most recent first"),
-    flat: bool | None = Query(True, description="Return data as flat arrays")
-    # token_id: str = Query(None, description="Optional token id"),
 ):
     """
     ERG or token balance history of an address.
     """
     query = f"""
         select d.height
-            , h.timestamp
+            {', h.timestamp' if timestamps else ''}
             , sum(d.value) over (order by d.height) as balance
         from bal.erg_diffs d
         join core.headers h on h.height = d.height
@@ -82,10 +89,16 @@ async def address_balance_history(
     async with request.app.state.db.acquire() as conn:
         rows = await conn.fetch(query, address, limit, offset)
         if flat:
-            return {
-                "heights": [r["height"] for r in rows],
-                "timestamps": [r["timestamp"] for r in rows],
-                "balances": [r["balance"] for r in rows],
-            }
+            if timestamps:
+                return {
+                    "heights": [r["height"] for r in rows],
+                    "timestamps": [r["timestamp"] for r in rows],
+                    "balances": [r["balance"] for r in rows],
+                }
+            else:
+                return {
+                    "heights": [r["height"] for r in rows],
+                    "balances": [r["balance"] for r in rows],
+                }
         else:
             return rows

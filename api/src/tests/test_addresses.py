@@ -42,120 +42,6 @@ def test_balance_returns_null_for_unknown_address(client):
     assert response.json() == None
 
 
-def test_balance_history_default(client):
-    response = client.get("/addresses/addr1/balance/history")
-    assert response.status_code == 200
-    assert response.json() == {
-        "heights": [
-            30,
-            20,
-            10,
-        ],
-        "timestamps": [
-            1569123456789,
-            1568123456789,
-            1567123456789,
-        ],
-        "balances": [
-            4000,
-            3000,
-            5000,
-        ],
-    }
-
-
-def test_balance_history_asc(client):
-    response = client.get("/addresses/addr1/balance/history?desc=false")
-    assert response.status_code == 200
-    assert response.json() == {
-        "heights": [
-            10,
-            20,
-            30,
-        ],
-        "timestamps": [
-            1567123456789,
-            1568123456789,
-            1569123456789,
-        ],
-        "balances": [
-            5000,
-            3000,
-            4000,
-        ],
-    }
-
-
-def test_balance_history_limit(client):
-    response = client.get("/addresses/addr1/balance/history?limit=1")
-    assert response.status_code == 200
-    assert response.json() == {
-        "heights": [
-            30,
-        ],
-        "timestamps": [
-            1569123456789,
-        ],
-        "balances": [
-            4000,
-        ],
-    }
-
-
-def test_balance_history_offset(client):
-    response = client.get("/addresses/addr1/balance/history?offset=1")
-    assert response.status_code == 200
-    assert response.json() == {
-        "heights": [
-            20,
-            10,
-        ],
-        "timestamps": [
-            1568123456789,
-            1567123456789,
-        ],
-        "balances": [
-            3000,
-            5000,
-        ],
-    }
-
-
-def test_balance_history_limit_and_offset(client):
-    response = client.get("/addresses/addr1/balance/history?limit=1&offset=1")
-    assert response.status_code == 200
-    assert response.json() == {
-        "heights": [
-            20,
-        ],
-        "timestamps": [
-            1568123456789,
-        ],
-        "balances": [
-            3000,
-        ],
-    }
-
-
-def test_balance_history_nested(client):
-    response = client.get("/addresses/addr1/balance/history?flat=false")
-    assert response.status_code == 200
-    assert response.json() == [
-        {"height": 30, "timestamp": 1569123456789, "balance": 4000},
-        {"height": 20, "timestamp": 1568123456789, "balance": 3000},
-        {"height": 10, "timestamp": 1567123456789, "balance": 5000},
-    ]
-
-
-def test_balance_history_nested_asc_limit(client):
-    response = client.get(
-        "/addresses/addr1/balance/history?flat=false&desc=false&limit=2"
-    )
-    assert response.status_code == 200
-    assert response.json() == [
-        {"height": 10, "timestamp": 1567123456789, "balance": 5000},
-        {"height": 20, "timestamp": 1568123456789, "balance": 3000},
-    ]
 class TestBalanceAtHeight:
     def test_height_before_first_tx(self, client):
         response = client.get("/addresses/addr1/balance/at/height/5")
@@ -212,3 +98,151 @@ class TestBalanceAtTimestamp:
         assert response.status_code == 422
 
 
+class TestBalanceHistory:
+    def test_default(self, client):
+        response = client.get("/addresses/addr1/balance/history")
+        assert response.status_code == 200
+        assert response.json() == {
+            "heights": [
+                30,
+                20,
+                10,
+            ],
+            "balances": [
+                4000,
+                3000,
+                5000,
+            ],
+        }
+
+    def test_timestamps(self, client):
+        response = client.get("/addresses/addr1/balance/history?timestamps=true")
+        assert response.status_code == 200
+        assert response.json() == {
+            "heights": [
+                30,
+                20,
+                10,
+            ],
+            "timestamps": [
+                1569123456789,
+                1568123456789,
+                1567123456789,
+            ],
+            "balances": [
+                4000,
+                3000,
+                5000,
+            ],
+        }
+
+    def test_asc(self, client):
+        response = client.get("/addresses/addr1/balance/history?desc=false")
+        assert response.status_code == 200
+        assert response.json() == {
+            "heights": [
+                10,
+                20,
+                30,
+            ],
+            "balances": [
+                5000,
+                3000,
+                4000,
+            ],
+        }
+
+    def test_asc_timestamps(self, client):
+        response = client.get(
+            "/addresses/addr1/balance/history?desc=false&timestamps=true"
+        )
+        assert response.status_code == 200
+        assert response.json() == {
+            "heights": [
+                10,
+                20,
+                30,
+            ],
+            "timestamps": [
+                1567123456789,
+                1568123456789,
+                1569123456789,
+            ],
+            "balances": [
+                5000,
+                3000,
+                4000,
+            ],
+        }
+
+    def test_limit(self, client):
+        response = client.get("/addresses/addr1/balance/history?limit=1")
+        assert response.status_code == 200
+        assert response.json() == {
+            "heights": [
+                30,
+            ],
+            "balances": [
+                4000,
+            ],
+        }
+
+    def test_offset_timestamps(self, client):
+        response = client.get("/addresses/addr1/balance/history?offset=1&timestamps=1")
+        assert response.status_code == 200
+        assert response.json() == {
+            "heights": [
+                20,
+                10,
+            ],
+            "timestamps": [
+                1568123456789,
+                1567123456789,
+            ],
+            "balances": [
+                3000,
+                5000,
+            ],
+        }
+
+    def test_limit_and_offset(self, client):
+        response = client.get("/addresses/addr1/balance/history?limit=1&offset=1")
+        assert response.status_code == 200
+        assert response.json() == {
+            "heights": [
+                20,
+            ],
+            "balances": [
+                3000,
+            ],
+        }
+
+    def test_nested(self, client):
+        response = client.get("/addresses/addr1/balance/history?flat=false")
+        assert response.status_code == 200
+        assert response.json() == [
+            {"height": 30, "balance": 4000},
+            {"height": 20, "balance": 3000},
+            {"height": 10, "balance": 5000},
+        ]
+
+    def test_nested_timestamps(self, client):
+        response = client.get(
+            "/addresses/addr1/balance/history?flat=false&timestamps=1"
+        )
+        assert response.status_code == 200
+        assert response.json() == [
+            {"height": 30, "timestamp": 1569123456789, "balance": 4000},
+            {"height": 20, "timestamp": 1568123456789, "balance": 3000},
+            {"height": 10, "timestamp": 1567123456789, "balance": 5000},
+        ]
+
+    def test_nested_asc_limit(self, client):
+        response = client.get(
+            "/addresses/addr1/balance/history?flat=false&desc=false&limit=2"
+        )
+        assert response.status_code == 200
+        assert response.json() == [
+            {"height": 10, "balance": 5000},
+            {"height": 20, "balance": 3000},
+        ]
