@@ -156,3 +156,59 @@ def test_balance_history_nested_asc_limit(client):
         {"height": 10, "timestamp": 1567123456789, "balance": 5000},
         {"height": 20, "timestamp": 1568123456789, "balance": 3000},
     ]
+class TestBalanceAtHeight:
+    def test_height_before_first_tx(self, client):
+        response = client.get("/addresses/addr1/balance/at/height/5")
+        assert response.status_code == 200
+        assert response.json() == 0
+
+    def test_height_on_tx(self, client):
+        response = client.get("/addresses/addr1/balance/at/height/20")
+        assert response.status_code == 200
+        assert response.json() == 3000
+
+    def test_height_within_between_txs(self, client):
+        response = client.get("/addresses/addr1/balance/at/height/25")
+        assert response.status_code == 200
+        assert response.json() == 3000
+
+    def test_height_after_last_tx(self, client):
+        response = client.get("/addresses/addr1/balance/at/height/100")
+        assert response.status_code == 200
+        assert response.json() == 4000
+
+    def test_height_gt0(self, client):
+        response = client.get("/addresses/addr1/balance/at/height/0")
+        assert response.status_code == 422
+        response = client.get("/addresses/addr1/balance/at/height/-1")
+        assert response.status_code == 422
+
+
+class TestBalanceAtTimestamp:
+    def test_ts_before_first_tx(self, client):
+        response = client.get("/addresses/addr1/balance/at/timestamp/1000123456789")
+        assert response.status_code == 200
+        assert response.json() == 0
+
+    def test_ts_on_tx(self, client):
+        response = client.get("/addresses/addr1/balance/at/timestamp/1568123456789")
+        assert response.status_code == 200
+        assert response.json() == 3000
+
+    def test_ts_within_between_txs(self, client):
+        response = client.get("/addresses/addr1/balance/at/timestamp/1568500000000")
+        assert response.status_code == 200
+        assert response.json() == 3000
+
+    def test_ts_after_last_tx(self, client):
+        response = client.get("/addresses/addr1/balance/at/timestamp/2000123456789")
+        assert response.status_code == 200
+        assert response.json() == 4000
+
+    def test_ts_gt0(self, client):
+        response = client.get("/addresses/addr1/balance/at/timestamp/0")
+        assert response.status_code == 422
+        response = client.get("/addresses/addr1/balance/at/timestamp/-1")
+        assert response.status_code == 422
+
+

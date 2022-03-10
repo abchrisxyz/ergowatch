@@ -25,9 +25,35 @@ async def address_balance(
         return row["value"] if row is not None else None
 
 
-# TODO:
-# @r.get("/{address}/balance/at/height/{height}", response_model=int)
-# @r.get("/{address}/balance/at/height/{timestamp}", response_model=int)
+@r.get("/{address}/balance/at/height/{height}", response_model=int)
+async def address_balance_at_height(
+    request: Request, address: Address, height: int = Path(None, gt=0)
+):
+    query = """
+        select sum(value) as value
+        from bal.erg_diffs
+        where address = $1 and height <= $2
+    """
+    async with request.app.state.db.acquire() as conn:
+        row = await conn.fetchrow(query, address, height)
+        value = row["value"]
+        return value if value is not None else 0
+
+
+@r.get("/{address}/balance/at/timestamp/{timestamp}", response_model=int)
+async def address_balance_at_timestamp(
+    request: Request, address: Address, timestamp: int = Path(..., gt=0)
+):
+    query = """
+        select sum(d.value) as value
+        from bal.erg_diffs d
+        join core.headers h on h.height = d.height
+        where d.address = $1 and h.timestamp <= $2
+    """
+    async with request.app.state.db.acquire() as conn:
+        row = await conn.fetchrow(query, address, timestamp)
+        value = row["value"]
+        return value if value is not None else 0
 
 
 @r.get("/{address}/balance/history")
