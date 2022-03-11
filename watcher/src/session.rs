@@ -7,7 +7,6 @@ use std::fs;
 use crate::db;
 use crate::node;
 use crate::settings::Settings;
-use crate::types;
 use crate::units;
 
 #[derive(Parser, Debug)]
@@ -50,6 +49,7 @@ pub struct Session {
     pub bootstrapping: bool,
     pub sync_once: bool,
     pub constraints_path: String,
+    pub head: crate::types::Head,
 }
 
 /// Preflight tasks
@@ -125,6 +125,19 @@ pub fn prepare_session() -> Result<Session, &'static str> {
         // return Err("Reinitialise the database without constraints to allow bootstrap mode.");
     }
 
+    // Retrieve DB sync state
+    let head = match db.get_head() {
+        Ok(h) => h,
+        Err(e) => {
+            error!("{}", e);
+            return Err("Failed to retrieve db state");
+        }
+    };
+    info!(
+        "Database is currently at height {} with block {}",
+        head.height, head.header_id
+    );
+
     if cli.bootstrap && db_constraints_set {
         return Err("Bootstrap mode cannot be used anymore because database constraints have already been set.");
     }
@@ -173,22 +186,12 @@ pub fn prepare_session() -> Result<Session, &'static str> {
         bootstrapping,
         sync_once: cli.sync_once,
         constraints_path: constraints_path,
+        head: head,
     })
 }
 
 impl Session {
-    /// Get db sync state
-    pub fn get_db_sync_state(&self) -> Result<types::Head, &'static str> {
-        let head = match self.db.get_head() {
-            Ok(h) => h,
-            Err(e) => {
-                error!("{}", e);
-                return Err("Failed to retrieve db state");
-            }
-        };
-        Ok(head)
-    }
-
+    /// Add genesis boxes to database
     pub fn include_genesis_boxes(&self) -> Result<(), &'static str> {
         info!("Retrieving genesis boxes");
         let boxes = match self.node.get_genesis_blocks() {
@@ -203,7 +206,60 @@ impl Session {
         Ok(())
     }
 
-    pub fn include_block(&self, block: &units::BlockData) {
+    /// Normal mode sync
+    ///
+    /// Syncs DB to given node_height and returns.
+    pub fn sync_to(&mut self, node_height: u32) -> Result<(), &'static str> {
+        while self.head.height < node_height {
+            let next_height = self.head.height + 1;
+            // Fetch next block from node
+            let block = self.node.get_main_chain_block_at(next_height).unwrap();
+
+            if block.header.parent_id == self.head.header_id {
+                info!(
+                    "Including block {} for height {}",
+                    block.header.id, block.header.height
+                );
+
+                let prepped_block = units::BlockData::new(&block);
+                self.include_block(&prepped_block);
+
+                // Move head to latest block
+                self.head.height = next_height;
+                self.head.header_id = block.header.id;
+            } else {
+                // New block is not a child of last processed block, need to rollback.
+                warn!(
+                    "Rolling back block {} at height {}",
+                    self.head.header_id, self.head.height
+                );
+
+                // Rollbacks may rely on database constraints to propagate.
+                // So prevent any rollbacks if constraints haven't been set.
+                if !self.db_constraints_set {
+                    warn!("Preventing a rollback on an unconstrained database.");
+                    warn!("Rollbacks may rely on database constraints to propagate.");
+                    warn!("Please set the database contraints defined in `constraints.sql`.");
+                    return Err("Preventing a rollback on an unconstrained database.");
+                }
+
+                // Retrieve processed block from node
+                let block = self.node.get_block(&self.head.header_id).unwrap();
+
+                // Collect rollback statements, in reverse order
+                let prepped_block = units::BlockData::new(&block);
+                self.rollback_block(&prepped_block);
+
+                // Move head to previous block
+                self.head.height = block.header.height - 1;
+                self.head.header_id = block.header.parent_id;
+            }
+        }
+        Ok(())
+    }
+
+    /// Process block data into database
+    fn include_block(&self, block: &units::BlockData) {
         // Init parsing units
         let ucore = units::core::CoreUnit {};
         let mut sql_statements = ucore.prep(block);
@@ -218,7 +274,8 @@ impl Session {
         self.db.execute_in_transaction(sql_statements).unwrap();
     }
 
-    pub fn rollback_block(&self, block: &units::BlockData) {
+    /// Discard block data from database
+    fn rollback_block(&self, block: &units::BlockData) {
         // Init parsing units
         let ucore = units::core::CoreUnit {};
 
@@ -267,4 +324,12 @@ impl Session {
         self.db.execute_in_transaction(sql_statements).unwrap();
         Ok(())
     }
+
+    // pub fn bootstrap_db(&self) -> Result<(), &'static str> {
+    //     // Get last height
+    //     // Iterate over all height
+    //     // Run queries for each block height
+
+    //     Ok(())
+    // }
 }

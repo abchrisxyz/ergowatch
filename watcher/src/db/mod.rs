@@ -60,6 +60,41 @@ impl DB {
         transaction.commit()?;
         Ok(())
     }
+
+    /// Retrieves sync head from current db state.
+    ///
+    /// For an empty database, returns:
+    /// ```
+    /// Head {
+    ///     height: 0,
+    ///     header_id: "0000000000000000000000000000000000000000000000000000000000000000",
+    /// }
+    /// ```
+    pub fn get_head(&self) -> Result<Head, postgres::Error> {
+        let mut client = Client::connect(&self.conn_str, NoTls)?;
+        // Cast height to oid to allow deserialisation to u32
+        let row_opt = client.query_opt(
+            "
+            select height::oid
+                , id
+            from core.headers
+            order by 1 desc
+            limit 1;",
+            &[],
+        )?;
+        match row_opt {
+            Some(row) => Ok(Head {
+                height: row.get("height"),
+                header_id: row.get("id"),
+            }),
+            None => Ok(Head {
+                height: 0,
+                header_id: String::from(
+                    "0000000000000000000000000000000000000000000000000000000000000000",
+                ),
+            }),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -106,40 +141,5 @@ impl DB {
             stmt.execute(&mut transaction)?;
         }
         transaction.commit()
-    }
-
-    /// Retrieves sync head from current db state.
-    ///
-    /// For an empty database, returns:
-    /// ```
-    /// Head {
-    ///     height: 0,
-    ///     header_id: "0000000000000000000000000000000000000000000000000000000000000000",
-    /// }
-    /// ```
-    pub fn get_head(&self) -> Result<Head, postgres::Error> {
-        let mut client = Client::connect(&self.conn_str, NoTls)?;
-        // Cast height to oid to allow deserialisation to u32
-        let row_opt = client.query_opt(
-            "\
-            select height::oid \
-                , id \
-            from core.headers \
-            order by 1 desc \
-            limit 1;",
-            &[],
-        )?;
-        match row_opt {
-            Some(row) => Ok(Head {
-                height: row.get("height"),
-                header_id: row.get("id"),
-            }),
-            None => Ok(Head {
-                height: 0,
-                header_id: String::from(
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                ),
-            }),
-        }
     }
 }
