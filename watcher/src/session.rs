@@ -1,0 +1,270 @@
+use clap::Parser;
+use log::error;
+use log::info;
+use log::warn;
+use std::fs;
+
+use crate::db;
+use crate::node;
+use crate::settings::Settings;
+use crate::types;
+use crate::units;
+
+#[derive(Parser, Debug)]
+#[clap(version, about, long_about = None)]
+struct Cli {
+    /// Path to config file
+    #[clap(short, long)]
+    config: Option<String>,
+
+    /// Print help information
+    #[clap(short, long)]
+    help: bool,
+
+    /// Allow migrations
+    #[clap(short = 'm', long)]
+    allow_migrations: bool,
+
+    /// Use bootsrap mode
+    #[clap(short = 'b', long)]
+    bootstrap: bool,
+
+    /// Path to constraints sql
+    #[clap(short = 'k', long)]
+    constraints_file: Option<String>,
+
+    /// Print version information
+    #[clap(short, long)]
+    version: bool,
+
+    /// Exit once synced (mostly for integration tests)
+    #[clap(short, long)]
+    sync_once: bool,
+}
+
+/// Session parameters
+pub struct Session {
+    pub db: db::DB,
+    pub db_constraints_set: bool,
+    pub node: node::Node,
+    pub bootstrapping: bool,
+    pub sync_once: bool,
+    pub constraints_path: String,
+}
+
+/// Preflight tasks
+///
+/// Configures logger, checks for forbidden options
+/// and returns resulting session options.
+pub fn prepare_session() -> Result<Session, &'static str> {
+    let env = env_logger::Env::default().filter_or("EW_LOG", "info");
+    env_logger::init_from_env(env);
+    info!("Starting Ergo Watcher");
+
+    // Parse command line args
+    let cli = Cli::parse();
+    if cli.sync_once && cli.bootstrap {
+        return Err("--sync-once and --bootstrap options cannot be used together");
+    } else if cli.sync_once {
+        info!("Found option `--sync-once`, watcher will exit once synced with node")
+    } else if cli.bootstrap {
+        info!("Found option `--bootstrap`, watcher will start in bootstrap mode")
+    }
+
+    // Load config
+    let cfg = match Settings::new(cli.config) {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            error!("{}", err);
+            return Err("Failed loading config");
+        }
+    };
+    let node = node::Node::new(cfg.node.url);
+
+    let db = db::DB::new(
+        &cfg.database.host,
+        cfg.database.port,
+        &cfg.database.name,
+        &cfg.database.user,
+        &cfg.database.pw,
+    );
+
+    // Check db state
+    let db_is_empty = match db.is_empty() {
+        Ok(set) => set,
+        Err(e) => {
+            error!("{}", e);
+            return Err("Database is not ready");
+        }
+    };
+    // Check db constraints
+    let db_constraints_set = match db.has_constraints() {
+        Ok(set) => set,
+        Err(e) => {
+            error!("{}", e);
+            return Err("Database is not ready");
+        }
+    };
+    if !db_constraints_set {
+        warn!("Database is unconstrained");
+    }
+    if db_is_empty {
+        info!("Database is empty");
+    }
+    if db_is_empty && db_constraints_set {
+        // It makes little sense not to use bootstrap mode when starting from scratch,
+        // so forbid running on an empty database with constraints set (constraints prevent bootstrap mode).
+        // This also avoids having to write custom handling of genesis boxes for some units.
+        //
+        // EDIT: Bootstrap mode requires some extra disk space, so tempted to allow
+        // initial sync in normal mode. Let's see how it compares.
+        // TODO: Depending on how it performs, add messages indicating what to do and when.
+        warn!("Found constraints on empty database.");
+        info!("Starting from scratch in normal mode.");
+        // error!("Starting from scratch in normal mode is not supported.");
+        // return Err("Reinitialise the database without constraints to allow bootstrap mode.");
+    }
+
+    if cli.bootstrap && db_constraints_set {
+        return Err("Bootstrap mode cannot be used anymore because database constraints have already been set.");
+    }
+
+    if !db_is_empty && !db_constraints_set && !cli.bootstrap {
+        return Err(
+            "Cannot run on a non-empty unconstrained database without the --bootstrap option.",
+        );
+    }
+
+    let bootstrapping = if db_is_empty && !db_constraints_set && !cli.bootstrap {
+        info!("Using bootstrap mode for empty unconstrained database");
+        true
+    } else if cli.bootstrap && !db_constraints_set {
+        true
+    } else {
+        false
+    };
+
+    // Check db version
+    match db.check_migrations(cli.allow_migrations) {
+        Ok(_) => (),
+        Err(e) => {
+            error!("{}", e);
+            return Err("Database not ready");
+        }
+    };
+
+    // Ensure constraints file is accessible if needed
+    let constraints_path = match cli.constraints_file {
+        Some(path) => String::from(&path),
+        None => String::from("constraints.sql"),
+    };
+    if bootstrapping {
+        if let Err(e) = fs::read_to_string(&constraints_path) {
+            error!("{}", e);
+            error!("Could not read constraints file '{}'", &constraints_path);
+            return Err("Could not read constraints file");
+        }
+    }
+
+    Ok(Session {
+        db,
+        db_constraints_set,
+        node: node,
+        bootstrapping,
+        sync_once: cli.sync_once,
+        constraints_path: constraints_path,
+    })
+}
+
+impl Session {
+    /// Get db sync state
+    pub fn get_db_sync_state(&self) -> Result<types::Head, &'static str> {
+        let head = match self.db.get_head() {
+            Ok(h) => h,
+            Err(e) => {
+                error!("{}", e);
+                return Err("Failed to retrieve db state");
+            }
+        };
+        Ok(head)
+    }
+
+    pub fn include_genesis_boxes(&self) -> Result<(), &'static str> {
+        info!("Retrieving genesis boxes");
+        let boxes = match self.node.get_genesis_blocks() {
+            Ok(boxes) => boxes,
+            Err(e) => {
+                error!("{}", e);
+                return Err("Failed to retrieve genesis boxes from node");
+            }
+        };
+        let sql_statements = units::core::genesis::prep(boxes);
+        self.db.execute_in_transaction(sql_statements).unwrap();
+        Ok(())
+    }
+
+    pub fn include_block(&self, block: &units::BlockData) {
+        // Init parsing units
+        let ucore = units::core::CoreUnit {};
+        let mut sql_statements = ucore.prep(block);
+
+        // Skip bootstrappable units if bootstrapping
+        if !self.bootstrapping {
+            sql_statements.append(&mut units::unspent::prep(block));
+            sql_statements.append(&mut units::balances::prep(block));
+        }
+
+        // Execute statements in single transaction
+        self.db.execute_in_transaction(sql_statements).unwrap();
+    }
+
+    pub fn rollback_block(&self, block: &units::BlockData) {
+        // Init parsing units
+        let ucore = units::core::CoreUnit {};
+
+        // Collect rollback statements, in reverse order
+        let mut sql_statements: Vec<db::SQLStatement> = vec![];
+        sql_statements.append(&mut units::balances::prep_rollback(block));
+        sql_statements.append(&mut units::unspent::prep_rollback(block));
+        sql_statements.append(&mut ucore.prep_rollback(block));
+
+        // Execute statements in single transaction
+        self.db.execute_in_transaction(sql_statements).unwrap();
+    }
+
+    pub fn load_db_constraints(&self) -> Result<(), &'static str> {
+        info!(
+            "Loading database constraints - close any other db connections to avoid relation locks"
+        );
+        assert_eq!(self.bootstrapping, true);
+        // Load db constraints from file
+        let sql = match fs::read_to_string(&self.constraints_path) {
+            Ok(sql) => sql,
+            Err(e) => {
+                error!("{}", e);
+                error!(
+                    "Could not read constraints file '{}'",
+                    &self.constraints_path
+                );
+                return Err("Could not read constraints file after bootstrapping");
+            }
+        };
+        match self.db.apply_constraints(sql) {
+            Ok(()) => info!("Database constraints have been loaded"),
+            Err(e) => {
+                error!("{}", e);
+                return Err("Failed to set database constraints.");
+            }
+        };
+        Ok(())
+    }
+
+    pub fn run_bootstrapping_queries(&self) -> Result<(), &'static str> {
+        info!("Running bootstrapping queries");
+        let mut sql_statements: Vec<db::SQLStatement> = vec![];
+        sql_statements.append(&mut units::balances::prep_bootstrap());
+        sql_statements.append(&mut units::unspent::prep_bootstrap());
+        self.db.execute_in_transaction(sql_statements).unwrap();
+        Ok(())
+    }
+}
