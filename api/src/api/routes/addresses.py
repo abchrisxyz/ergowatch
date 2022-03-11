@@ -67,7 +67,9 @@ async def address_balance_history(
     request: Request,
     address: Address,
     # token_id: str = Query(None, description="Optional token id"),
-    timestamps: bool = Query(False, description="Timestamps instead of heights"),
+    timestamps: bool = Query(
+        False, description="Include timestamps in addition to block heights"
+    ),
     flat: bool | None = Query(True, description="Return data as flat arrays."),
     limit: int | None = Query(50, gt=0, le=10000),
     offset: int | None = Query(0, ge=0),
