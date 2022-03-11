@@ -33,7 +33,7 @@ async def address_balance(
 
 @r.get("/{address}/balance/at/height/{height}", response_model=int)
 async def address_balance_at_height(
-    request: Request, address: Address, height: int = Path(None, gt=0)
+    request: Request, address: Address, height: int = Path(None, ge=0)
 ):
     query = """
         select sum(value) as value

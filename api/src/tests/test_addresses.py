@@ -63,9 +63,9 @@ class TestBalanceAtHeight:
         assert response.status_code == 200
         assert response.json() == 4000
 
-    def test_height_gt0(self, client):
+    def test_height_ge0(self, client):
         response = client.get("/addresses/addr1/balance/at/height/0")
-        assert response.status_code == 422
+        assert response.status_code == 200
         response = client.get("/addresses/addr1/balance/at/height/-1")
         assert response.status_code == 422
 
