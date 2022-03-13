@@ -64,15 +64,6 @@ pub const DELETE_ZERO_BALANCES: &str = "
     delete from bal.erg
     where value = 0;";
 
-pub const TRUNCATE_BALANCES: &str = "truncate bal.erg;";
-
-pub const BOOTSTRAP_BALANCES: &str = "
-    insert into bal.erg (address, value)
-    select address
-        , sum(value)
-    from bal.erg_diffs
-    group by 1;";
-
 pub fn update_statement(height: i32) -> SQLStatement {
     SQLStatement {
         sql: String::from(UPDATE_BALANCES),
@@ -104,20 +95,6 @@ pub fn rollback_delete_zero_balances_statement(height: i32) -> SQLStatement {
 pub fn delete_zero_balances_statement() -> SQLStatement {
     SQLStatement {
         sql: String::from(DELETE_ZERO_BALANCES),
-        args: vec![],
-    }
-}
-
-pub fn truncate_statement() -> SQLStatement {
-    SQLStatement {
-        sql: String::from(TRUNCATE_BALANCES),
-        args: vec![],
-    }
-}
-
-pub fn bootstrap_statement() -> SQLStatement {
-    SQLStatement {
-        sql: String::from(BOOTSTRAP_BALANCES),
         args: vec![],
     }
 }

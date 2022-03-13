@@ -1,5 +1,4 @@
 import requests
-import pytest
 
 from fixtures import balances_fork_env
 from utils import run_watcher

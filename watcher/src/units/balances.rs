@@ -3,7 +3,7 @@
 //! Process blocks into balance tables data.
 
 use super::BlockData;
-use crate::db;
+// use crate::db;
 use crate::db::bal;
 use crate::db::SQLStatement;
 
@@ -36,12 +36,12 @@ pub fn prep_rollback(block: &BlockData) -> Vec<SQLStatement> {
     sql_statements
 }
 
-pub fn prep_bootstrap() -> Vec<SQLStatement> {
+pub fn prep_bootstrap(height: i32) -> Vec<SQLStatement> {
     vec![
-        db::bal::erg_diff::truncate_statement(),
-        db::bal::erg_diff::bootstrap_statement(),
-        db::bal::erg::truncate_statement(),
-        db::bal::erg::bootstrap_statement(),
+        bal::erg_diff::bootstrapping::insert_diffs_statement(height),
+        bal::erg::update_statement(height),
+        bal::erg::insert_statement(height),
+        bal::erg::delete_zero_balances_statement(),
     ]
 }
 
@@ -80,11 +80,19 @@ mod tests {
 
     #[test]
     fn check_bootstrap_statements() -> () {
-        let statements = super::prep_bootstrap();
+        let statements = super::prep_bootstrap(600000);
         assert_eq!(statements.len(), 4);
-        assert_eq!(statements[0].sql, db::bal::erg_diff::TRUNCATE_DIFFS);
-        assert_eq!(statements[1].sql, db::bal::erg_diff::BOOTSTRAP_DIFFS);
-        assert_eq!(statements[2].sql, db::bal::erg::TRUNCATE_BALANCES);
-        assert_eq!(statements[3].sql, db::bal::erg::BOOTSTRAP_BALANCES);
+        assert_eq!(
+            statements[0].sql,
+            db::bal::erg_diff::bootstrapping::INSERT_DIFFS_AT_HEIGHT
+        );
+        assert_eq!(statements[1].sql, db::bal::erg::UPDATE_BALANCES);
+        assert_eq!(statements[2].sql, db::bal::erg::INSERT_BALANCES);
+        assert_eq!(statements[3].sql, db::bal::erg::DELETE_ZERO_BALANCES);
+
+        assert_eq!(statements[0].args[0], db::SQLArg::Integer(600000));
+        assert_eq!(statements[1].args[0], db::SQLArg::Integer(600000));
+        assert_eq!(statements[2].args[0], db::SQLArg::Integer(600000));
+        assert_eq!(statements[3].args.len(), 0);
     }
 }

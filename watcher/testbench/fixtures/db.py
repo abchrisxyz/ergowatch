@@ -25,6 +25,8 @@ def conn_str(dbname: str) -> str:
 
 
 class TestDB:
+    # Most mocks will represent a db with some data in it already,
+    # so have constraints set as default.
     def __init__(self, set_constraints=True):
         self._dbname: str = "ew_pytest"  # TODO: use random name
         with open(SCHEMA_PATH) as f:
@@ -73,7 +75,7 @@ def generate_bootstrap_sql(blocks: List[Dict]) -> str:
     """
     height = blocks[0]["header"]["height"] - 1
     if height == 0:
-        # Starting with genesis block, keep db empty
+        # Starting from scratch, keep db empty
         return None
 
     header_id = blocks[0]["header"]["parentId"]
@@ -180,6 +182,14 @@ def generate_bootstrap_sql(blocks: List[Dict]) -> str:
             0,
             'EIP-004'
         );
+    """
+
+    # Watcher checks latest height in bal.erg_diffs to determine if bootstrapping
+    # is needed and if so, from which height. Here, we set it to same height as core tables
+    # meaning no bootstrap is needed.
+    sql += f"""
+        insert into bal.erg_diffs (address, height, tx_id, value)
+        values ('dummy-addr-to-fake-bootstrap', {height}, '{tx_id}', 0);
     """
 
     return sql

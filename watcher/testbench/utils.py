@@ -6,19 +6,18 @@ import subprocess
 def run_watcher(
     cfg_path: Path,
     target="release",
-    sync_only=True,
-    bootstrap=False,
+    no_bootstrap=False,
     backtrace=False,
     timeout=10,
+    log_file: str = None,
 ) -> subprocess.CompletedProcess:
     exe = str(
         Path(__file__).parent.parent.absolute() / Path(f"target/{target}/watcher")
     )
     args = [exe, "-c", cfg_path]
-    if sync_only:
-        args.append("--sync-once")
-    if bootstrap:
-        args.append("--bootstrap")
+    args.append("--exit")
+    if no_bootstrap:
+        args.append("--no-bootstrap")
 
     # Path to constraints definitions
     sql = Path(__file__).parent.parent.absolute() / Path(f"db/constraints.sql")
@@ -26,20 +25,30 @@ def run_watcher(
 
     env = dict(
         os.environ,
-        EW_LOG="DEBUG",
+        EW_LOG="INFO",
     )
     if backtrace:
         env["RUST_BACKTRACE"] = "full"
 
     print(args)
-    cp = subprocess.run(
-        args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        env=env,
-        timeout=timeout,
-    )
-    print(cp.stdout.decode())
+    if log_file is None:
+        cp = subprocess.run(
+            args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            env=env,
+            timeout=timeout,
+        )
+        print(cp.stdout.decode())
+    else:
+        with open(log_file, "w") as f:
+            cp = subprocess.run(
+                args,
+                stdout=f,
+                stderr=subprocess.STDOUT,
+                env=env,
+                timeout=timeout,
+            )
     return cp
 
 

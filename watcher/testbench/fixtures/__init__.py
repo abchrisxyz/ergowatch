@@ -248,14 +248,6 @@ def unspent_bootstrap_env(tmp_path):
         with pg.connect(conn_str(db_name)) as conn:
             with conn.cursor() as cur:
                 cur.execute(generate_bootstrap_sql(blocks))
-                cur.execute(
-                    """
-                    insert into usp.boxes (box_id)
-                    values
-                        ('dummy-box-ids'),
-                        ('should-get-overwritten-by-bootstrapping-process');
-                """
-                )
             conn.commit()
             cfg_path = tmp_path / Path("unspent.toml")
             cfg_path.write_text(format_config(db_name))

@@ -35,8 +35,10 @@ impl DB {
     /// Returns true if db is empty
     pub fn is_empty(&self) -> anyhow::Result<bool> {
         let mut client = Client::connect(&self.conn_str, NoTls)?;
+        // Genesis boxes will be the first thing to be included,
+        // before any headers, so check for presence of outputs
         let row = client.query_one(
-            "select not exists (select * from core.headers limit 1);",
+            "select not exists (select * from core.outputs limit 1);",
             &[],
         )?;
         let empty: bool = row.get(0);
@@ -93,6 +95,26 @@ impl DB {
                     "0000000000000000000000000000000000000000000000000000000000000000",
                 ),
             }),
+        }
+    }
+
+    /// Get sync height of derived (i.e. non-core) tables
+    ///
+    /// Will be different from core tables during bootstrapping process.
+    pub fn get_bootstrap_height(&self) -> Result<i32, postgres::Error> {
+        let mut client = Client::connect(&self.conn_str, NoTls)?;
+        // Cast height to oid to allow deserialisation to u32
+        let row_opt = client.query_opt(
+            "
+            select height
+            from bal.erg_diffs
+            order by 1 desc
+            limit 1;",
+            &[],
+        )?;
+        match row_opt {
+            Some(row) => Ok(row.get("height")),
+            None => Ok(0),
         }
     }
 }

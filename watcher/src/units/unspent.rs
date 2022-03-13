@@ -3,10 +3,9 @@
 //! Maintain set of unspent boxes.
 
 use super::BlockData;
-use crate::db::usp::bootstrap_statement;
+use crate::db::usp::bootstrapping;
 use crate::db::usp::delete_spent_box_statement;
 use crate::db::usp::insert_new_box_statement;
-use crate::db::usp::truncate_statement;
 use crate::db::SQLStatement;
 
 /// Delete input boxes, then insert output boxes
@@ -59,9 +58,11 @@ pub fn prep_rollback(block: &BlockData) -> Vec<SQLStatement> {
     sql_statements
 }
 
-/// Generate unspent set snapshot
-pub fn prep_bootstrap() -> Vec<SQLStatement> {
-    vec![truncate_statement(), bootstrap_statement()]
+pub fn prep_bootstrap(height: i32) -> Vec<SQLStatement> {
+    vec![
+        bootstrapping::insert_new_boxes_statement(height),
+        bootstrapping::delete_spent_boxes_statement(height),
+    ]
 }
 
 #[cfg(test)]
@@ -120,9 +121,18 @@ mod tests {
 
     #[test]
     fn check_bootstrap_statements() -> () {
-        let statements = super::prep_bootstrap();
+        let statements = super::prep_bootstrap(600000);
         assert_eq!(statements.len(), 2);
-        assert_eq!(statements[0].sql, db::usp::TRUNCATE_UNSPENT_BOXES);
-        assert_eq!(statements[1].sql, db::usp::BOOTSTRAP_UNSPENT_BOXES);
+        assert_eq!(
+            statements[0].sql,
+            db::usp::bootstrapping::INSERT_NEW_BOXES_AT_HEIGHT
+        );
+        assert_eq!(
+            statements[1].sql,
+            db::usp::bootstrapping::DELETE_SPENT_BOXES_AT_HEIGHT
+        );
+
+        assert_eq!(statements[0].args[0], db::SQLArg::Integer(600000));
+        assert_eq!(statements[1].args[0], db::SQLArg::Integer(600000));
     }
 }
