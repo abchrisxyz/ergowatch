@@ -3,6 +3,7 @@ use crate::db::bal::erg_diff::ErgDiffQuery;
 use crate::db::core::header::HeaderRow;
 use crate::db::core::outputs::OutputRow;
 use crate::db::core::transaction::TransactionRow;
+use crate::db::usp;
 use crate::db::SQLStatement;
 
 /// Helper function to include genesis boxes in db.
@@ -56,6 +57,17 @@ pub fn prep(node_boxes: Vec<crate::node::models::Output>) -> Vec<SQLStatement> {
             .collect(),
     );
     // TODO: refactor genesis out of core unit since it affects multiple schemas
+    // TODO: test db state after genesis boxes inclusion (in testbench)
+    // Unspent boxes
+    statements.append(
+        &mut node_boxes
+            .iter()
+            .map(|node_box| {
+                let output = super::super::Output::from_node_output(node_box);
+                usp::insert_new_box_statement(&output.box_id)
+            })
+            .collect(),
+    );
     // Erg balance diffs
     statements.push(
         ErgDiffQuery {
@@ -76,9 +88,9 @@ mod tests {
     use crate::node::models::testing::genesis_boxes;
 
     #[test]
-    fn statement() -> () {
+    fn statements() -> () {
         let statements: Vec<db::SQLStatement> = prep(genesis_boxes());
-        assert_eq!(statements.len(), 13);
+        assert_eq!(statements.len(), 16);
         assert_eq!(statements[0].sql, db::core::header::INSERT_HEADER);
         assert_eq!(statements[1].sql, db::core::transaction::INSERT_TRANSACTION);
         assert_eq!(statements[2].sql, db::core::outputs::INSERT_OUTPUT);
@@ -90,8 +102,11 @@ mod tests {
         assert_eq!(statements[8].sql, db::core::registers::INSERT_BOX_REGISTER);
         assert_eq!(statements[9].sql, db::core::registers::INSERT_BOX_REGISTER);
         assert_eq!(statements[10].sql, db::core::registers::INSERT_BOX_REGISTER);
-        assert_eq!(statements[11].sql, db::bal::erg_diff::INSERT_DIFFS);
-        assert_eq!(statements[12].sql, db::bal::erg::INSERT_BALANCES);
+        assert_eq!(statements[11].sql, db::usp::INSERT_NEW_BOX);
+        assert_eq!(statements[12].sql, db::usp::INSERT_NEW_BOX);
+        assert_eq!(statements[13].sql, db::usp::INSERT_NEW_BOX);
+        assert_eq!(statements[14].sql, db::bal::erg_diff::INSERT_DIFFS);
+        assert_eq!(statements[15].sql, db::bal::erg::INSERT_BALANCES);
 
         // First box statement
         let statement = &statements[2];
