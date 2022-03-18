@@ -11,7 +11,7 @@ If looking for the frontend of https://ergo.watch see https://github.com/abchris
 
 v0.1: Address counts, ERG/token balances and tokens supply/burnings
 
-v0.2: Basic metrics (on par with old backend)
+v0.2: Basic metrics (at least on par with old backend)
 
 v0.3: V1 Oracle Pools (Integrating https://github.com/thedelphiproject/ergo-oracle-stats-backend)
 
@@ -29,13 +29,13 @@ An indexer that queries a node's API and populates the database.
 
 As long as enough disk space is available, the watcher will run smoothly on most machines. As of now (block ~700k) the database is around 30GB.
 
-> Note that the current implementation doesn't use streaming or any async features. Syncing from scratch with a node that is on another host will be **very slow**, even when using bootstrap mode.
+> Note that the current implementation doesn't use streaming or any async features. Syncing from scratch with a node that is on another host will be **very slow**.
 
 ### Installation
 
 #### Build
 
-For a local build, install [Rust](https://www.rust-lang.org/tools/install) and then run `cargo build --release` from within the `watcher` directory.
+For a local build, install [Rust](https://www.rust-lang.org/tools/install) and then run `cargo build --release` from within the `watcher` directory. The binary will be located under `watcher/target/release`.
 
 #### Test
 
@@ -45,15 +45,15 @@ There is also a testbench performing a number of integration tests that need acc
 
 #### Database
 
-The watcher expects a database with the schema defined in `watcher/db/schema.sql` and optionally with the constraints and indexes defined in  `watcher/db/constraints.sql` as well if not using `--bootstrap` mode (see initial sync further down).
+The watcher expects a database with the schema defined in `watcher/db/schema.sql` . Constraints and indexes are defined separately in `watcher/db/constraints.sql` and will be loaded by the watcher after the  bootstrapping process. The exact path to `constraints.sql` can be specified with the `-k` option.
 
-If using the Dockerfiles, all of the above will be preconfigured to use bootstrap mode.
+If using the Dockerfiles, the above will be preconfigured.
 
 ### Usage
 
 Basic usage is like so `watcher -c <path/to/config.toml>`.
 
-> If running from scratch or with the `--bootstrap` option, add the following option:
+> If running from scratch, add the following option:
 >
 > `-k <path/to/constaints.sql`> 
 
@@ -77,26 +77,9 @@ The `docker-compose.yml` might also be a good place to look at to see how things
 
 #### Initial Sync
 
-There two strategies to perform the initial syncing of the database:
+When running for the first time (i.e. with an empty database), the watcher will first sync core tables only, then load database constraints and finally populate other tables. To skip this bootstrapping process, you can pass the `no-bootstrap` option. If interrupted during the bootstrap process, it is safe to restart the watcher, it'll pick up where it left.
 
-- **Normal mode**: Processes each block entirely, in sequence. Good is if disk space is an issue.
-- **Bootstrap mode**: Only syncs core tables until current height is reached, then runs bootstrapping queries to fill other tables.
-
-Bootstrap mode is roughly 3x faster than normal mode but requires at least twice the size of the database in free disk space (this is only momentarily to store PostgreSQL WAL when running the bootstrapping queries).
-
-In bootstrap mode, the watcher will exit when done. It should be pretty close to current height when finished, but there will always be some lag due to the time taken by the bootstrapping queries (step 5).
-
-> Bootstrap mode expects to run with an unconstrained database, so only load `schema.sql` when initializing the database. The watcher will take care of applying `constraints.sql` to the database once done. Specify the path to that sql file using the `-k` option.
-
-Database state and command line options:
-
-- If the database constraints have been set, watcher starts in normal mode and will not allow the `--bootstrap` flag.
-
-- If the database constraints have not been set and the database is empty, watcher will start in bootstrap mode.
-
-- If the database constraints have not been set and the database is *not* empty - can happen when the bootstrapping process is interrupted - then watcher will proceed in bootstrap with the `--bootstrap` flag. If omitted, watcher will not run as normal mode is not allowed with an unconstrained database.
-
-### Indexing
+### Fork handling
 
 The watcher only keeps main chain blocks. In the event of a chain fork, the old branch is rolled back up to the forking block and main chain blocks are included again from that point onwards.
 
