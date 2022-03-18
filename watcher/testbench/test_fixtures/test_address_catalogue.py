@@ -30,5 +30,7 @@ class TestAddressCatalogue:
     def test_contract_address(self):
         con5 = AC.get("con5")
         assert AC.boxid2addr("con5-box1") == con5.address
-        assert con5.address.startswith("2EUTBSptBKdQu76Xfh6Tue2jhQzUpeynk5")
-        assert con5.ergo_tree.startswith("100204020480897ad193c1b2a57300007e730105")
+        assert con5.address.startswith("3i6Vwjab1VJaWJh1fNN2p1noNWK65VC8NfUizzv3wj")
+        assert con5.ergo_tree.startswith(
+            "10030404040205a09c01d1ed93b1a5730093c1b2a57301007302"
+        )

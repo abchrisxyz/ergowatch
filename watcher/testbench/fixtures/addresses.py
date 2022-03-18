@@ -1,3 +1,14 @@
+"""
+Repository of addresses and their Ergo tree.
+
+Addresses are sorted alphabetically for predictability.
+
+Fees address starts with 2iH
+Coinbase starts with 2Z4
+Selected contracts start with 3 or 4.
+P2PK's start with a 9.
+"""
+
 from collections import namedtuple
 from multiprocessing.sharedctypes import Value
 
@@ -47,37 +58,6 @@ P2PK_BOXES = [
 ]
 
 CONTRACT_BOXES = [
-    Box(
-        "2EURkMEuMJ8p1Hw5Es856rj2CEitVE2PbH", "1000d1d801d601e4c6a7040e93cb7a7c72017201"
-    ),
-    Box(
-        "2EURzVq674rfQQjDQ6HaDJ1SugGsNFfPbg", "100105f8c1a5d9dbe6c603d193e4c6a704057300"
-    ),
-    Box(
-        "2EUTBShk4TbLWRYLuKPBJb2QDdC1JkSzrB", "100204000400d193c2b2a5730000c2b2a4730100"
-    ),
-    Box(
-        "2EUTBSpsnJjedGiU2yN1ogEVaF9BZawWKE", "100204020402d1937eb28cc7a702730000047301"
-    ),
-    Box(
-        "2EUTBSptBKdQu76Xfh6Tue2jhQzUpeynk5", "100204020480897ad193c1b2a57300007e730105"
-    ),
-    Box(
-        "2EUTBxGu2TNyNn5P5V8K4CaVTjzBcTjgd3", "100205e0ebd2c0010504d1939e7cc5a773007301"
-    ),
-    Box("2fp7638C6L4WKZW4kntV6rn", "1001050ad191e4e300057300"),
-    Box(
-        "2pxniFAi3EMHQnPuDpoEMnkKi3bEQgeK9wxZu4",
-        "10010400d193cb7a7ce4c6b2a5730000040ee4c6a7040e",
-    ),
-    Box(
-        "2pxnLshTr2aL5t3QFd6ScSEHC5Jk6EpnMRzGb3",
-        "1000cee4c6a70407e4c6a70507e4c6a70607e4c6a70707",
-    ),
-    Box(
-        "2pxpVFd5qzhEoq4duiBqXoLcLzKvKBJmwHWUEN",
-        "100204000e0710010100d17300d193c2b2a57300007301",
-    ),
     Box(
         "3i6QAH4GMJDnicSdUo1UotuugYePfQTPDipHCZ67U7",
         "1000d1aea5d9010163ed93c27201c2a793db63087201db6308a7",

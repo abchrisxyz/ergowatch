@@ -8,6 +8,13 @@ from fixtures.db2 import temp_db_class_scoped
 from fixtures.db2 import unconstrained_db_class_scoped
 from fixtures.addresses import AddressCatalogue as AC
 from utils import run_watcher
+from utils import assert_pk
+from utils import assert_fk
+from utils import assert_unique
+from utils import assert_column_not_null
+from utils import assert_index
+from utils import assert_column_ge
+from utils import assert_column_le
 
 ORDER = 10
 
@@ -31,7 +38,7 @@ def make_blocks(height: int):
                            pub1-box1   10 (2000 con1-box1)
 
     block c using a datainput (in {}) and spending tokens:
-        pub1-box1   40 --> pub1-box2   35 (1500 con1-box1)
+        pub1-box1   10 --> pub1-box2    5 (1500 con1-box1)
        {con2-box1}         pub2-box1    4 ( 500 con1-box1)
                            fees-box1    1
 
@@ -163,7 +170,7 @@ def make_blocks(height: int):
         "outputs": [
             {
                 "boxId": "pub1-box2",
-                "value": 35,
+                "value": 5,
                 "ergoTree": pub1.ergo_tree,
                 "assets": [
                     {
@@ -303,7 +310,276 @@ def make_blocks(height: int):
     return [block_a, block_x, block_b, block_c]
 
 
-def _test_headers(cur, start_height):
+@pytest.mark.order(ORDER)
+class TestSync:
+    """
+    Start with bootstrapped db.
+    """
+
+    start_height = 599_999
+
+    @pytest.fixture(scope="class")
+    def synced_db(self, temp_cfg, temp_db_class_scoped):
+        """
+        Run watcher with mock api and return cursor to test db.
+        """
+        blocks = make_blocks(self.start_height)
+        with MockApi() as api:
+            api = ApiUtil()
+            api.set_blocks(blocks)
+
+            # Bootstrap db
+            with pg.connect(temp_db_class_scoped) as conn:
+                bootstrap_db(conn, blocks)
+
+            # Run
+            cp = run_watcher(temp_cfg)
+            assert cp.returncode == 0
+            assert "Including block block-c" in cp.stdout.decode()
+
+            with pg.connect(temp_db_class_scoped) as conn:
+                yield conn
+
+    def test_db_state(self, synced_db: pg.Connection):
+        _test_db_state(synced_db, self.start_height)
+
+
+@pytest.mark.order(ORDER)
+class TestSyncRollback:
+    """
+    Start with bootstrapped db.
+    Forking scenario triggering a rollback.
+    """
+
+    start_height = 599_999
+
+    @pytest.fixture(scope="class")
+    def synced_db(self, temp_cfg, temp_db_class_scoped):
+        """
+        Run watcher with mock api and return cursor to test db.
+        """
+        blocks = make_blocks(self.start_height)
+        with MockApi() as api:
+            api = ApiUtil()
+
+            # Initially have blocks a and x only
+            first_blocks = blocks[0:2]
+            api.set_blocks(first_blocks)
+
+            # Bootstrap db
+            with pg.connect(temp_db_class_scoped) as conn:
+                bootstrap_db(conn, first_blocks)
+
+            # Run to include block x
+            cp = run_watcher(temp_cfg)
+            assert cp.returncode == 0
+            assert "Including block block-x" in cp.stdout.decode()
+
+            # Now make all blocks visible
+            api.set_blocks(blocks)
+
+            # Run again
+            cp = run_watcher(temp_cfg)
+            assert cp.returncode == 0
+            assert "Rolling back block block-x" in cp.stdout.decode()
+            assert "Including block block-b" in cp.stdout.decode()
+
+            with pg.connect(temp_db_class_scoped) as conn:
+                yield conn
+
+    def test_db_state(self, synced_db: pg.Connection):
+        _test_db_state(synced_db, self.start_height)
+
+
+@pytest.mark.order(ORDER)
+class TestSyncNoForkChild:
+    """
+    Start with bootstrapped db.
+    Scenario where node has two block candidates for last height.
+    """
+
+    start_height = 599_999
+
+    @pytest.fixture(scope="class")
+    def synced_db(self, temp_cfg, temp_db_class_scoped):
+        """
+        Run watcher with mock api and return cursor to test db.
+        """
+        blocks = make_blocks(self.start_height)
+        with MockApi() as api:
+            api = ApiUtil()
+
+            # Initially have blocks a, b and x
+            first_blocks = blocks[0:3]
+            api.set_blocks(first_blocks)
+
+            # Bootstrap db
+            with pg.connect(temp_db_class_scoped) as conn:
+                bootstrap_db(conn, first_blocks)
+
+            # 1 st run
+            # No way to tell fork appart, should pick 1st block in alphabetical order (block-b)
+            cp = run_watcher(temp_cfg)
+            assert cp.returncode == 0
+            assert "Including block block-b" in cp.stdout.decode()
+            assert "Including block block-x" not in cp.stdout.decode()
+            assert "no child" not in cp.stdout.decode()
+
+            # Now make all blocks visible
+            api.set_blocks(blocks)
+
+            # Run again
+            cp = run_watcher(temp_cfg)
+            assert cp.returncode == 0
+            assert "Including block block-c" in cp.stdout.decode()
+
+            with pg.connect(temp_db_class_scoped) as conn:
+                yield conn
+
+    def test_db_state(self, synced_db: pg.Connection):
+        _test_db_state(synced_db, self.start_height)
+
+
+@pytest.mark.order(ORDER)
+class TestGenesis:
+    """
+    Start with empty, unconstrained db.
+    """
+
+    start_height = 0
+
+    @pytest.fixture(scope="class")
+    def synced_db(self, temp_cfg, unconstrained_db_class_scoped):
+        """
+        Run watcher with mock api and return cursor to test db.
+        """
+        blocks = make_blocks(self.start_height)
+        with MockApi() as api:
+            api = ApiUtil()
+            api.set_blocks(blocks)
+
+            # Run
+            cp = run_watcher(temp_cfg)
+            assert cp.returncode == 0
+            assert "Bootstrapping step 1/2 - syncing core tables" in cp.stdout.decode()
+
+            with pg.connect(unconstrained_db_class_scoped) as conn:
+                yield conn
+
+    def test_db_state(self, synced_db: pg.Connection):
+        _test_db_state(synced_db, self.start_height)
+
+
+@pytest.mark.order(ORDER)
+class TestGenesisNoBootstrap:
+    """
+    Start with empty, unconstrained db and --no-bootstrap flag.
+    """
+
+    start_height = 0
+
+    @pytest.fixture(scope="class")
+    def synced_db(self, temp_cfg, unconstrained_db_class_scoped):
+        """
+        Run watcher with mock api and return cursor to test db.
+        """
+        blocks = make_blocks(self.start_height)
+        with MockApi() as api:
+            api = ApiUtil()
+            api.set_blocks(blocks)
+
+            # Run
+            cp = run_watcher(temp_cfg, no_bootstrap=True)
+            assert cp.returncode == 0
+            assert "Found --no-bootstrap flag" in cp.stdout.decode()
+            assert "Synchronizing with node" in cp.stdout.decode()
+
+            with pg.connect(unconstrained_db_class_scoped) as conn:
+                yield conn
+
+    def test_db_state(self, synced_db: pg.Connection):
+        _test_db_state(synced_db, self.start_height)
+
+
+def _test_db_state(conn: pg.Connection, start_height: int):
+    assert_db_constraints(conn)
+    with conn.cursor() as cur:
+        assert_headers(cur, start_height)
+        assert_transactions(cur, start_height)
+        assert_inputs(cur)
+        assert_data_inputs(cur)
+        assert_outputs(cur, start_height)
+        assert_box_registers(cur)
+        assert_tokens(cur)
+        assert_box_assets(cur)
+
+
+def assert_db_constraints(conn: pg.Connection):
+    # Headers
+    assert_pk(conn, "core", "headers", ["height"])
+    assert_column_not_null(conn, "core", "headers", "id")
+    assert_column_not_null(conn, "core", "headers", "parent_id")
+    assert_column_not_null(conn, "core", "headers", "timestamp")
+    assert_unique(conn, "core", "headers", ["id"])
+    assert_unique(conn, "core", "headers", ["parent_id"])
+
+    # Transactions
+    assert_pk(conn, "core", "transactions", ["id"])
+    assert_fk(conn, "core", "transactions", "transactions_header_id_fkey")
+    assert_index(conn, "core", "transactions", "transactions_height_idx")
+
+    # Outputs
+    assert_pk(conn, "core", "outputs", ["box_id"])
+    assert_column_not_null(conn, "core", "outputs", "tx_id")
+    assert_column_not_null(conn, "core", "outputs", "header_id")
+    assert_column_not_null(conn, "core", "outputs", "address")
+    assert_fk(conn, "core", "outputs", "outputs_tx_id_fkey")
+    assert_fk(conn, "core", "outputs", "outputs_header_id_fkey")
+    assert_index(conn, "core", "outputs", "outputs_tx_id_idx")
+    assert_index(conn, "core", "outputs", "outputs_header_id_idx")
+    assert_index(conn, "core", "outputs", "outputs_address_idx")
+    assert_index(conn, "core", "outputs", "outputs_index_idx")
+
+    # Inputs
+    assert_pk(conn, "core", "inputs", ["box_id"])
+    assert_column_not_null(conn, "core", "inputs", "tx_id")
+    assert_column_not_null(conn, "core", "inputs", "header_id")
+    assert_fk(conn, "core", "inputs", "inputs_tx_id_fkey")
+    assert_fk(conn, "core", "inputs", "inputs_header_id_fkey")
+    assert_index(conn, "core", "inputs", "inputs_tx_id_idx")
+    assert_index(conn, "core", "inputs", "inputs_header_id_idx")
+    assert_index(conn, "core", "inputs", "inputs_index_idx")
+
+    # Data-inputs
+    assert_pk(conn, "core", "data_inputs", ["box_id", "tx_id"])
+    assert_column_not_null(conn, "core", "data_inputs", "header_id")
+    assert_fk(conn, "core", "data_inputs", "data_inputs_tx_id_fkey")
+    assert_fk(conn, "core", "data_inputs", "data_inputs_header_id_fkey")
+    assert_fk(conn, "core", "data_inputs", "data_inputs_box_id_fkey")
+    assert_index(conn, "core", "data_inputs", "data_inputs_tx_id_idx")
+    assert_index(conn, "core", "data_inputs", "data_inputs_header_id_idx")
+
+    # Box registers
+    assert_pk(conn, "core", "box_registers", ["id", "box_id"])
+    assert_fk(conn, "core", "box_registers", "box_registers_box_id_fkey")
+    assert_column_ge(conn, "core", "box_registers", "id", 4)
+    assert_column_le(conn, "core", "box_registers", "id", 9)
+
+    # Tokens
+    assert_pk(conn, "core", "tokens", ["id", "box_id"])
+    assert_column_not_null(conn, "core", "tokens", "box_id")
+    assert_fk(conn, "core", "tokens", "tokens_box_id_fkey")
+    assert_column_ge(conn, "core", "tokens", "emission_amount", 0)
+
+    # Box assets
+    assert_pk(conn, "core", "box_assets", ["box_id", "token_id"])
+    assert_column_not_null(conn, "core", "box_assets", "box_id")
+    assert_column_not_null(conn, "core", "box_assets", "token_id")
+    assert_fk(conn, "core", "box_assets", "box_assets_box_id_fkey")
+    assert_column_ge(conn, "core", "box_assets", "amount", 0)
+
+
+def assert_headers(cur: pg.Cursor, start_height: int):
     # 4 headers: 1 parent + 3 from blocks
     cur.execute("select height, id from core.headers order by 1, 2;")
     rows = cur.fetchall()
@@ -314,7 +590,7 @@ def _test_headers(cur, start_height):
     assert rows[3] == (start_height + 3, "block-c")
 
 
-def _test_transactions(cur, start_height):
+def assert_transactions(cur: pg.Cursor, start_height: int):
     # 5 txs: 1 bootstrap + 4 from blocks
     cur.execute(
         "select height, header_id, index, id from core.transactions order by 1, 3;"
@@ -329,7 +605,7 @@ def _test_transactions(cur, start_height):
     assert rows[4] == (start_height + 3, "block-c", 1, "tx-c2")
 
 
-def _test_inputs(cur):
+def assert_inputs(cur: pg.Cursor):
     # 4 inputs
     cur.execute(
         "select header_id, tx_id, index, box_id from core.inputs order by 1, 2;"
@@ -342,7 +618,7 @@ def _test_inputs(cur):
     assert rows[3] == ("block-c", "tx-c2", 0, "fees-box1")
 
 
-def _test_data_inputs(cur):
+def assert_data_inputs(cur: pg.Cursor):
     # 1 data-inputs
     cur.execute(
         "select header_id, tx_id, index, box_id from core.data_inputs order by 1, 2;"
@@ -352,7 +628,7 @@ def _test_data_inputs(cur):
     assert rows[0] == ("block-c", "tx-c1", 0, "con2-box1")
 
 
-def _test_outputs(cur, start_height):
+def assert_outputs(cur: pg.Cursor, start_height: int):
     # 9 outputs: 1 bootstrap + 8 from blocks
     cur.execute(
         """
@@ -421,7 +697,7 @@ def _test_outputs(cur, start_height):
         "tx-c1",
         0,
         "pub1-box2",
-        35,
+        5,
         AC.boxid2addr("pub1-box2"),
     )
     assert rows[6] == (
@@ -453,7 +729,7 @@ def _test_outputs(cur, start_height):
     )
 
 
-def _test_box_registers(cur):
+def assert_box_registers(cur: pg.Cursor):
     # 3 registers
     cur.execute(
         """
@@ -491,7 +767,7 @@ def _test_box_registers(cur):
     )
 
 
-def _test_tokens(cur):
+def assert_tokens(cur: pg.Cursor):
     # 1 minted token
     cur.execute(
         """
@@ -511,7 +787,7 @@ def _test_tokens(cur):
     assert rows[0] == ("con1-box1", "pub1-box1", 2000, None, None, None, None)
 
 
-def _test_box_assets(cur):
+def assert_box_assets(cur: pg.Cursor):
     # 3 boxes containing some tokens
     cur.execute(
         """
@@ -527,295 +803,3 @@ def _test_box_assets(cur):
     assert rows[0] == ("pub1-box1", "con1-box1", 2000)
     assert rows[1] == ("pub1-box2", "con1-box1", 1500)
     assert rows[2] == ("pub2-box1", "con1-box1", 500)
-
-
-@pytest.mark.order(ORDER)
-class TestSync:
-    start_height = 599_999
-
-    @pytest.fixture(scope="class")
-    def blocks(self):
-        return make_blocks(self.start_height)
-
-    @pytest.fixture(scope="class")
-    def api(self, blocks):
-        with MockApi() as api:
-            api = ApiUtil()
-            api.set_blocks(blocks)
-            yield api
-
-    @pytest.fixture(scope="class")
-    def cur(self, temp_db_class_scoped, blocks):
-        with pg.connect(temp_db_class_scoped) as conn:
-            bootstrap_db(conn, blocks)
-            with conn.cursor() as cur:
-                yield cur
-
-    @pytest.fixture(scope="class")
-    def synced_db(self, api, temp_cfg, cur):
-        """
-        Run watcher with mock api and return cursor to test db.
-        """
-        cp = run_watcher(temp_cfg)
-        assert cp.returncode == 0
-        return cur
-
-    def test_headers(self, synced_db):
-        _test_headers(synced_db, self.start_height)
-
-    def test_transactions(self, synced_db):
-        _test_transactions(synced_db, self.start_height)
-
-    def test_inputs(self, synced_db):
-        _test_inputs(synced_db)
-
-    def test_data_inputs(self, synced_db):
-        _test_data_inputs(synced_db)
-
-    def test_outputs(self, synced_db):
-        _test_outputs(synced_db, self.start_height)
-
-    def test_box_registers(self, synced_db):
-        _test_box_registers(synced_db)
-
-    def test_tokens(self, synced_db):
-        _test_tokens(synced_db)
-
-    def test_box_assets(self, synced_db):
-        _test_box_assets(synced_db)
-
-
-@pytest.mark.order(ORDER)
-class TestSyncRollback:
-    start_height = 599_999
-
-    @pytest.fixture(scope="class")
-    def synced_db(self, temp_cfg, temp_db_class_scoped):
-        """
-        Run watcher with mock api and return cursor to test db.
-        """
-        blocks = make_blocks(self.start_height)
-        with MockApi() as api:
-            api = ApiUtil()
-            # Initially have blocks a and x only
-            first_blocks = blocks[0:2]
-            api.set_blocks(first_blocks)
-            with pg.connect(temp_db_class_scoped) as conn:
-                bootstrap_db(conn, first_blocks)
-
-            # Run to include block x
-            cp = run_watcher(temp_cfg)
-            assert cp.returncode == 0
-            assert "Including block block-x" in cp.stdout.decode()
-
-            # Now make all blocks visible
-            api.set_blocks(blocks)
-
-            # Run again
-            cp = run_watcher(temp_cfg)
-            assert cp.returncode == 0
-            assert "Rolling back block block-x" in cp.stdout.decode()
-            assert "Including block block-b" in cp.stdout.decode()
-
-            with pg.connect(temp_db_class_scoped) as conn:
-                with conn.cursor() as cur:
-                    yield cur
-
-    def test_headers(self, synced_db):
-        _test_headers(synced_db, self.start_height)
-
-    def test_transactions(self, synced_db):
-        _test_transactions(synced_db, self.start_height)
-
-    def test_inputs(self, synced_db):
-        _test_inputs(synced_db)
-
-    def test_data_inputs(self, synced_db):
-        _test_data_inputs(synced_db)
-
-    def test_outputs(self, synced_db):
-        _test_outputs(synced_db, self.start_height)
-
-    def test_box_registers(self, synced_db):
-        _test_box_registers(synced_db)
-
-    def test_tokens(self, synced_db):
-        _test_tokens(synced_db)
-
-    def test_box_assets(self, synced_db):
-        _test_box_assets(synced_db)
-
-
-@pytest.mark.order(ORDER)
-class TestSyncNoForkChild:
-    start_height = 599_999
-
-    @pytest.fixture(scope="class")
-    def synced_db(self, temp_cfg, temp_db_class_scoped):
-        """
-        Run watcher with mock api and return cursor to test db.
-        """
-        blocks = make_blocks(self.start_height)
-        with MockApi() as api:
-            api = ApiUtil()
-            # Initially have blocks a, b and x
-            first_blocks = blocks[0:3]
-            api.set_blocks(first_blocks)
-            with pg.connect(temp_db_class_scoped) as conn:
-                bootstrap_db(conn, first_blocks)
-
-            # 1 st run
-            # No way to tell fork appart, should pick 1st block in alphabetical order (block-b)
-            cp = run_watcher(temp_cfg)
-            assert cp.returncode == 0
-            assert "Including block block-b" in cp.stdout.decode()
-            assert "Including block block-x" not in cp.stdout.decode()
-            assert "no child" not in cp.stdout.decode()
-
-            # Now make all blocks visible
-            api.set_blocks(blocks)
-
-            # Run again
-            cp = run_watcher(temp_cfg)
-            assert cp.returncode == 0
-            assert "Including block block-c" in cp.stdout.decode()
-
-            with pg.connect(temp_db_class_scoped) as conn:
-                with conn.cursor() as cur:
-                    yield cur
-
-    def test_headers(self, synced_db):
-        _test_headers(synced_db, self.start_height)
-
-    def test_transactions(self, synced_db):
-        _test_transactions(synced_db, self.start_height)
-
-    def test_inputs(self, synced_db):
-        _test_inputs(synced_db)
-
-    def test_data_inputs(self, synced_db):
-        _test_data_inputs(synced_db)
-
-    def test_outputs(self, synced_db):
-        _test_outputs(synced_db, self.start_height)
-
-    def test_box_registers(self, synced_db):
-        _test_box_registers(synced_db)
-
-    def test_tokens(self, synced_db):
-        _test_tokens(synced_db)
-
-    def test_box_assets(self, synced_db):
-        _test_box_assets(synced_db)
-
-
-@pytest.mark.order(ORDER)
-class TestGenesis:
-    start_height = 0
-
-    @pytest.fixture(scope="class")
-    def blocks(self):
-        return make_blocks(self.start_height)
-
-    @pytest.fixture(scope="class")
-    def api(self, blocks):
-        with MockApi() as api:
-            api = ApiUtil()
-            api.set_blocks(blocks)
-            yield api
-
-    @pytest.fixture(scope="class")
-    def cur(self, unconstrained_db_class_scoped, blocks):
-        with pg.connect(unconstrained_db_class_scoped) as conn:
-            with conn.cursor() as cur:
-                yield cur
-
-    @pytest.fixture(scope="class")
-    def synced_db(self, api, temp_cfg, cur):
-        """
-        Run watcher with mock api and return cursor to test db.
-        """
-        cp = run_watcher(temp_cfg)
-        assert cp.returncode == 0
-        assert "Bootstrapping step 1/2 - syncing core tables" in cp.stdout.decode()
-        return cur
-
-    def test_headers(self, synced_db):
-        _test_headers(synced_db, self.start_height)
-
-    def test_transactions(self, synced_db):
-        _test_transactions(synced_db, self.start_height)
-
-    def test_inputs(self, synced_db):
-        _test_inputs(synced_db)
-
-    def test_data_inputs(self, synced_db):
-        _test_data_inputs(synced_db)
-
-    def test_outputs(self, synced_db):
-        _test_outputs(synced_db, self.start_height)
-
-    def test_box_registers(self, synced_db):
-        _test_box_registers(synced_db)
-
-    def test_tokens(self, synced_db):
-        _test_tokens(synced_db)
-
-    def test_box_assets(self, synced_db):
-        _test_box_assets(synced_db)
-
-
-@pytest.mark.order(ORDER)
-class TestGenesisNoBootstrap:
-    start_height = 0
-
-    @pytest.fixture(scope="class")
-    def blocks(self):
-        return make_blocks(self.start_height)
-
-    @pytest.fixture(scope="class")
-    def api(self, blocks):
-        with MockApi() as api:
-            api = ApiUtil()
-            api.set_blocks(blocks)
-            yield api
-
-    @pytest.fixture(scope="class")
-    def cur(self, unconstrained_db_class_scoped, blocks):
-        with pg.connect(unconstrained_db_class_scoped) as conn:
-            with conn.cursor() as cur:
-                yield cur
-
-    @pytest.fixture(scope="class")
-    def synced_db(self, api, temp_cfg, cur):
-        """
-        Run watcher with mock api and return cursor to test db.
-        """
-        cp = run_watcher(temp_cfg, no_bootstrap=True)
-        assert cp.returncode == 0
-        assert "Found --no-bootstrap flag" in cp.stdout.decode()
-        return cur
-
-    def test_headers(self, synced_db):
-        _test_headers(synced_db, self.start_height)
-
-    def test_transactions(self, synced_db):
-        _test_transactions(synced_db, self.start_height)
-
-    def test_inputs(self, synced_db):
-        _test_inputs(synced_db)
-
-    def test_data_inputs(self, synced_db):
-        _test_data_inputs(synced_db)
-
-    def test_outputs(self, synced_db):
-        _test_outputs(synced_db, self.start_height)
-
-    def test_box_registers(self, synced_db):
-        _test_box_registers(synced_db)
-
-    def test_tokens(self, synced_db):
-        _test_tokens(synced_db)
-
-    def test_box_assets(self, synced_db):
-        _test_box_assets(synced_db)
