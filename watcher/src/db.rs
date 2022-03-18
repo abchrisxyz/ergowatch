@@ -1,7 +1,7 @@
-pub mod bal;
+pub mod balances;
 pub mod core;
 mod migrations;
-pub mod usp;
+pub mod unspent;
 
 use log::debug;
 use postgres::{Client, NoTls};

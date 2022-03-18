@@ -1,10 +1,10 @@
 mod db;
 mod node;
+mod parsing;
 mod session;
 mod settings;
 mod sync;
 mod types;
-mod units;
 use session::Session;
 
 fn main() -> Result<(), &'static str> {

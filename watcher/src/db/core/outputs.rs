@@ -1,35 +1,43 @@
-use crate::db::SQLArg;
+use crate::db::core::sql::outputs::OutputRow;
 use crate::db::SQLStatement;
+use crate::parsing::BlockData;
 
-pub const INSERT_OUTPUT: &str = "\
-    insert into core.outputs (box_id, tx_id, header_id, creation_height, address, index, value) \
-    values ($1, $2, $3, $4, $5, $6, $7);";
-
-pub struct OutputRow<'a> {
-    pub box_id: &'a str,
-    pub tx_id: &'a str,
-    pub header_id: &'a str,
-    pub creation_height: i32,
-    pub address: &'a str,
-    pub index: i32,
-    pub value: i64,
-    // pub additional_registers: &'a serde_json::Value,
+pub fn extract_outputs(block: &BlockData) -> Vec<SQLStatement> {
+    block
+        .transactions
+        .iter()
+        .flat_map(|tx| {
+            tx.outputs.iter().map(|op| {
+                OutputRow {
+                    box_id: &op.box_id,
+                    tx_id: &tx.id,
+                    header_id: &block.header_id,
+                    creation_height: op.creation_height,
+                    address: &op.address,
+                    index: op.index,
+                    value: op.value,
+                }
+                .to_statement()
+            })
+        })
+        .collect()
 }
 
-impl OutputRow<'_> {
-    pub fn to_statement(&self) -> SQLStatement {
-        SQLStatement {
-            sql: String::from(INSERT_OUTPUT),
-            args: vec![
-                SQLArg::Text(String::from(self.box_id)),
-                SQLArg::Text(String::from(self.tx_id)),
-                SQLArg::Text(String::from(self.header_id)),
-                SQLArg::Integer(self.creation_height),
-                SQLArg::Text(String::from(self.address)),
-                SQLArg::Integer(self.index),
-                SQLArg::BigInt(self.value),
-                // SQLArg::Json(self.additional_registers.clone()),
-            ],
-        }
+#[cfg(test)]
+mod tests {
+    use super::extract_outputs;
+    use crate::db::core::sql;
+    use crate::parsing::testing::block_600k;
+
+    #[test]
+    fn statements() -> () {
+        let statements = extract_outputs(&block_600k());
+        assert_eq!(statements.len(), 6);
+        assert_eq!(statements[0].sql, sql::outputs::INSERT_OUTPUT);
+        assert_eq!(statements[1].sql, sql::outputs::INSERT_OUTPUT);
+        assert_eq!(statements[2].sql, sql::outputs::INSERT_OUTPUT);
+        assert_eq!(statements[3].sql, sql::outputs::INSERT_OUTPUT);
+        assert_eq!(statements[4].sql, sql::outputs::INSERT_OUTPUT);
+        assert_eq!(statements[5].sql, sql::outputs::INSERT_OUTPUT);
     }
 }

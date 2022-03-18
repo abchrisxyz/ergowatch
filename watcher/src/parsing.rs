@@ -1,7 +1,4 @@
-pub mod core;
-pub mod sigma;
-pub mod balances;
-pub mod unspent;
+mod sigma;
 
 use log::debug;
 use crate::node;
@@ -14,11 +11,11 @@ use crate::node;
 /// - Casts unsigned ints to signed (for postgres compatibility)
 #[derive(Debug)]
 pub struct BlockData<'a> {
-    height: i32,
-    header_id: &'a str,
-    parent_header_id: &'a str,
-    timestamp: i64,
-    transactions: Vec<Transaction<'a>>,
+    pub height: i32,
+    pub header_id: &'a str,
+    pub parent_header_id: &'a str,
+    pub timestamp: i64,
+    pub transactions: Vec<Transaction<'a>>,
 }
 
 impl<'a> BlockData<'a> {
@@ -40,12 +37,12 @@ impl<'a> BlockData<'a> {
 }
 
 #[derive(Debug)]
-struct Transaction<'a> {
-    id: &'a str,
-    index: i32,
-    outputs: Vec<Output<'a>>,
-    input_box_ids: Vec<&'a str>,
-    data_input_box_ids: Vec<&'a str>,
+pub struct Transaction<'a> {
+    pub id: &'a str,
+    pub index: i32,
+    pub outputs: Vec<Output<'a>>,
+    pub input_box_ids: Vec<&'a str>,
+    pub data_input_box_ids: Vec<&'a str>,
 }
 
 impl<'a> Transaction<'a> {
@@ -66,18 +63,18 @@ impl<'a> Transaction<'a> {
 }
 
 #[derive(Debug)]
-struct Output<'a> {
-    box_id: &'a str,
-    creation_height: i32,
-    address: String,
-    index: i32,
-    value: i64,
-    additional_registers: [Option<Register>; 6],
-    assets: Vec<Asset<'a>>,
+pub struct Output<'a> {
+    pub box_id: &'a str,
+    pub creation_height: i32,
+    pub address: String,
+    pub index: i32,
+    pub value: i64,
+    pub additional_registers: [Option<Register>; 6],
+    pub assets: Vec<Asset<'a>>,
 }
 
 impl<'a> Output<'a> {
-    fn from_node_output(output: &'a node::models::Output) -> Self {
+    pub fn from_node_output(output: &'a node::models::Output) -> Self {
         debug!("Processing output {}", &output.box_id);
         Output {
             box_id: &output.box_id,
@@ -121,11 +118,11 @@ impl Output<'_> {
 }
 
 #[derive(Debug)]
-struct Register {
-    id: i16,
-    stype: String,
-    serialized_value: String,
-    rendered_value: String,
+pub struct Register {
+    pub id: i16,
+    pub stype: String,
+    pub serialized_value: String,
+    pub rendered_value: String,
 }
 
 fn parse_additional_registers(regs: &serde_json::Value) -> [Option<Register>; 6] {
@@ -177,9 +174,9 @@ fn decode_register(value: &serde_json::Value, id: i16) -> Option<Register> {
 }
 
 #[derive(Debug)]
-struct Asset<'a> {
-    token_id: &'a str,
-    amount: i64,
+pub struct Asset<'a> {
+    pub token_id: &'a str,
+    pub amount: i64,
 }
 
 impl std::ops::Add for Asset<'_> {
@@ -301,7 +298,7 @@ mod tests {
 }
 
 #[cfg(test)]
-mod testing {
+pub mod testing {
     use super::Asset;
     use super::BlockData;
     use super::Output;

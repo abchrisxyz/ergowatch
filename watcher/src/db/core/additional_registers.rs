@@ -1,7 +1,7 @@
-use super::super::Output;
-use super::BlockData;
-use crate::db::core::registers::BoxRegisterRow;
+use super::sql::registers::BoxRegisterRow;
 use crate::db::SQLStatement;
+use crate::parsing::BlockData;
+use crate::parsing::Output;
 
 pub(super) fn extract_additional_registers(block: &BlockData) -> Vec<SQLStatement> {
     block
@@ -32,17 +32,18 @@ pub(super) fn extract_from_output(op: &Output) -> Vec<SQLStatement> {
 #[cfg(test)]
 mod tests {
     use super::extract_additional_registers;
-    use crate::db;
-    use crate::units::testing::block_600k;
+    use crate::db::core::sql;
+    use crate::db::SQLArg;
+    use crate::parsing::testing::block_600k;
     use pretty_assertions::assert_eq;
 
     #[test]
     fn register_statements() -> () {
         let statements = extract_additional_registers(&block_600k());
         assert_eq!(statements.len(), 3);
-        assert_eq!(statements[0].sql, db::core::registers::INSERT_BOX_REGISTER);
-        assert_eq!(statements[1].sql, db::core::registers::INSERT_BOX_REGISTER);
-        assert_eq!(statements[2].sql, db::core::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[0].sql, sql::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[1].sql, sql::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[2].sql, sql::registers::INSERT_BOX_REGISTER);
     }
 
     #[test]
@@ -51,27 +52,27 @@ mod tests {
         let statements = extract_additional_registers(&block_600k());
         let args = &statements[0].args;
         // Register id
-        assert_eq!(args[0], db::SQLArg::SmallInt(4));
+        assert_eq!(args[0], SQLArg::SmallInt(4));
         // Box id
         assert_eq!(
             args[1],
-            db::SQLArg::Text(String::from(
+            SQLArg::Text(String::from(
                 "aa94183d21f9e8fee38d4f3326d2acf8258dd36e6dff38142fa93e633d01464d"
             ))
         );
         // Value type
-        assert_eq!(args[2], db::SQLArg::Text(String::from("SGroupElement")));
+        assert_eq!(args[2], SQLArg::Text(String::from("SGroupElement")));
         // Serialized value
         assert_eq!(
             args[3],
-            db::SQLArg::Text(String::from(
+            SQLArg::Text(String::from(
                 "0703553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8"
             ))
         );
         // Rendered value
         assert_eq!(
             args[4],
-            db::SQLArg::Text(String::from(
+            SQLArg::Text(String::from(
                 "03553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8"
             ))
         );

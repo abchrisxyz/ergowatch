@@ -1,10 +1,11 @@
-use crate::db::bal;
-use crate::db::bal::erg_diff::ErgDiffQuery;
-use crate::db::core::header::HeaderRow;
-use crate::db::core::outputs::OutputRow;
-use crate::db::core::transaction::TransactionRow;
-use crate::db::usp;
+use crate::db::balances;
+use crate::db::balances::erg_diffs::ErgDiffQuery;
+use crate::db::core::sql::header::HeaderRow;
+use crate::db::core::sql::outputs::OutputRow;
+use crate::db::core::sql::transaction::TransactionRow;
+use crate::db::unspent;
 use crate::db::SQLStatement;
+use crate::parsing::Output;
 
 /// Helper function to include genesis boxes in db.
 ///
@@ -32,7 +33,7 @@ pub fn prep(node_boxes: Vec<crate::node::models::Output>) -> Vec<SQLStatement> {
         &mut node_boxes
             .iter()
             .map(|node_box| {
-                let output = super::super::Output::from_node_output(node_box);
+                let output = Output::from_node_output(node_box);
                 OutputRow {
                     box_id: &output.box_id,
                     tx_id: &node_box.transaction_id,
@@ -51,7 +52,7 @@ pub fn prep(node_boxes: Vec<crate::node::models::Output>) -> Vec<SQLStatement> {
         &mut node_boxes
             .iter()
             .flat_map(|node_box| {
-                let output = super::super::Output::from_node_output(node_box);
+                let output = Output::from_node_output(node_box);
                 super::additional_registers::extract_from_output(&output)
             })
             .collect(),
@@ -63,8 +64,8 @@ pub fn prep(node_boxes: Vec<crate::node::models::Output>) -> Vec<SQLStatement> {
         &mut node_boxes
             .iter()
             .map(|node_box| {
-                let output = super::super::Output::from_node_output(node_box);
-                usp::insert_new_box_statement(&output.box_id)
+                let output = Output::from_node_output(node_box);
+                unspent::usp::insert_new_box_statement(&output.box_id)
             })
             .collect(),
     );
@@ -76,7 +77,7 @@ pub fn prep(node_boxes: Vec<crate::node::models::Output>) -> Vec<SQLStatement> {
         .to_statement(),
     );
     // Erg balance
-    statements.push(bal::erg::insert_statement(0));
+    statements.push(balances::erg::insert_statement(0));
 
     statements
 }
@@ -85,28 +86,31 @@ pub fn prep(node_boxes: Vec<crate::node::models::Output>) -> Vec<SQLStatement> {
 mod tests {
     use super::prep;
     use crate::db;
+    use crate::db::core::sql;
     use crate::node::models::testing::genesis_boxes;
 
     #[test]
     fn statements() -> () {
         let statements: Vec<db::SQLStatement> = prep(genesis_boxes());
         assert_eq!(statements.len(), 16);
-        assert_eq!(statements[0].sql, db::core::header::INSERT_HEADER);
-        assert_eq!(statements[1].sql, db::core::transaction::INSERT_TRANSACTION);
-        assert_eq!(statements[2].sql, db::core::outputs::INSERT_OUTPUT);
-        assert_eq!(statements[3].sql, db::core::outputs::INSERT_OUTPUT);
-        assert_eq!(statements[4].sql, db::core::outputs::INSERT_OUTPUT);
-        assert_eq!(statements[5].sql, db::core::registers::INSERT_BOX_REGISTER);
-        assert_eq!(statements[6].sql, db::core::registers::INSERT_BOX_REGISTER);
-        assert_eq!(statements[7].sql, db::core::registers::INSERT_BOX_REGISTER);
-        assert_eq!(statements[8].sql, db::core::registers::INSERT_BOX_REGISTER);
-        assert_eq!(statements[9].sql, db::core::registers::INSERT_BOX_REGISTER);
-        assert_eq!(statements[10].sql, db::core::registers::INSERT_BOX_REGISTER);
-        assert_eq!(statements[11].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[12].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[13].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[14].sql, db::bal::erg_diff::INSERT_DIFFS);
-        assert_eq!(statements[15].sql, db::bal::erg::INSERT_BALANCES);
+        // Core
+        assert_eq!(statements[0].sql, sql::header::INSERT_HEADER);
+        assert_eq!(statements[1].sql, sql::transaction::INSERT_TRANSACTION);
+        assert_eq!(statements[2].sql, sql::outputs::INSERT_OUTPUT);
+        assert_eq!(statements[3].sql, sql::outputs::INSERT_OUTPUT);
+        assert_eq!(statements[4].sql, sql::outputs::INSERT_OUTPUT);
+        assert_eq!(statements[5].sql, sql::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[6].sql, sql::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[7].sql, sql::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[8].sql, sql::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[9].sql, sql::registers::INSERT_BOX_REGISTER);
+        assert_eq!(statements[10].sql, sql::registers::INSERT_BOX_REGISTER);
+        // Others
+        assert_eq!(statements[11].sql, db::unspent::usp::INSERT_NEW_BOX);
+        assert_eq!(statements[12].sql, db::unspent::usp::INSERT_NEW_BOX);
+        assert_eq!(statements[13].sql, db::unspent::usp::INSERT_NEW_BOX);
+        assert_eq!(statements[14].sql, db::balances::erg_diffs::INSERT_DIFFS);
+        assert_eq!(statements[15].sql, db::balances::erg::INSERT_BALANCES);
 
         // First box statement
         let statement = &statements[2];

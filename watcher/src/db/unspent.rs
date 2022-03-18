@@ -2,11 +2,14 @@
 //!
 //! Maintain set of unspent boxes.
 
-use super::BlockData;
-use crate::db::usp::bootstrapping;
-use crate::db::usp::delete_spent_box_statement;
-use crate::db::usp::insert_new_box_statement;
+// TODO undo pub once genesis refactoring is done
+pub mod usp;
+
 use crate::db::SQLStatement;
+use crate::parsing::BlockData;
+use usp::bootstrapping;
+use usp::delete_spent_box_statement;
+use usp::insert_new_box_statement;
 
 /// Insert output boxes, then delete input boxes
 pub fn prep(block: &BlockData) -> Vec<SQLStatement> {
@@ -67,8 +70,9 @@ pub fn prep_bootstrap(height: i32) -> Vec<SQLStatement> {
 
 #[cfg(test)]
 mod tests {
-    use crate::db;
-    use crate::units::testing::block_600k;
+    use super::usp;
+    use crate::db::SQLArg;
+    use crate::parsing::testing::block_600k;
 
     /*
        Block 600k has x inputs:
@@ -91,32 +95,32 @@ mod tests {
     fn check_prep_statements() -> () {
         let statements = super::prep(&block_600k());
         assert_eq!(statements.len(), 6 + 4);
-        assert_eq!(statements[0].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[1].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[2].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[3].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[4].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[5].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[6].sql, db::usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[7].sql, db::usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[8].sql, db::usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[9].sql, db::usp::DELETE_SPENT_BOX);
+        assert_eq!(statements[0].sql, usp::INSERT_NEW_BOX);
+        assert_eq!(statements[1].sql, usp::INSERT_NEW_BOX);
+        assert_eq!(statements[2].sql, usp::INSERT_NEW_BOX);
+        assert_eq!(statements[3].sql, usp::INSERT_NEW_BOX);
+        assert_eq!(statements[4].sql, usp::INSERT_NEW_BOX);
+        assert_eq!(statements[5].sql, usp::INSERT_NEW_BOX);
+        assert_eq!(statements[6].sql, usp::DELETE_SPENT_BOX);
+        assert_eq!(statements[7].sql, usp::DELETE_SPENT_BOX);
+        assert_eq!(statements[8].sql, usp::DELETE_SPENT_BOX);
+        assert_eq!(statements[9].sql, usp::DELETE_SPENT_BOX);
     }
 
     #[test]
     fn check_rollback_statements() -> () {
         let statements = super::prep_rollback(&block_600k());
         assert_eq!(statements.len(), 4 + 6);
-        assert_eq!(statements[0].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[1].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[2].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[3].sql, db::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[4].sql, db::usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[5].sql, db::usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[6].sql, db::usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[7].sql, db::usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[8].sql, db::usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[9].sql, db::usp::DELETE_SPENT_BOX);
+        assert_eq!(statements[0].sql, usp::INSERT_NEW_BOX);
+        assert_eq!(statements[1].sql, usp::INSERT_NEW_BOX);
+        assert_eq!(statements[2].sql, usp::INSERT_NEW_BOX);
+        assert_eq!(statements[3].sql, usp::INSERT_NEW_BOX);
+        assert_eq!(statements[4].sql, usp::DELETE_SPENT_BOX);
+        assert_eq!(statements[5].sql, usp::DELETE_SPENT_BOX);
+        assert_eq!(statements[6].sql, usp::DELETE_SPENT_BOX);
+        assert_eq!(statements[7].sql, usp::DELETE_SPENT_BOX);
+        assert_eq!(statements[8].sql, usp::DELETE_SPENT_BOX);
+        assert_eq!(statements[9].sql, usp::DELETE_SPENT_BOX);
     }
 
     #[test]
@@ -125,14 +129,14 @@ mod tests {
         assert_eq!(statements.len(), 2);
         assert_eq!(
             statements[0].sql,
-            db::usp::bootstrapping::INSERT_NEW_BOXES_AT_HEIGHT
+            usp::bootstrapping::INSERT_NEW_BOXES_AT_HEIGHT
         );
         assert_eq!(
             statements[1].sql,
-            db::usp::bootstrapping::DELETE_SPENT_BOXES_AT_HEIGHT
+            usp::bootstrapping::DELETE_SPENT_BOXES_AT_HEIGHT
         );
 
-        assert_eq!(statements[0].args[0], db::SQLArg::Integer(600000));
-        assert_eq!(statements[1].args[0], db::SQLArg::Integer(600000));
+        assert_eq!(statements[0].args[0], SQLArg::Integer(600000));
+        assert_eq!(statements[1].args[0], SQLArg::Integer(600000));
     }
 }

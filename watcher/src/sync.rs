@@ -5,8 +5,8 @@ use log::warn;
 use std::{thread, time};
 
 use crate::db;
+use crate::parsing::BlockData;
 use crate::session::Session;
-use crate::units;
 
 // TODO: move this to config
 const POLL_INTERVAL_SECONDS: u64 = 5;
@@ -46,7 +46,7 @@ fn sync_to_height(session: &mut Session, node_height: u32) -> Result<(), &'stati
                 block.header.id, block.header.height
             );
 
-            let prepped_block = units::BlockData::new(&block);
+            let prepped_block = BlockData::new(&block);
             include_block(session, &prepped_block);
 
             // Move head to latest block
@@ -72,7 +72,7 @@ fn sync_to_height(session: &mut Session, node_height: u32) -> Result<(), &'stati
             let block = session.node.get_block(&session.head.header_id).unwrap();
 
             // Collect rollback statements, in reverse order
-            let prepped_block = units::BlockData::new(&block);
+            let prepped_block = BlockData::new(&block);
             rollback_block(session, &prepped_block);
 
             // Move head to previous block
@@ -93,33 +93,29 @@ pub fn include_genesis_boxes(session: &Session) -> Result<(), &'static str> {
             return Err("Failed to retrieve genesis boxes from node");
         }
     };
-    let sql_statements = units::core::genesis::prep(boxes);
+    let sql_statements = db::core::genesis::prep(boxes);
     session.db.execute_in_transaction(sql_statements).unwrap();
     Ok(())
 }
 
 /// Process block data into database
-fn include_block(session: &Session, block: &units::BlockData) {
-    // Init parsing units
-    let ucore = units::core::CoreUnit {};
-    let mut sql_statements = ucore.prep(block);
-    sql_statements.append(&mut units::unspent::prep(block));
-    sql_statements.append(&mut units::balances::prep(block));
+fn include_block(session: &Session, block: &BlockData) {
+    // Prepare statements
+    let mut sql_statements = db::core::prep(block);
+    sql_statements.append(&mut db::unspent::prep(block));
+    sql_statements.append(&mut db::balances::prep(block));
 
     // Execute statements in single transaction
     session.db.execute_in_transaction(sql_statements).unwrap();
 }
 
 /// Discard block data from database
-fn rollback_block(session: &Session, block: &units::BlockData) {
-    // Init parsing units
-    let ucore = units::core::CoreUnit {};
-
+fn rollback_block(session: &Session, block: &BlockData) {
     // Collect rollback statements, in reverse order
     let mut sql_statements: Vec<db::SQLStatement> = vec![];
-    sql_statements.append(&mut units::balances::prep_rollback(block));
-    sql_statements.append(&mut units::unspent::prep_rollback(block));
-    sql_statements.append(&mut ucore.prep_rollback(block));
+    sql_statements.append(&mut db::balances::prep_rollback(block));
+    sql_statements.append(&mut db::unspent::prep_rollback(block));
+    sql_statements.append(&mut db::core::prep_rollback(block));
 
     // Execute statements in single transaction
     session.db.execute_in_transaction(sql_statements).unwrap();
@@ -144,8 +140,8 @@ fn get_node_height_blocking(session: &Session) -> u32 {
 pub mod bootstrap {
     use super::get_node_height_blocking;
     use crate::db;
+    use crate::parsing::BlockData;
     use crate::session::Session;
-    use crate::units;
     use log::info;
 
     /// Sync core tables only.
@@ -186,8 +182,8 @@ pub mod bootstrap {
             info!("Processing block {}/{}", h, session.head.height);
             // Collect statements
             let mut sql_statements: Vec<db::SQLStatement> = vec![];
-            sql_statements.append(&mut units::unspent::prep_bootstrap(h));
-            sql_statements.append(&mut units::balances::prep_bootstrap(h));
+            sql_statements.append(&mut db::unspent::prep_bootstrap(h));
+            sql_statements.append(&mut db::balances::prep_bootstrap(h));
 
             // Execute statements in single transaction
             session.db.execute_in_transaction(sql_statements).unwrap();
@@ -209,7 +205,7 @@ pub mod bootstrap {
                 block.header.id, block.header.height
             );
 
-            let prepped_block = units::BlockData::new(&block);
+            let prepped_block = BlockData::new(&block);
             include_block(session, &prepped_block);
 
             // Move head to latest block
@@ -221,10 +217,9 @@ pub mod bootstrap {
 
     /// Process block data into database.
     /// Core tables only.
-    fn include_block(session: &Session, block: &units::BlockData) {
+    fn include_block(session: &Session, block: &BlockData) {
         // Init parsing units
-        let ucore = units::core::CoreUnit {};
-        let sql_statements = ucore.prep(block);
+        let sql_statements = db::core::prep(block);
 
         // Execute statements in single transaction
         session.db.execute_in_transaction(sql_statements).unwrap();

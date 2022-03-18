@@ -1,7 +1,7 @@
-use super::BlockData;
-use crate::db::core::header::rollback_statement;
-use crate::db::core::header::HeaderRow;
+use super::sql::header::rollback_statement;
+use super::sql::header::HeaderRow;
 use crate::db::SQLStatement;
+use crate::parsing::BlockData;
 
 // Convert block header to sql statement
 pub(super) fn extract_header(block: &BlockData) -> SQLStatement {
@@ -22,14 +22,14 @@ pub(super) fn rollback_header(block: &BlockData) -> SQLStatement {
 mod tests {
     use super::extract_header;
     use super::rollback_header;
-    use crate::db;
+    use crate::db::core::sql;
     use crate::db::SQLArg;
-    use crate::units::testing::block_600k;
+    use crate::parsing::testing::block_600k;
 
     #[test]
     fn header_statement() -> () {
         let stmnt = extract_header(&block_600k());
-        assert_eq!(stmnt.sql, db::core::header::INSERT_HEADER);
+        assert_eq!(stmnt.sql, sql::header::INSERT_HEADER);
         assert_eq!(stmnt.args.len(), 4);
         assert_eq!(stmnt.args[0], SQLArg::Integer(600000));
         assert_eq!(
@@ -50,7 +50,7 @@ mod tests {
     #[test]
     fn rollback() -> () {
         let stmnt = rollback_header(&block_600k());
-        assert_eq!(stmnt.sql, db::core::header::DELETE_HEADER);
+        assert_eq!(stmnt.sql, sql::header::DELETE_HEADER);
         assert_eq!(stmnt.args.len(), 1);
         assert_eq!(
             stmnt.args[0],

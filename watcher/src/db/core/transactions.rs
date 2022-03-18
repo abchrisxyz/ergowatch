@@ -1,6 +1,6 @@
-use super::BlockData;
-use crate::db::core::transaction::TransactionRow;
+use crate::db::core::sql::transaction::TransactionRow;
 use crate::db::SQLStatement;
+use crate::parsing::BlockData;
 
 // Convert block transactions to sql statements
 pub(super) fn extract_transactions(block: &BlockData) -> Vec<SQLStatement> {
@@ -20,15 +20,15 @@ pub(super) fn extract_transactions(block: &BlockData) -> Vec<SQLStatement> {
 #[cfg(test)]
 mod tests {
     use super::extract_transactions;
-    use crate::db;
-    use crate::units::testing::block_600k;
+    use crate::db::core::sql;
+    use crate::parsing::testing::block_600k;
 
     #[test]
     fn statements() -> () {
         let statements = extract_transactions(&block_600k());
         assert_eq!(statements.len(), 3);
-        assert_eq!(statements[0].sql, db::core::transaction::INSERT_TRANSACTION);
-        assert_eq!(statements[1].sql, db::core::transaction::INSERT_TRANSACTION);
-        assert_eq!(statements[2].sql, db::core::transaction::INSERT_TRANSACTION);
+        assert_eq!(statements[0].sql, sql::transaction::INSERT_TRANSACTION);
+        assert_eq!(statements[1].sql, sql::transaction::INSERT_TRANSACTION);
+        assert_eq!(statements[2].sql, sql::transaction::INSERT_TRANSACTION);
     }
 }

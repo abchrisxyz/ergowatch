@@ -1,27 +1,38 @@
-use crate::db::SQLArg;
+use super::sql::data_inputs::DataInputRow;
 use crate::db::SQLStatement;
+use crate::parsing::BlockData;
 
-pub const INSERT_DATA_INPUT: &str = "\
-    insert into core.data_inputs (box_id, tx_id, header_id, index) \
-    values ($1, $2, $3, $4);";
-
-pub struct DataInputRow<'a> {
-    pub box_id: &'a str,
-    pub tx_id: &'a str,
-    pub header_id: &'a str,
-    pub index: i32,
+pub(super) fn extract_data_inputs(block: &BlockData) -> Vec<SQLStatement> {
+    block
+        .transactions
+        .iter()
+        .flat_map(|tx| {
+            tx.data_input_box_ids.iter().enumerate().map(|(ix, id)| {
+                DataInputRow {
+                    box_id: &id,
+                    tx_id: &tx.id,
+                    header_id: &block.header_id,
+                    index: ix as i32,
+                }
+                .to_statement()
+            })
+        })
+        .collect()
 }
 
-impl DataInputRow<'_> {
-    pub fn to_statement(&self) -> SQLStatement {
-        SQLStatement {
-            sql: String::from(INSERT_DATA_INPUT),
-            args: vec![
-                SQLArg::Text(String::from(self.box_id)),
-                SQLArg::Text(String::from(self.tx_id)),
-                SQLArg::Text(String::from(self.header_id)),
-                SQLArg::Integer(self.index),
-            ],
-        }
+#[cfg(test)]
+mod tests {
+    use super::extract_data_inputs;
+    use crate::db;
+    use crate::parsing::testing::block_600k;
+
+    #[test]
+    fn statements() -> () {
+        let statements = extract_data_inputs(&block_600k());
+        assert_eq!(statements.len(), 1);
+        assert_eq!(
+            statements[0].sql,
+            db::core::sql::data_inputs::INSERT_DATA_INPUT
+        );
     }
 }
