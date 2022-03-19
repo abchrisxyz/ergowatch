@@ -5,10 +5,17 @@ create schema ew;
 create table ew.revision (
 	singleton int primary key default 1,
 	version integer not null,
-	constraints_set boolean default false,
 	check(singleton = 1)
 );
 insert into ew.revision (version) values (1);
+
+create table ew.constraints (
+	singleton int primary key default 1,
+	tier_1 boolean not null default false,
+	tier_2 boolean not null default false,
+	check(singleton = 1)
+);
+insert into ew.constraints (singleton) values (1);
 
 
 -------------------------------------------------------------------------------

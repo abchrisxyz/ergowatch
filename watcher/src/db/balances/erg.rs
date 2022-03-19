@@ -15,6 +15,13 @@ pub const UPDATE_BALANCES: &str = "
     from new_diffs d
     where d.address = b.address;";
 
+pub fn update_statement(height: i32) -> SQLStatement {
+    SQLStatement {
+        sql: String::from(UPDATE_BALANCES),
+        args: vec![SQLArg::Integer(height)],
+    }
+}
+
 // Inserts balances for new addresses
 pub const INSERT_BALANCES: &str = "
     with new_addresses as (
@@ -31,6 +38,13 @@ pub const INSERT_BALANCES: &str = "
         , value
     from new_addresses;";
 
+pub fn insert_statement(height: i32) -> SQLStatement {
+    SQLStatement {
+        sql: String::from(INSERT_BALANCES),
+        args: vec![SQLArg::Integer(height)],
+    }
+}
+
 // Undo balance updates
 pub const ROLLBACK_BALANCE_UPDATES: &str = "
     with new_diffs as (
@@ -44,6 +58,13 @@ pub const ROLLBACK_BALANCE_UPDATES: &str = "
     set value = b.value - d.value
     from new_diffs d
     where d.address = b.address;";
+
+pub fn rollback_update_statement(height: i32) -> SQLStatement {
+    SQLStatement {
+        sql: String::from(ROLLBACK_BALANCE_UPDATES),
+        args: vec![SQLArg::Integer(height)],
+    }
+}
 
 pub const ROLLBACK_DELETE_ZERO_BALANCES: &str = "
     with deleted_addresses as (
@@ -60,31 +81,6 @@ pub const ROLLBACK_DELETE_ZERO_BALANCES: &str = "
         , 0 -- actual value will be set by update rollback
     from deleted_addresses;";
 
-pub const DELETE_ZERO_BALANCES: &str = "
-    delete from bal.erg
-    where value = 0;";
-
-pub fn update_statement(height: i32) -> SQLStatement {
-    SQLStatement {
-        sql: String::from(UPDATE_BALANCES),
-        args: vec![SQLArg::Integer(height)],
-    }
-}
-
-pub fn insert_statement(height: i32) -> SQLStatement {
-    SQLStatement {
-        sql: String::from(INSERT_BALANCES),
-        args: vec![SQLArg::Integer(height)],
-    }
-}
-
-pub fn rollback_update_statement(height: i32) -> SQLStatement {
-    SQLStatement {
-        sql: String::from(ROLLBACK_BALANCE_UPDATES),
-        args: vec![SQLArg::Integer(height)],
-    }
-}
-
 pub fn rollback_delete_zero_balances_statement(height: i32) -> SQLStatement {
     SQLStatement {
         sql: String::from(ROLLBACK_DELETE_ZERO_BALANCES),
@@ -92,9 +88,19 @@ pub fn rollback_delete_zero_balances_statement(height: i32) -> SQLStatement {
     }
 }
 
+pub const DELETE_ZERO_BALANCES: &str = "
+    delete from bal.erg
+    where value = 0;";
+
 pub fn delete_zero_balances_statement() -> SQLStatement {
     SQLStatement {
         sql: String::from(DELETE_ZERO_BALANCES),
         args: vec![],
     }
+}
+
+pub mod constraints {
+    pub const ADD_PK: &str = "alter table bal.erg add primary key(address);";
+    pub const CHECK_VALUE_GE0: &str = "alter table bal.erg add check (value >= 0);";
+    pub const IDX_VALUE: &str = "create index on bal.erg(value);";
 }

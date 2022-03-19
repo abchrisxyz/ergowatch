@@ -25,3 +25,20 @@ impl DataInputRow<'_> {
         }
     }
 }
+
+pub mod constraints {
+    pub const ADD_PK: &str = "alter table core.data_inputs add primary key (box_id, tx_id);";
+    pub const NOT_NULL_HEADER_ID: &str =
+        "alter table core.data_inputs alter column header_id set not null;";
+    pub const FK_TX_ID: &str = "alter table core.data_inputs add foreign key (tx_id)
+        references core.transactions (id)
+        on delete cascade;";
+    pub const FK_HEADER_ID: &str = "alter table core.data_inputs add foreign key (header_id)
+        references core.headers (id)
+        on delete cascade;";
+    pub const FK_BOX_ID: &str = "alter table core.data_inputs add foreign key (box_id)
+        references core.outputs (box_id)
+        on delete cascade;";
+    pub const IDX_TX_ID: &str = "create index on core.data_inputs(tx_id);";
+    pub const IDX_HEADER_ID: &str = "create index on core.data_inputs(header_id);";
+}

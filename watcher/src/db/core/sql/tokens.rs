@@ -55,3 +55,13 @@ impl TokenRowEIP4<'_> {
         }
     }
 }
+
+pub mod constraints {
+    pub const ADD_PK: &str = "alter table core.tokens add primary key (id, box_id);";
+    pub const NOT_NULL_BOX_ID: &str = "alter table core.tokens alter column box_id set not null;";
+    pub const FK_BOX_ID: &str = "alter table core.tokens	add foreign key (box_id)
+        references core.outputs (box_id)
+        on delete cascade;";
+    pub const CHECK_EMISSION_AMOUNT_GT0: &str =
+        "alter table core.tokens add check (emission_amount > 0);";
+}

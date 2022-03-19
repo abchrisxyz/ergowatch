@@ -1,3 +1,16 @@
+/*****************************************************************************
+ *
+ * DO NOT LOAD THIS - YOU ONLY NEED SCHEMA.SQL
+ *
+ * Watcher will add constraints and indexes when needed, during and after the
+ * the bootstrapping process.
+ *
+ * If for some reason you want to skip bootstrapping, go ahead, load this file
+ * and pass the --no-bootstrap flag when starting watcher.
+ *
+ *****************************************************************************/
+
+
 -------------------------------------------------------------------------------
 -- Core
 ------------------------------------------------------------------------------- 
@@ -108,4 +121,5 @@ alter table bal.tokens_diffs add primary key(address, token_id, height, tx_id);
 -------------------------------------------------------------------------------
 -- Finally
 ------------------------------------------------------------------------------- 
-update ew.revision set constraints_set = true;
+update ew.constraints set tier_1 = true;
+update ew.constraints set tier_2 = true;

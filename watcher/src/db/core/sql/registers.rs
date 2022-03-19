@@ -27,3 +27,12 @@ impl BoxRegisterRow<'_> {
         }
     }
 }
+
+pub mod constraints {
+    pub const ADD_PK: &str = "alter table core.box_registers add primary key (id, box_id);";
+    pub const FK_BOX_ID: &str = "alter table core.box_registers add foreign key (box_id)
+        references core.outputs (box_id)
+        on delete cascade;";
+    pub const CHECK_ID_GE4_AND_LE_9: &str =
+        "alter table core.box_registers add check (id >= 4 and id <= 9);";
+}

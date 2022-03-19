@@ -12,17 +12,20 @@ fn main() -> Result<(), &'static str> {
 
     if session.db.is_empty().unwrap() {
         if !session.allow_bootstrap {
-            session.load_db_constraints()?;
+            session.db.apply_constraints_all().unwrap();
         }
         sync::include_genesis_boxes(&session)?;
     };
 
     if session.allow_bootstrap {
-        if !session.db_constraints_set {
-            sync::bootstrap::sync_core(&mut session).unwrap();
+        let db_constraints_status = session.db.constraints_status().unwrap();
+        if !db_constraints_status.tier_1 {
+            sync::bootstrap::phase_1(&mut session).unwrap();
         }
         if !sync::bootstrap::db_is_bootstrapped(&session) {
-            sync::bootstrap::expand_db(&mut session).unwrap();
+            sync::bootstrap::phase_2(&mut session).unwrap();
+            // Bootstrapping is completed, allow rollbacks now.
+            session.allow_rollbacks = true;
         }
     }
 

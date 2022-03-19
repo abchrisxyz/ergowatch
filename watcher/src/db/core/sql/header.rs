@@ -35,3 +35,16 @@ pub fn rollback_statement(header_id: &str) -> SQLStatement {
         args: vec![SQLArg::Text(String::from(header_id))],
     }
 }
+
+pub mod constraints {
+    pub const ADD_PK: &str = "alter table core.headers add primary key (height);";
+    pub const NOT_NULL_ID: &str = "alter table core.headers alter column id set not null;";
+    pub const NOT_NULL_PARENT_ID: &str =
+        "alter table core.headers alter column parent_id set not null;";
+    pub const NOT_NULL_TIMESTAMP: &str =
+        "alter table core.headers alter column timestamp set not null;";
+    pub const UNIQUE: &str =
+        "alter table core.headers add constraint headers_unique_id unique(id);";
+    pub const UNIQUE_PARENT_ID: &str =
+        "alter table core.headers add constraint headers_unique_parent_id unique(parent_id);";
+}

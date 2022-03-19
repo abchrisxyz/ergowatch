@@ -4,6 +4,7 @@ mod migrations;
 pub mod unspent;
 
 use log::debug;
+use log::info;
 use postgres::{Client, NoTls};
 
 use crate::types::Head;
@@ -11,6 +12,12 @@ use crate::types::Head;
 #[derive(Debug)]
 pub struct DB {
     conn_str: String,
+}
+
+pub struct ConstraintsStatus {
+    pub tier_1: bool,
+    pub tier_2: bool,
+    pub all_set: bool,
 }
 
 impl DB {
@@ -46,20 +53,128 @@ impl DB {
     }
 
     /// Returns true if db constraints are set.
-    pub fn has_constraints(&self) -> anyhow::Result<bool> {
+    pub fn constraints_status(&self) -> anyhow::Result<ConstraintsStatus> {
         let mut client = Client::connect(&self.conn_str, NoTls)?;
-        let row = client.query_one("select constraints_set from ew.revision;", &[])?;
-        let set: bool = row.get("constraints_set");
-        Ok(set)
+        let row = client.query_one("select tier_1, tier_2 from ew.constraints;", &[])?;
+        let tier_1 = row.get("tier_1");
+        let tier_2 = row.get("tier_2");
+        Ok(ConstraintsStatus {
+            tier_1: tier_1,
+            tier_2: tier_2,
+            all_set: tier_1 && tier_2,
+        })
     }
 
-    pub fn apply_constraints(&self, sql: String) -> anyhow::Result<()> {
+    /// Load tier 1 db constraints and indexes
+    pub fn apply_constraints_tier1(&self) -> anyhow::Result<()> {
+        info!("Loading tier-1 constraints and indexes");
+        let statements: Vec<&'static str> = vec![
+            // Core - headers
+            core::sql::header::constraints::ADD_PK,
+            core::sql::header::constraints::NOT_NULL_ID,
+            core::sql::header::constraints::NOT_NULL_PARENT_ID,
+            core::sql::header::constraints::NOT_NULL_TIMESTAMP,
+            core::sql::header::constraints::UNIQUE,
+            core::sql::header::constraints::UNIQUE_PARENT_ID,
+            // Core - transactions
+            core::sql::transaction::constraints::ADD_PK,
+            core::sql::transaction::constraints::FK_HEADER_ID,
+            core::sql::transaction::constraints::IDX_HEIGHT,
+            // Core - outputs
+            core::sql::outputs::constraints::ADD_PK,
+            core::sql::outputs::constraints::NOT_NULL_TX_ID,
+            core::sql::outputs::constraints::NOT_NULL_HEADER_ID,
+            core::sql::outputs::constraints::NOT_NULL_ADDRESS,
+            core::sql::outputs::constraints::FK_TX_ID,
+            core::sql::outputs::constraints::FK_HEADER_ID,
+            core::sql::outputs::constraints::IDX_TX_ID,
+            core::sql::outputs::constraints::IDX_HEADER_ID,
+            core::sql::outputs::constraints::IDX_ADDRESS,
+            core::sql::outputs::constraints::IDX_INDEX,
+            // Core - inputs
+            core::sql::inputs::constraints::ADD_PK,
+            core::sql::inputs::constraints::NOT_NULL_TX_ID,
+            core::sql::inputs::constraints::NOT_NULL_HEADER_ID,
+            core::sql::inputs::constraints::FK_TX_ID,
+            core::sql::inputs::constraints::FK_HEADER_ID,
+            core::sql::inputs::constraints::IDX_TX_ID,
+            core::sql::inputs::constraints::IDX_HEADER_ID,
+            core::sql::inputs::constraints::IDX_INDEX,
+            // Core - data inputs
+            core::sql::data_inputs::constraints::ADD_PK,
+            core::sql::data_inputs::constraints::NOT_NULL_HEADER_ID,
+            core::sql::data_inputs::constraints::FK_TX_ID,
+            core::sql::data_inputs::constraints::FK_HEADER_ID,
+            core::sql::data_inputs::constraints::FK_BOX_ID,
+            core::sql::data_inputs::constraints::IDX_TX_ID,
+            core::sql::data_inputs::constraints::IDX_HEADER_ID,
+            // Core - registers
+            core::sql::registers::constraints::ADD_PK,
+            core::sql::registers::constraints::FK_BOX_ID,
+            core::sql::registers::constraints::CHECK_ID_GE4_AND_LE_9,
+            // Core - tokens
+            core::sql::tokens::constraints::ADD_PK,
+            core::sql::tokens::constraints::NOT_NULL_BOX_ID,
+            core::sql::tokens::constraints::FK_BOX_ID,
+            core::sql::tokens::constraints::CHECK_EMISSION_AMOUNT_GT0,
+            // Core - box assets
+            core::sql::assets::constraints::ADD_PK,
+            core::sql::assets::constraints::NOT_NULL_BOX_ID,
+            core::sql::assets::constraints::NOT_NULL_TOKEN_ID,
+            core::sql::assets::constraints::FK_BOX_ID,
+            core::sql::assets::constraints::CHECK_AMOUNT_GT0,
+            // Unspent
+            // PK needed during phase 2 (for delete statements)
+            unspent::usp::constraints::ADD_PK,
+            // ERG Balances
+            // Bootstrap phase 2 relies on pk and index.
+            // Delaying the check might cause intermediate negative values to go unnoticed,
+            // so keeping it here
+            balances::erg::constraints::ADD_PK,
+            balances::erg::constraints::CHECK_VALUE_GE0,
+            balances::erg::constraints::IDX_VALUE,
+            // ERG balance diffs
+            // Both PK and index needed by erg.bal bootstrap queries
+            balances::erg_diffs::constraints::ADD_PK,
+            balances::erg_diffs::constraints::IDX_HEIGHT,
+            // Token Balances
+
+            // Finally
+            "update ew.constraints set tier_1 = true;",
+        ];
+
         let mut client = Client::connect(&self.conn_str, NoTls)?;
         let mut transaction = client.transaction()?;
-        for statement in sql.split(";") {
-            transaction.execute(statement.trim(), &[])?;
+        for statement in statements {
+            transaction.execute(statement, &[])?;
         }
         transaction.commit()?;
+        Ok(())
+    }
+
+    /// Load tier 2 db constraints and indexes
+    pub fn apply_constraints_tier2(&self) -> anyhow::Result<()> {
+        info!("Loading tier-2 constraints and indexes");
+        let statements: Vec<&'static str> = vec![
+            // Finally
+            "update ew.constraints set tier_1 = true;",
+        ];
+
+        let mut client = Client::connect(&self.conn_str, NoTls)?;
+        let mut transaction = client.transaction()?;
+        for statement in statements {
+            transaction.execute(statement, &[])?;
+        }
+        transaction.commit()?;
+        Ok(())
+    }
+
+    /// Load all constraints and indexes
+    ///
+    /// Used when skipping bootstrap process.
+    pub fn apply_constraints_all(&self) -> anyhow::Result<()> {
+        self.apply_constraints_tier1()?;
+        self.apply_constraints_tier2()?;
         Ok(())
     }
 
@@ -149,6 +264,15 @@ impl SQLStatement {
             .collect::<Vec<&(dyn postgres::types::ToSql + Sync)>>();
         tx.execute(&self.sql, &arg_refs[..])?;
         Ok(())
+    }
+}
+
+impl From<&'static str> for SQLStatement {
+    fn from(query: &'static str) -> Self {
+        SQLStatement {
+            sql: String::from(query),
+            args: vec![],
+        }
     }
 }
 

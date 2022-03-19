@@ -22,10 +22,6 @@ def run_watcher(
     if no_bootstrap:
         args.append("--no-bootstrap")
 
-    # Path to constraints definitions
-    sql = Path(__file__).parent.parent.absolute() / Path(f"db/constraints.sql")
-    args.extend(["-k", str(sql)])
-
     env = dict(
         os.environ,
         EW_LOG="INFO",

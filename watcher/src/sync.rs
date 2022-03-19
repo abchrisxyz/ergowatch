@@ -61,10 +61,8 @@ fn sync_to_height(session: &mut Session, node_height: u32) -> Result<(), &'stati
 
             // Rollbacks may rely on database constraints to propagate.
             // So prevent any rollbacks if constraints haven't been set.
-            if !session.db_constraints_set {
+            if !session.allow_rollbacks {
                 warn!("Preventing a rollback on an unconstrained database.");
-                warn!("Rollbacks may rely on database constraints to propagate.");
-                warn!("Please set the database contraints defined in `constraints.sql`.");
                 return Err("Preventing a rollback on an unconstrained database.");
             }
 
@@ -144,15 +142,27 @@ pub mod bootstrap {
     use crate::session::Session;
     use log::info;
 
+    pub fn phase_1(session: &mut Session) -> Result<(), &'static str> {
+        sync_core(session)?;
+        session.db.apply_constraints_tier1().unwrap();
+        Ok(())
+    }
+
+    pub fn phase_2(session: &mut Session) -> Result<(), &'static str> {
+        expand_db(session)?;
+        session.db.apply_constraints_tier2().unwrap();
+        Ok(())
+    }
+
     /// Sync core tables only.
-    pub fn sync_core(session: &mut Session) -> Result<(), &'static str> {
+    fn sync_core(session: &mut Session) -> Result<(), &'static str> {
         info!("Bootstrapping step 1/2 - syncing core tables");
         loop {
             let node_height = get_node_height_blocking(session);
             if node_height <= session.head.height {
                 break;
             }
-            sync_to_height(session, node_height)?;
+            sync_core_to_height(session, node_height)?;
         }
         info!("Minimal sync completed");
         Ok(())
@@ -164,13 +174,17 @@ pub mod bootstrap {
         bootstrap_height == session.head.height as i32
     }
 
-    /// Fill derived tables to match sync height of core tables.
-    pub fn expand_db(session: &mut Session) -> Result<(), &'static str> {
+    /// Phase 2 - Fill derived tables to match sync height of core tables.
+    fn expand_db(session: &mut Session) -> Result<(), &'static str> {
         info!("Bootstrapping step 2/2 - populating secondary tables");
-        // Set db constraints if absent.
+        // Set tier 1 db constraints if absent.
         // Constraints may already be set if bootstrap process got interrupted.
-        if !session.db_constraints_set {
-            session.load_db_constraints()?;
+        let constraints_status = session.db.constraints_status().unwrap();
+        assert_eq!(constraints_status.tier_2, false);
+        if !constraints_status.tier_1 {
+            session.db.apply_constraints_tier1().unwrap();
+        } else {
+            info!("Tier constraints have already been set. Likely recovering from interrupted bootstrapping.")
         }
 
         // Get last height of derived tables
@@ -188,14 +202,18 @@ pub mod bootstrap {
             // Execute statements in single transaction
             session.db.execute_in_transaction(sql_statements).unwrap();
         }
+
+        // TODO: move this to tier 2 function when available
+        session.db.apply_constraints_tier2().unwrap();
+
         info!("Bootstrapping completed");
         Ok(())
     }
 
-    /// Sync db to given height
+    /// Sync db core to given height
     ///
     /// No rollback support.
-    fn sync_to_height(session: &mut Session, node_height: u32) -> Result<(), &'static str> {
+    fn sync_core_to_height(session: &mut Session, node_height: u32) -> Result<(), &'static str> {
         while session.head.height < node_height {
             let next_height = session.head.height + 1;
             // Fetch next block from node

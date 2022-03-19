@@ -1,29 +1,33 @@
 //! # usp schema
 //!
 //! Maintains set of unspent boxes
-use crate::db;
+use crate::db::{SQLArg, SQLStatement};
 
 pub const DELETE_SPENT_BOX: &str = "delete from usp.boxes where box_id = $1;";
 
-pub const INSERT_NEW_BOX: &str = "insert into usp.boxes (box_id) values ($1);";
-
-pub fn delete_spent_box_statement(box_id: &str) -> db::SQLStatement {
-    db::SQLStatement {
+pub fn delete_spent_box_statement(box_id: &str) -> SQLStatement {
+    SQLStatement {
         sql: String::from(DELETE_SPENT_BOX),
-        args: vec![db::SQLArg::Text(String::from(box_id))],
+        args: vec![SQLArg::Text(String::from(box_id))],
     }
 }
 
-pub fn insert_new_box_statement(box_id: &str) -> db::SQLStatement {
-    db::SQLStatement {
+pub const INSERT_NEW_BOX: &str = "insert into usp.boxes (box_id) values ($1);";
+
+pub fn insert_new_box_statement(box_id: &str) -> SQLStatement {
+    SQLStatement {
         sql: String::from(INSERT_NEW_BOX),
-        args: vec![db::SQLArg::Text(String::from(box_id))],
+        args: vec![SQLArg::Text(String::from(box_id))],
     }
+}
+
+pub mod constraints {
+    pub const ADD_PK: &str = "alter table usp.boxes add primary key (box_id);";
 }
 
 pub mod bootstrapping {
-    use crate::db::SQLArg;
-    use crate::db::SQLStatement;
+    use super::SQLArg;
+    use super::SQLStatement;
 
     // Find all unspent boxes: outputs not used as input
     pub const INSERT_NEW_BOXES_AT_HEIGHT: &str = "

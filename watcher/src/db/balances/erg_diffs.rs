@@ -99,3 +99,8 @@ pub mod bootstrapping {
         }
     }
 }
+
+pub mod constraints {
+    pub const ADD_PK: &str = "alter table bal.erg_diffs add primary key(address, height, tx_id);";
+    pub const IDX_HEIGHT: &str = "create index on bal.erg_diffs(height);";
+}

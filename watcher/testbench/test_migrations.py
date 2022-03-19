@@ -4,7 +4,7 @@ from fixtures import block_600k_env
 from utils import run_watcher
 
 
-@pytest.mark.order(2)
+@pytest.mark.order(5)
 class TestMigrations:
     def test_future_db(self, block_600k_env):
         """

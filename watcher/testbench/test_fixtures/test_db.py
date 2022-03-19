@@ -24,8 +24,8 @@ class TestGenesisDB:
         row = cur.fetchone()
         assert row[0] == 0
 
-    def test_constraints_flag_not_set(self, cur):
-        cur.execute("select constraints_set from ew.revision;")
+    def test_constraints_flags_not_set(self, cur):
+        cur.execute("select tier_1 or tier_2 from ew.constraints;")
         row = cur.fetchone()
         assert row[0] == False
 
@@ -230,8 +230,8 @@ class TestPopulatedDB:
             with conn.cursor() as cur:
                 yield cur
 
-    def test_constraints_flag_is_set(self, cur):
-        cur.execute("select constraints_set from ew.revision;")
+    def test_constraints_flags_are_set(self, cur):
+        cur.execute("select tier_1 and tier_2 from ew.constraints;")
         row = cur.fetchone()
         assert row[0] == True
 

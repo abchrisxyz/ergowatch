@@ -33,3 +33,20 @@ impl OutputRow<'_> {
         }
     }
 }
+
+pub mod constraints {
+    pub const ADD_PK: &str = "alter table core.outputs add primary key (box_id);";
+    pub const NOT_NULL_TX_ID: &str = "alter table core.outputs alter column tx_id set not null;";
+    pub const NOT_NULL_HEADER_ID: &str =
+        "alter table core.outputs alter column header_id set not null;";
+    pub const NOT_NULL_ADDRESS: &str =
+        "alter table core.outputs alter column address set not null;";
+    pub const FK_TX_ID: &str = "alter table core.outputs add foreign key (tx_id)
+        references core.transactions (id) on delete cascade;";
+    pub const FK_HEADER_ID: &str = "alter table core.outputs add foreign key (header_id)
+        references core.headers (id) on delete cascade;";
+    pub const IDX_TX_ID: &str = "create index on core.outputs(tx_id);";
+    pub const IDX_HEADER_ID: &str = "create index on core.outputs(header_id);";
+    pub const IDX_ADDRESS: &str = "create index on core.outputs(address);";
+    pub const IDX_INDEX: &str = "create index on core.outputs(index);";
+}

@@ -23,3 +23,15 @@ impl BoxAssetRow<'_> {
         }
     }
 }
+
+pub mod constraints {
+    pub const ADD_PK: &str = "alter table core.box_assets add primary key (box_id, token_id);";
+    pub const NOT_NULL_BOX_ID: &str =
+        "alter table core.box_assets alter column box_id set not null;";
+    pub const NOT_NULL_TOKEN_ID: &str =
+        "alter table core.box_assets alter column token_id set not null;";
+    pub const FK_BOX_ID: &str = "alter table core.box_assets	add foreign key (box_id)
+        references core.outputs (box_id)
+        on delete cascade;";
+    pub const CHECK_AMOUNT_GT0: &str = "alter table core.box_assets add check (amount > 0);";
+}

@@ -25,3 +25,10 @@ impl TransactionRow<'_> {
         }
     }
 }
+
+pub mod constraints {
+    pub const ADD_PK: &str = "alter table core.transactions add primary key (id);";
+    pub const FK_HEADER_ID: &str = "alter table core.transactions add foreign key (header_id)
+        references core.headers (id) on delete cascade;";
+    pub const IDX_HEIGHT: &str = "create index on core.transactions(height);";
+}
