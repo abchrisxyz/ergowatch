@@ -1,13 +1,13 @@
 import pytest
 import psycopg as pg
 
-from fixtures.db2 import bootstrap_db
-from fixtures.db2 import temp_db_class_scoped
-from fixtures.db2 import unconstrained_db_class_scoped
-from fixtures.db2.sql import extract_existing_header
-from fixtures.db2.sql import extract_existing_transaction
-from fixtures.db2.sql import extract_existing_outputs
-from fixtures.db2.sql import extract_existing_tokens
+from fixtures.db import bootstrap_db
+from fixtures.db import temp_db_class_scoped
+from fixtures.db import unconstrained_db_class_scoped
+from fixtures.db.sql import extract_existing_header
+from fixtures.db.sql import extract_existing_transaction
+from fixtures.db.sql import extract_existing_outputs
+from fixtures.db.sql import extract_existing_tokens
 from fixtures.addresses import AddressCatalogue as AC
 
 

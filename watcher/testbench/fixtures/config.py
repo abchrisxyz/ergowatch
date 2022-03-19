@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fixtures.api import MOCK_NODE_HOST
 from local import DB_HOST, DB_PORT, DB_USER, DB_PASS
-from .db2 import TEST_DB_NAME
+from .db import TEST_DB_NAME
 
 
 def format_config(db_name: str) -> str:

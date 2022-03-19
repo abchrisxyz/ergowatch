@@ -4,7 +4,7 @@ import copy
 
 from fixtures.api import GENESIS_ID, mock_api
 from fixtures.blocks import block_600k
-from fixtures.db2.sql import DEFAULT_BOX_VALUE
+from fixtures.db.sql import DEFAULT_BOX_VALUE
 
 
 @pytest.mark.order(1)

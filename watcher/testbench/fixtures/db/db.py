@@ -23,6 +23,12 @@ TEST_DB_NAME = "ew_pytest"
 
 
 @pytest.fixture
+def temp_db(scope="class"):
+    with TempDB() as db_name:
+        yield conn_str(db_name)
+
+
+@pytest.fixture
 def temp_db_class_scoped(scope="class"):
     with TempDB() as db_name:
         yield conn_str(db_name)

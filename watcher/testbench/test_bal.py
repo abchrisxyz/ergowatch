@@ -3,9 +3,9 @@ import psycopg as pg
 
 from fixtures.api import MockApi, ApiUtil, GENESIS_ID
 from fixtures.config import temp_cfg
-from fixtures.db2 import bootstrap_db
-from fixtures.db2 import temp_db_class_scoped
-from fixtures.db2 import unconstrained_db_class_scoped
+from fixtures.db import bootstrap_db
+from fixtures.db import temp_db_class_scoped
+from fixtures.db import unconstrained_db_class_scoped
 from fixtures.addresses import AddressCatalogue as AC
 from utils import run_watcher
 from utils import assert_pk
