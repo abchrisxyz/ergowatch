@@ -6,38 +6,45 @@ pub const INSERT_DIFFS: &str = "
         select tx.height
             , tx.id as tx_id
             , op.address
-            , sum(op.value) as value
+            , ba.token_id
+            , sum(ba.amount) as value
         from core.transactions tx
         join core.inputs ip on ip.tx_id = tx.id
         join core.outputs op on op.box_id = ip.box_id
+        join core.box_assets ba on ba.box_id = ip.box_id
         where tx.id = $1
-        group by 1, 2, 3
+        group by 1, 2, 3, 4
     ), outputs as (
         select tx.height
             , tx.id as tx_id
             , op.address
-            , sum(op.value) as value
+            , ba.token_id
+            , sum(ba.amount) as value
         from core.transactions tx
         join core.outputs op on op.tx_id = tx.id
+        join core.box_assets ba on ba.box_id = op.box_id
         where tx.id = $1
-        group by 1, 2, 3
+        group by 1, 2, 3, 4
     )
-    insert into bal.erg_diffs (address, height, tx_id, value)
+    insert into bal.tokens_diffs (address, token_id, height, tx_id, value)
     select coalesce(i.address, o.address) as address
+        , coalesce(i.token_id, o.token_id) as token_id
         , coalesce(i.height, o.height) as height
         , coalesce(i.tx_id, o.tx_id) as tx_id
         , sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0))
     from inputs i
-    full outer join outputs o on o.address = i.address
-    group by 1, 2, 3 having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) <> 0";
+    full outer join outputs o
+        on o.address = i.address
+        and o.token_id = i.token_id
+    group by 1, 2, 3, 4 having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) <> 0;";
 
-pub const DELETE_DIFFS: &str = "delete from bal.erg_diffs where tx_id = $1;";
+pub const DELETE_DIFFS: &str = "delete from bal.tokens_diffs where tx_id = $1;";
 
-pub struct ErgDiffQuery<'a> {
+pub struct TokenDiffQuery<'a> {
     pub tx_id: &'a str,
 }
 
-impl ErgDiffQuery<'_> {
+impl TokenDiffQuery<'_> {
     pub fn to_statement(&self) -> SQLStatement {
         SQLStatement {
             sql: String::from(INSERT_DIFFS),
@@ -58,30 +65,41 @@ pub mod bootstrapping {
     use crate::db::SQLStatement;
 
     pub const INSERT_DIFFS_AT_HEIGHT: &str = "
-    with transactions as (	
-        select height, id
-        from core.transactions
-        where height = $1
-    ), inputs as (
+    with inputs as (
+        with transactions as (	
+            select height, id
+            from core.transactions
+            where height = $1
+        )
         select tx.height
             , tx.id as tx_id
             , op.address
-            , sum(op.value) as value
+            , ba.token_id
+            , sum(ba.amount) as value
         from transactions tx
         join core.inputs ip on ip.tx_id = tx.id
         join core.outputs op on op.box_id = ip.box_id
-        group by 1, 2, 3
+        join core.box_assets ba on ba.box_id = ip.box_id
+        group by 1, 2, 3, 4
     ), outputs as (
+        with transactions as (	
+            select height, id
+            from core.transactions
+            where height = $1
+        )
         select tx.height
             , tx.id as tx_id
             , op.address
-            , sum(op.value) as value
+            , ba.token_id
+            , sum(ba.amount) as value
         from transactions tx
         join core.outputs op on op.tx_id = tx.id
-        group by 1, 2, 3
+        join core.box_assets ba on ba.box_id = op.box_id
+        group by 1, 2, 3, 4
     )
-    insert into bal.erg_diffs (address, height, tx_id, value)
+    insert into bal.tokens_diffs (address, token_id, height, tx_id, value)
     select coalesce(i.address, o.address) as address
+        , coalesce(i.token_id, o.token_id ) as token_id
         , coalesce(i.height, o.height) as height
         , coalesce(i.tx_id, o.tx_id) as tx_id
         , sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) as value
@@ -89,7 +107,8 @@ pub mod bootstrapping {
     full outer join outputs o
         on o.address = i.address
         and o.tx_id = i.tx_id
-    group by 1, 2, 3 having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) <> 0;";
+        and o.token_id = i.token_id
+    group by 1, 2, 3, 4 having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) <> 0;";
 
     pub fn insert_diffs_statement(height: i32) -> SQLStatement {
         SQLStatement {
@@ -100,6 +119,7 @@ pub mod bootstrapping {
 }
 
 pub mod constraints {
-    pub const ADD_PK: &str = "alter table bal.erg_diffs add primary key(address, height, tx_id);";
-    pub const IDX_HEIGHT: &str = "create index on bal.erg_diffs(height);";
+    pub const ADD_PK: &str =
+        "alter table bal.tokens_diffs add primary key(address, token_id, height, tx_id);";
+    pub const IDX_HEIGHT: &str = "create index on bal.tokens_diffs(height);";
 }

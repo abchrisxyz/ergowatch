@@ -138,7 +138,16 @@ impl DB {
             balances::erg_diffs::constraints::ADD_PK,
             balances::erg_diffs::constraints::IDX_HEIGHT,
             // Token Balances
-
+            // Bootstrap phase 2 relies on pk and index.
+            // Delaying the check might cause intermediate negative values to go unnoticed,
+            // so keeping it here
+            balances::tokens::constraints::ADD_PK,
+            balances::tokens::constraints::CHECK_VALUE_GE0,
+            balances::tokens::constraints::IDX_VALUE,
+            // ERG balance diffs
+            // Both PK and index needed by erg.bal bootstrap queries
+            balances::tokens_diffs::constraints::ADD_PK,
+            balances::tokens_diffs::constraints::IDX_HEIGHT,
             // Finally
             "update ew.constraints set tier_1 = true;",
         ];

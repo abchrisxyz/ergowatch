@@ -548,6 +548,8 @@ def _test_db_state(conn: pg.Connection, start_height: int):
     with conn.cursor() as cur:
         assert_erg_balances(cur)
         assert_erg_diffs(cur, start_height)
+        assert_tokens_balances(cur)
+        assert_tokens_diffs(cur, start_height)
 
 
 def assert_db_constraints(conn: pg.Connection):
@@ -560,10 +562,18 @@ def assert_db_constraints(conn: pg.Connection):
     assert_pk(conn, "bal", "erg_diffs", ["address", "height", "tx_id"])
     assert_index(conn, "bal", "erg_diffs", "erg_diffs_height_idx")
 
+    # Tokens bal
+    assert_pk(conn, "bal", "tokens", ["address", "token_id"])
+    assert_column_ge(conn, "bal", "tokens", "value", 0)
+    assert_index(conn, "bal", "tokens", "tokens_value_idx")
+
+    # Tokens diffs
+    assert_pk(conn, "bal", "tokens_diffs", ["address", "token_id", "height", "tx_id"])
+    assert_index(conn, "bal", "tokens_diffs", "tokens_diffs_height_idx")
+
 
 def assert_erg_balances(cur: pg.Cursor):
     base = AC.coinbase
-    fees = AC.fees
     con1 = AC.get("con1")
     con2 = AC.get("con2")
     pub1 = AC.get("pub1")
@@ -611,3 +621,34 @@ def assert_erg_diffs(cur: pg.Cursor, start_height: int):
 
     assert rows[11] == (h + 3, "tx-c3", pub1.address, 1)
     assert rows[12] == (h + 3, "tx-c3", pub2.address, -1)
+
+
+def assert_tokens_balances(cur: pg.Cursor):
+    pub1 = AC.get("pub1")
+    pub2 = AC.get("pub2")
+    cur.execute("select address, token_id, value from bal.tokens order by 1, 2;")
+    rows = cur.fetchall()
+    assert len(rows) == 2
+    assert rows[0] == (pub1.address, "con1-box1", 1600)
+    assert rows[1] == (pub2.address, "con1-box1", 400)
+
+
+def assert_tokens_diffs(cur: pg.Cursor, start_height: int):
+    base = AC.coinbase
+    fees = AC.fees
+    con1 = AC.get("con1")
+    con2 = AC.get("con2")
+    pub1 = AC.get("pub1")
+    pub2 = AC.get("pub2")
+    h = start_height
+    cur.execute(
+        "select height, tx_id, address, token_id, value from bal.tokens_diffs order by 1, 2, 3;"
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 5
+    assert rows[0] == (h + 2, "tx-b1", pub1.address, "con1-box1", 2000)
+
+    assert rows[1] == (h + 3, "tx-c1", pub1.address, "con1-box1", -500)
+    assert rows[2] == (h + 3, "tx-c1", pub2.address, "con1-box1", 500)
+    assert rows[3] == (h + 3, "tx-c3", pub1.address, "con1-box1", 100)
+    assert rows[4] == (h + 3, "tx-c3", pub2.address, "con1-box1", -100)
