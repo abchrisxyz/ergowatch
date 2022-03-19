@@ -21,5 +21,4 @@ RUN cargo build --release --bin watcher
 FROM debian:bullseye-slim AS runtime
 WORKDIR /ew
 COPY --from=builder /app/target/release/watcher /ew/watcher
-COPY ./db/constraints.sql /ew/constraints.sql
-ENTRYPOINT ["/ew/watcher", "-c", "/ew/config.toml", "-k", "/ew/constraints.sql"]
+ENTRYPOINT ["/ew/watcher", "-c", "/ew/config.toml"]
