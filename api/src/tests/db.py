@@ -27,7 +27,7 @@ SCHEMA_PATH = (
 ).absolute()
 
 CONSTRAINTS_PATH = (
-    Path(__file__).parent.parent.absolute() / Path("../../watcher/db/constraints.sql")
+    Path(__file__).parent.parent.absolute() / Path("../../watcher/db/_constraints.sql")
 ).absolute()
 
 
