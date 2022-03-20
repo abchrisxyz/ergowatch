@@ -284,9 +284,16 @@ class TestPopulatedDB:
         cur.execute("select count(*) from core.box_assets;")
         assert cur.fetchone()[0] == 0
 
-    @pytest.mark.skip("TODO")
     def test_db_state_usp(self, cur):
-        pass
+        cur.execute("select box_id from usp.boxes order by 1;")
+        box_ids = [r[0] for r in cur.fetchall()]
+        assert box_ids == [
+            "base-box1",
+            "con2-box1",
+            "data-input-1",
+            "dummy-token-box-id-1",
+            "pub1-box1",
+        ]
 
     def test_db_state_bal(self, cur):
         # Erg diffs
