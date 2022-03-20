@@ -91,7 +91,7 @@ def test_bottom_rank(client):
     }
 
 
-def test_non_p2pk_address_return_error(client):
+def test_non_p2pk_address_returns_422(client):
     # 51 chars but not starting with 9
     response = client.get(
         "/ranking/1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -107,3 +107,11 @@ def test_non_p2pk_address_return_error(client):
         "/ranking/9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx"
     )
     assert response.status_code == 422
+
+
+def test_non_existing_p2pk_address_returns_404(client):
+    response = client.get(
+        "/ranking/9addrxunknownxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Address not found"

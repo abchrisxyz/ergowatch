@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter
+from fastapi import HTTPException
+from fastapi import Request
 from pydantic import BaseModel
 from pydantic import constr
 
@@ -79,6 +81,8 @@ async def p2pk_address_rank(
     """
     async with request.app.state.db.acquire() as conn:
         rows = await conn.fetch(query, p2pk_address)
+        if not rows:
+            raise HTTPException(status_code=404, detail="Address not found")
         return {
             row["label"]: {
                 "rank": row["rank"],
