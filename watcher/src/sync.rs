@@ -203,10 +203,6 @@ pub mod bootstrap {
             session.db.execute_in_transaction(sql_statements).unwrap();
         }
 
-        // TODO: move this to tier 2 function when available
-        session.db.apply_constraints_tier2().unwrap();
-
-        info!("Bootstrapping completed");
         Ok(())
     }
 

@@ -166,7 +166,7 @@ impl DB {
         info!("Loading tier-2 constraints and indexes");
         let statements: Vec<&'static str> = vec![
             // Finally
-            "update ew.constraints set tier_1 = true;",
+            "update ew.constraints set tier_2 = true;",
         ];
 
         let mut client = Client::connect(&self.conn_str, NoTls)?;

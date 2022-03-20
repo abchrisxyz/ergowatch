@@ -5,6 +5,7 @@ mod session;
 mod settings;
 mod sync;
 mod types;
+use log::info;
 use session::Session;
 
 fn main() -> Result<(), &'static str> {
@@ -26,6 +27,7 @@ fn main() -> Result<(), &'static str> {
             sync::bootstrap::phase_2(&mut session).unwrap();
             // Bootstrapping is completed, allow rollbacks now.
             session.allow_rollbacks = true;
+            info!("Bootstrapping completed");
         }
     }
 
