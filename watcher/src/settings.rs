@@ -22,7 +22,6 @@ pub struct Node {
 #[derive(Debug, Deserialize)]
 #[allow(unused)]
 pub struct Settings {
-    pub debug: bool,
     pub database: Database,
     pub node: Node,
 }

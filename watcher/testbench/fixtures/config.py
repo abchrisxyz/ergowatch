@@ -13,8 +13,6 @@ def format_config(db_name: str) -> str:
     """
     return textwrap.dedent(
         f"""
-        debug = false
-
         [database]
         host = "{DB_HOST}"
         port = {DB_PORT}
