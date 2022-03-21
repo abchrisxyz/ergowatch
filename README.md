@@ -11,25 +11,40 @@ Note that https://ergo.watch is currenlty running on older backend (https://gith
 
 ## Roadmap
 
-v0.1: Address counts, ERG/token balances and tokens supply/burnings
+- [x] Address counts, ERG/token balances and tokens supply/burnings
 
-v0.2: Basic metrics (at least on par with old backend)
+- [ ] Basic metrics (at least on par with old backend)
 
-v0.3: V1 Oracle Pools (Integrating https://github.com/thedelphiproject/ergo-oracle-stats-backend)
+- [ ] V1 Oracle Pools (Integrating https://github.com/thedelphiproject/ergo-oracle-stats-backend)
 
-v0.4: SigmaUSD
+- [ ] SigmaUSD
 
 At this point, should be ready to retire old backend and merge with main branch.
 
-v0.5: V2 Oracle Pools
+- [ ] V2 Oracle Pools
 
 ## Watcher
 
 An indexer that queries a node's API and populates the database.
 
+```
+USAGE:
+    watcher [OPTIONS]
+
+OPTIONS:
+    -c, --config <PATH>                          Path to config file
+    -h, --help                                   Print help information
+    -m, --allow-migrations                       Allow database migrations to be applied
+        --no-bootstrap                           Skip bootstrap process
+    -v, --version                                Print version information
+    -x, --exit                                   Exit once synced (mostly for integration tests)
+```
+
+
+
 ### Requirements
 
-As long as enough disk space is available, the watcher will run smoothly on most machines. As of now (block ~700k) the database is around 30GB.
+The watcher needs a synced Ergo node and a PostgreSQL server to run with. As long as enough disk space is available, the watcher will run smoothly on most machines. As of now (block ~710k) the database is around 32GB.
 
 > Note that the current implementation doesn't use streaming or any async features. Syncing from scratch with a node that is on another host will be **very slow**.
 
@@ -53,11 +68,7 @@ If using the Dockerfiles, the above will be preconfigured.
 
 ### Usage
 
-Basic usage is like so `watcher -c <path/to/config.toml>`.
-
-> If running from scratch, add the following option:
->
-> `-k <path/to/constaints.sql`> 
+Typical usage is like so: `watcher -c <path/to/config.toml>`.
 
 Run `watcher -h` or `watcher --help` for more options.
 
@@ -79,23 +90,13 @@ The `docker-compose.yml` might also be a good place to look at to see how things
 
 #### Initial Sync
 
-When running for the first time (i.e. with an empty database), the watcher will first sync core tables only, then load database constraints and finally populate other tables. To skip this bootstrapping process, you can pass the `no-bootstrap` option. If interrupted during the bootstrap process, it is safe to restart the watcher, it'll pick up where it left.
+When running for the first time (i.e. with an empty database), the watcher will first sync core tables only, then load database constraints and populate other tables. To skip this bootstrapping process, you can pass the `no-bootstrap` option. If interrupted during the bootstrap process, it is safe to restart the watcher, it'll pick up where it left off.
+
+The boostrapping process takes around 24h on common hardware (old desktop) to reach height 700k.
 
 ### Fork handling
 
 The watcher only keeps main chain blocks. In the event of a chain fork, the old branch is rolled back up to the forking block and main chain blocks are included again from that point onwards.
-
-### Processing units
-
-When a new block is available, the watcher will query it from the node. Once obtained from the node, a block is preprocessed into a rust struct. The preprocessing step involves conversion of ergo trees into readable addresses as well as rendering of register contents into string representations. The preprocessed block then goes through a number of processing units - for lack of a better name - each responsible of extracting specific information from the block and writing it to the database. All database actions related to a block are executed within a transaction to keep all units in sync, at all times.
-
-List of units:
-
-- [x] **Core unit**: The first unit a block goes through, writing all core tables (headers, transactions, outputs etc.). If you're familiar with the explorer backend database you will recognise a similar schema, minus some tables and columns that aren't relevant for the statistics we're interested in. Notably, at this stage, we don't store raw ergo trees or AD proofs for instance. This helps keeping the database size to a minimum.
-- [x] **Unspent unit**: Maintains a set of unspent boxes.
-- [ ] **Balance unit**: Tracks address balances and balance changes for both ERG and native tokens.
-- [ ] **Oracle pools** unit: Anything related to known oracle pools.
-- [ ] **SigmaUSD unit**: Monitors SigmaUSD related transactions.
 
 ## API
 
@@ -107,5 +108,12 @@ Docs: see https://ergo.watch/api/v0/docs.
 cd api/src/tests
 pip install -r requirements.txt
 pytest
+```
+
+### Run
+
+```
+cd api/src
+uvicorn main:app
 ```
 
