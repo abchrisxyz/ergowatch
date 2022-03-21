@@ -7,6 +7,8 @@ API docs available at https://ergo.watch/api/v0/docs.
 
 If looking for the frontend of https://ergo.watch see https://github.com/abchrisxyz/ergowatch-ui.
 
+Note that https://ergo.watch is currenlty running on older backend (https://github.com/abchrisxyz/ergowatch/tree/explorer-based), soon to be replaced.
+
 ## Roadmap
 
 v0.1: Address counts, ERG/token balances and tokens supply/burnings
