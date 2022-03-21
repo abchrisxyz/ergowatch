@@ -25,11 +25,13 @@ ErgoWatch API docs.
 Rules of thumb:
  - all ERG values expressed in nanoERG
  - all token values expressed in integer form
- - all timestamps in milli-seconds since unix epoch (same as node api)
+ - all timestamps in milliseconds since unix epoch (same as node api)
  
 Most API's will accept a `?token_id=` query parameter to return data relating to a given token instead of ERG itself.
 
 [Swagger]({root_path}/docs) | [ReDoc]({root_path}/redoc)
+
+[Release notes](https://github.com/abchrisxyz/ergowatch/blob/master/CHANGELOG.md)
 """
 # TODO: explain history vs series
 
@@ -50,7 +52,7 @@ tags_metadata = [
 
 app = FastAPI(
     title="ErgoWatch",
-    version="0.1.0-alpha",
+    version="0.1.0",
     description=description,
     openapi_tags=tags_metadata,
     root_path=root_path,
