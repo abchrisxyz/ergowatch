@@ -1,0 +1,10 @@
+[database]
+host = "localhost"
+port = 5432
+name = "db"
+user = "user"
+pw = "hello"
+
+[node]
+url = "http://127.0.0.1:9053"
+

@@ -1,0 +1,11 @@
+debug = false
+
+[database]
+host = "db"
+port = 5432
+name = "ergo"
+user = "ergo"
+pw = "ergo"
+
+[node]
+url = "http://node:9053"

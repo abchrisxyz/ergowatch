@@ -6,3 +6,6 @@ explorer-backend/[0-9]*
 **/.pytest_cache/*
 .stignore
 *.code-workspace
+
+# Local test db connection settings
+**/local.py

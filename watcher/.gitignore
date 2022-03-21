@@ -1,0 +1,6 @@
+/target
+Cargo.lock
+.vscode
+
+# Local config for use with cargo run
+local.toml
