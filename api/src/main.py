@@ -20,7 +20,12 @@ root_path = "/api/v0"
 description = f"""
 ErgoWatch API docs.
 
-All ERG values expressed in nanoERG.
+Rules of thumb:
+ - all ERG values expressed in nanoERG
+ - all token values expressed in integer form
+ - all timestamps in milli-seconds since unix epoch (same as node api)
+ 
+Most API's will accept a *token_id* query parameter to return data relating to a given token instead of ERG itself.
 
 [Swagger]({root_path}/docs) | [ReDoc]({root_path}/redoc)
 """
