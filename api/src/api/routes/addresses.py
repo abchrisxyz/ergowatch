@@ -3,12 +3,12 @@ from fastapi import HTTPException
 from fastapi import Path
 from fastapi import Query
 from fastapi import Request
-from pydantic import constr
+
+from ..models import Address
+from ..models import TokenID
 
 addresses_router = r = APIRouter()
 
-Address = constr(regex="^[a-zA-Z0-9]+$")
-TokenID = constr(regex="^[a-zA-Z0-9]+$")
 
 DETAIL_404 = "No balance found"
 

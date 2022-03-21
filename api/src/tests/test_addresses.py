@@ -5,10 +5,14 @@ from fastapi.testclient import TestClient
 from ..main import app
 from .db import MockDB
 
+TOKEN_A = "tokenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+TOKEN_B = "tokenbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+TOKEN_X = "validxtokenxidxofxnonxexistingxtokenxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
 
 @pytest.fixture(scope="module")
 def client():
-    sql = """
+    sql = f"""
         insert into bal.erg_diffs (address, height, tx_id, value) values
         ('addr1', 10, 'tx_1',   5000),
         ('addr1', 20, 'tx_2',  -2000),
@@ -20,16 +24,16 @@ def client():
         ('addr2', 2000);
 
         insert into bal.tokens_diffs (address, token_id, height, tx_id, value) values
-        ('addr1', 'tkna', 10, 'tx_1',   500),
-        ('addr1', 'tknb', 10, 'tx_1',   800),
-        ('addr1', 'tkna', 20, 'tx_2',  -200),
-        ('addr2', 'tkna', 20, 'tx_2',   200),
-        ('addr1', 'tkna', 30, 'tx_3',   100);
+        ('addr1', '{TOKEN_A}', 10, 'tx_1',   500),
+        ('addr1', '{TOKEN_B}', 10, 'tx_1',   800),
+        ('addr1', '{TOKEN_A}', 20, 'tx_2',  -200),
+        ('addr2', '{TOKEN_A}', 20, 'tx_2',   200),
+        ('addr1', '{TOKEN_A}', 30, 'tx_3',   100);
 
         insert into bal.tokens (address, token_id, value) values
-        ('addr1', 'tkna', 400),
-        ('addr1', 'tknb', 800),
-        ('addr2', 'tkna', 200);
+        ('addr1', '{TOKEN_A}', 400),
+        ('addr1', '{TOKEN_B}', 800),
+        ('addr2', '{TOKEN_A}', 200);
 
         insert into core.headers (height, id, parent_id, timestamp) values 
         (10, 'header10', 'header09', 1567123456789),
@@ -48,7 +52,7 @@ class TestBalance:
         assert response.status_code == 200
         assert response.json() == 4000
 
-        response = client.get(url + "?token_id=tkna")
+        response = client.get(url + f"?token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == 400
 
@@ -58,7 +62,7 @@ class TestBalance:
         assert response.json()["detail"] == "No balance found"
 
     def test_unknown_token(self, client):
-        response = client.get("/addresses/addr1/balance?token_id=oops")
+        response = client.get(f"/addresses/addr1/balance?token_id={TOKEN_X}")
         assert response.status_code == 404
         assert response.json()["detail"] == "No balance found"
 
@@ -70,7 +74,7 @@ class TestBalanceAtHeight:
         assert response.status_code == 404
         assert response.json()["detail"] == "No balance found"
 
-        response = client.get(url + "?token_id=tkna")
+        response = client.get(url + f"?token_id={TOKEN_A}")
         assert response.status_code == 404
         assert response.json()["detail"] == "No balance found"
 
@@ -80,7 +84,7 @@ class TestBalanceAtHeight:
         assert response.status_code == 200
         assert response.json() == 3000
 
-        response = client.get(url + "?token_id=tkna")
+        response = client.get(url + f"?token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == 300
 
@@ -90,7 +94,7 @@ class TestBalanceAtHeight:
         assert response.status_code == 200
         assert response.json() == 3000
 
-        response = client.get(url + "?token_id=tkna")
+        response = client.get(url + f"?token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == 300
 
@@ -100,7 +104,7 @@ class TestBalanceAtHeight:
         assert response.status_code == 200
         assert response.json() == 4000
 
-        response = client.get(url + "?token_id=tkna")
+        response = client.get(url + f"?token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == 400
 
@@ -110,7 +114,7 @@ class TestBalanceAtHeight:
         response = client.get(url)
         assert response.status_code == 404
 
-        response = client.get(url + "?token_id=tkna")
+        response = client.get(url + f"?token_id={TOKEN_A}")
         assert response.status_code == 404
 
         #  Negative height is not allowed, expect 422
@@ -118,7 +122,7 @@ class TestBalanceAtHeight:
         response = client.get(url)
         assert response.status_code == 422
 
-        response = client.get(url + "?token_id=tkna")
+        response = client.get(url + f"?token_id={TOKEN_A}")
         assert response.status_code == 422
 
     def test_unknown_address(self, client):
@@ -127,7 +131,9 @@ class TestBalanceAtHeight:
         assert response.json()["detail"] == "No balance found"
 
     def test_unknown_token(self, client):
-        response = client.get("/addresses/addr1/balance/at/height/20?token_id=oops")
+        response = client.get(
+            f"/addresses/addr1/balance/at/height/20?token_id={TOKEN_X}"
+        )
         assert response.status_code == 404
         assert response.json()["detail"] == "No balance found"
 
@@ -139,7 +145,7 @@ class TestBalanceAtTimestamp:
         assert response.status_code == 404
         assert response.json()["detail"] == "No balance found"
 
-        response = client.get(url + "?token_id=tkna")
+        response = client.get(url + f"?token_id={TOKEN_A}")
         assert response.status_code == 404
         assert response.json()["detail"] == "No balance found"
 
@@ -149,7 +155,7 @@ class TestBalanceAtTimestamp:
         assert response.status_code == 200
         assert response.json() == 3000
 
-        response = client.get(url + "?token_id=tkna")
+        response = client.get(url + f"?token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == 300
 
@@ -159,7 +165,7 @@ class TestBalanceAtTimestamp:
         assert response.status_code == 200
         assert response.json() == 3000
 
-        response = client.get(url + "?token_id=tkna")
+        response = client.get(url + f"?token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == 300
 
@@ -169,7 +175,7 @@ class TestBalanceAtTimestamp:
         assert response.status_code == 200
         assert response.json() == 4000
 
-        response = client.get(url + "?token_id=tkna")
+        response = client.get(url + f"?token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == 400
 
@@ -178,14 +184,14 @@ class TestBalanceAtTimestamp:
         response = client.get(url)
         assert response.status_code == 422
 
-        response = client.get(url + "?token_id=tkna")
+        response = client.get(url + f"?token_id={TOKEN_A}")
         assert response.status_code == 422
 
         url = "/addresses/addr1/balance/at/timestamp/-1"
         response = client.get(url)
         assert response.status_code == 422
 
-        response = client.get(url + "?token_id=tkna")
+        response = client.get(url + f"?token_id={TOKEN_A}")
         assert response.status_code == 422
 
     def test_unknown_address(self, client):
@@ -197,7 +203,7 @@ class TestBalanceAtTimestamp:
 
     def test_unknown_token(self, client):
         response = client.get(
-            "/addresses/addr1/balance/at/timestamp/1568123456789?token_id=oops"
+            f"/addresses/addr1/balance/at/timestamp/1568123456789?token_id={TOKEN_X}"
         )
         assert response.status_code == 404
         assert response.json()["detail"] == "No balance found"
@@ -221,7 +227,7 @@ class TestBalanceHistory:
             ],
         }
 
-        response = client.get(url + "?token_id=tkna")
+        response = client.get(url + f"?token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == {
             "heights": [
@@ -258,7 +264,7 @@ class TestBalanceHistory:
             ],
         }
 
-        response = client.get(url + "&token_id=tkna")
+        response = client.get(url + f"&token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == {
             "heights": [
@@ -295,7 +301,7 @@ class TestBalanceHistory:
             ],
         }
 
-        response = client.get(url + "&token_id=tkna")
+        response = client.get(url + f"&token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == {
             "heights": [
@@ -332,7 +338,7 @@ class TestBalanceHistory:
             ],
         }
 
-        response = client.get(url + "&token_id=tkna")
+        response = client.get(url + f"&token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == {
             "heights": [
@@ -395,7 +401,7 @@ class TestBalanceHistory:
             ],
         }
 
-        response = client.get(url + "&token_id=tkna")
+        response = client.get(url + f"&token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == {
             "heights": [
@@ -425,7 +431,7 @@ class TestBalanceHistory:
             ],
         }
 
-        response = client.get(url + "&token_id=tkna")
+        response = client.get(url + f"&token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == {
             "heights": [
@@ -446,7 +452,7 @@ class TestBalanceHistory:
             {"height": 10, "balance": 5000},
         ]
 
-        response = client.get(url + "&token_id=tkna")
+        response = client.get(url + f"&token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == [
             {"height": 30, "balance": 400},
@@ -464,7 +470,7 @@ class TestBalanceHistory:
             {"height": 10, "timestamp": 1567123456789, "balance": 5000},
         ]
 
-        response = client.get(url + "&token_id=tkna")
+        response = client.get(url + f"&token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == [
             {"height": 30, "timestamp": 1569123456789, "balance": 400},
@@ -481,7 +487,7 @@ class TestBalanceHistory:
             {"height": 20, "balance": 3000},
         ]
 
-        response = client.get(url + "&token_id=tkna")
+        response = client.get(url + f"&token_id={TOKEN_A}")
         assert response.status_code == 200
         assert response.json() == [
             {"height": 10, "balance": 500},
@@ -495,7 +501,7 @@ class TestBalanceHistory:
         assert response.json()["detail"] == "No balance found"
 
     def test_unknown_token_id(self, client):
-        url = "/addresses/addr1/balance/history?token_id=oops"
+        url = f"/addresses/addr1/balance/history?token_id={TOKEN_X}"
         response = client.get(url)
         assert response.status_code == 404
         assert response.json()["detail"] == "No balance found"
