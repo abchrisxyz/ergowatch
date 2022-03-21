@@ -40,7 +40,7 @@ async def address_balance(
         row = await conn.fetchrow(query, *args)
         if row is None:
             raise HTTPException(status_code=404, detail=DETAIL_404)
-        return row["value"] if row is not None else None
+        return row["value"]
 
 
 @r.get("/{address}/balance/at/height/{height}", response_model=int)
