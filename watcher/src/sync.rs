@@ -184,7 +184,7 @@ pub mod bootstrap {
         if !constraints_status.tier_1 {
             session.db.apply_constraints_tier1().unwrap();
         } else {
-            info!("Tier constraints have already been set. Likely recovering from interrupted bootstrapping.")
+            info!("Tier 1 constraints have already been set. Likely recovering from interrupted bootstrapping.")
         }
 
         // Get last height of derived tables
