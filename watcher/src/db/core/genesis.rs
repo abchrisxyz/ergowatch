@@ -7,6 +7,8 @@ use crate::db::unspent;
 use crate::db::SQLStatement;
 use crate::parsing::Output;
 
+const GENESIS_TIMESTAMP: i64 = 1561978800000;
+
 /// Helper function to include genesis boxes in db.
 ///
 /// Includes dummy header and tx to satisfy FK's.
@@ -17,7 +19,7 @@ pub fn prep(node_boxes: Vec<crate::node::models::Output>) -> Vec<SQLStatement> {
             height: 0,
             id: "0000000000000000000000000000000000000000000000000000000000000000",
             parent_id: "genesis",
-            timestamp: 0,
+            timestamp: GENESIS_TIMESTAMP,
         }
         .to_statement(),
         TransactionRow {
@@ -111,6 +113,13 @@ mod tests {
         assert_eq!(statements[13].sql, db::unspent::usp::INSERT_NEW_BOX);
         assert_eq!(statements[14].sql, db::balances::erg_diffs::INSERT_DIFFS);
         assert_eq!(statements[15].sql, db::balances::erg::INSERT_BALANCES);
+
+        // Timestamp of genesis header
+        let statement = &statements[0];
+        assert_eq!(
+            statement.args[3],
+            db::SQLArg::BigInt(super::GENESIS_TIMESTAMP)
+        );
 
         // First box statement
         let statement = &statements[2];

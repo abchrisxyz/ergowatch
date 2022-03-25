@@ -292,7 +292,7 @@ def make_blocks(height: int):
     block_c = {
         "header": {
             "votes": "000000",
-            "timestamp": 1234560200000,
+            "timestamp": 1234560300000,
             "size": 123,
             "height": height + 3,
             "id": "block-c",
@@ -581,13 +581,30 @@ def assert_db_constraints(conn: pg.Connection):
 
 def assert_headers(cur: pg.Cursor, start_height: int):
     # 4 headers: 1 parent + 3 from blocks
-    cur.execute("select height, id from core.headers order by 1, 2;")
+    cur.execute(
+        "select height, id, parent_id, timestamp from core.headers order by 1, 2;"
+    )
     rows = cur.fetchall()
     assert len(rows) == 4
-    assert rows[0] == (start_height, GENESIS_ID)
-    assert rows[1] == (start_height + 1, "block-a")
-    assert rows[2] == (start_height + 2, "block-b")
-    assert rows[3] == (start_height + 3, "block-c")
+    if start_height == 0:
+        # Genesis parent_id and timestamp are set by watcher
+        assert rows[0] == (
+            start_height,
+            GENESIS_ID,
+            "genesis",
+            1561978800000,
+        )
+    else:
+        # Genesis parent_id and timestamp are set by db fixture
+        assert rows[0] == (
+            start_height,
+            GENESIS_ID,
+            "bootstrap-parent-header-id",
+            1234560000000,
+        )
+    assert rows[1] == (start_height + 1, "block-a", GENESIS_ID, 1234560100000)
+    assert rows[2] == (start_height + 2, "block-b", "block-a", 1234560200000)
+    assert rows[3] == (start_height + 3, "block-c", "block-b", 1234560300000)
 
 
 def assert_transactions(cur: pg.Cursor, start_height: int):
