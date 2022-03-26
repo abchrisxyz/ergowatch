@@ -14,6 +14,12 @@ const POLL_INTERVAL_SECONDS: u64 = 5;
 /// Sync db and track node in infinite loop
 pub fn sync_and_track(session: &mut Session) -> Result<(), &'static str> {
     info!("Synchronizing with node");
+
+    if session.db.is_empty().unwrap() {
+        session.db.apply_constraints_all().unwrap();
+        include_genesis_boxes(&session)?;
+    };
+
     loop {
         let node_height = get_node_height_blocking(session);
 
@@ -82,7 +88,7 @@ fn sync_to_height(session: &mut Session, node_height: u32) -> Result<(), &'stati
 }
 
 /// Add genesis boxes to database
-pub fn include_genesis_boxes(session: &Session) -> Result<(), &'static str> {
+fn include_genesis_boxes(session: &Session) -> Result<(), &'static str> {
     info!("Retrieving genesis boxes");
     let boxes = match session.node.get_genesis_blocks() {
         Ok(boxes) => boxes,
@@ -91,7 +97,10 @@ pub fn include_genesis_boxes(session: &Session) -> Result<(), &'static str> {
             return Err("Failed to retrieve genesis boxes from node");
         }
     };
-    let sql_statements = db::core::genesis::prep(boxes);
+    let mut sql_statements = vec![];
+    sql_statements.append(&mut db::core::genesis::prep(boxes));
+    sql_statements.append(&mut db::unspent::prep_bootstrap(0));
+    sql_statements.append(&mut db::balances::prep_bootstrap(0));
     session.db.execute_in_transaction(sql_statements).unwrap();
     Ok(())
 }
@@ -143,6 +152,9 @@ pub mod bootstrap {
     use log::info;
 
     pub fn phase_1(session: &mut Session) -> Result<(), &'static str> {
+        if !session.db.has_genesis_boxes() {
+            super::include_genesis_boxes(session)?;
+        }
         sync_core(session)?;
         session.db.apply_constraints_tier1().unwrap();
         Ok(())
@@ -169,12 +181,15 @@ pub mod bootstrap {
     }
 
     pub fn db_is_bootstrapped(session: &Session) -> bool {
-        // Get last height of derived tables.
-        let bootstrap_height = session.db.get_bootstrap_height().unwrap();
-        bootstrap_height == session.head.height as i32
+        // Compare last height of derived tables.
+        match session.db.get_bootstrap_height().unwrap() {
+            Some(h) => h == session.head.height as i32,
+            None => false,
+        }
     }
 
     /// Phase 2 - Fill derived tables to match sync height of core tables.
+    // TODO: rename to reflect association with tier2/phase2
     fn expand_db(session: &mut Session) -> Result<(), &'static str> {
         info!("Bootstrapping step 2/2 - populating secondary tables");
         // Set tier 1 db constraints if absent.
@@ -188,7 +203,10 @@ pub mod bootstrap {
         }
 
         // Get last height of derived tables
-        let bootstrap_height: i32 = session.db.get_bootstrap_height().unwrap();
+        let bootstrap_height: i32 = match session.db.get_bootstrap_height().unwrap() {
+            Some(h) => h,
+            None => -1, // Empty tables, next height should be genesis (i.e. 0)
+        };
 
         // Iterate from session.head.height to core_height
         // Run queries for each block height

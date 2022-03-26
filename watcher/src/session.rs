@@ -84,7 +84,10 @@ impl Session {
         };
         let db_constraints_status = db.constraints_status().unwrap();
         let db_core_head = db.get_head().unwrap();
-        let db_bootstrap_height = db.get_bootstrap_height().unwrap();
+        let unfinished_bootstrap = match db.get_bootstrap_height().unwrap() {
+            Some(h) => h < db_core_head.height as i32,
+            None => false,
+        };
 
         // Check cli args and db state
         if db_is_empty && db_constraints_status.tier_1 {
@@ -92,7 +95,7 @@ impl Session {
                 "Database should be initialized without constraints or indexes. Pass --no-bootstrap flag to override.",
             );
         }
-        if cli.no_bootstrap && db_bootstrap_height < db_core_head.height as i32 {
+        if cli.no_bootstrap && unfinished_bootstrap {
             return Err("Cannot use --no-boostrap after unfinished bootstrapping");
         }
         if cli.no_bootstrap {

@@ -225,9 +225,9 @@ impl DB {
     /// Get sync height of derived (i.e. non-core) tables
     ///
     /// Will be different from core tables during bootstrapping process.
-    pub fn get_bootstrap_height(&self) -> Result<i32, postgres::Error> {
+    /// Returns None for empty tables, 0 for genesis data, 1 for 1st block etc.
+    pub fn get_bootstrap_height(&self) -> Result<Option<i32>, postgres::Error> {
         let mut client = Client::connect(&self.conn_str, NoTls)?;
-        // Cast height to oid to allow deserialisation to u32
         let row_opt = client.query_opt(
             "
             select height
@@ -238,8 +238,19 @@ impl DB {
         )?;
         match row_opt {
             Some(row) => Ok(row.get("height")),
-            None => Ok(0),
+            None => Ok(None),
         }
+    }
+
+    /// Checks genesis block data is present
+    pub fn has_genesis_boxes(&self) -> bool {
+        let mut client = Client::connect(&self.conn_str, NoTls).unwrap();
+        // Outputs cannot be empty if genesis boxes have been processed
+        let row = client
+            .query_one("select exists (select * from core.outputs limit 1);", &[])
+            .unwrap();
+        let exists: bool = row.get(0);
+        exists
     }
 }
 
