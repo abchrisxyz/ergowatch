@@ -1,12 +1,15 @@
 # Changelog
 
 
-## watcher v0.2.0 - UNRELEASED
+## v0.2.0 - UNRELEASED
 
 ### Fixed
- - Non-zero timestamp for genesis header
+[Issue 11](https://github.com/abchrisxyz/ergowatch/issues/11) Non-zero timestamp for genesis header.
+
+### Housekeeping
+[Issue 12](https://github.com/abchrisxyz/ergowatch/issues/12) Handle genesis boxes in bootstrapping process (not separately).
 
 
-## watcher v0.1.0 - 2022-03-22
-- 🎉 first release
+## v0.1.0 - 2022-03-22
+🎉 first release
 
