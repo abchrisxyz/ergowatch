@@ -7,4 +7,5 @@ pw = "hello"
 
 [node]
 url = "http://127.0.0.1:9053"
+poll_interval = 5 # seconds
 

@@ -8,9 +8,6 @@ use crate::db;
 use crate::parsing::BlockData;
 use crate::session::Session;
 
-// TODO: move this to config
-const POLL_INTERVAL_SECONDS: u64 = 5;
-
 /// Sync db and track node in infinite loop
 pub fn sync_and_track(session: &mut Session) -> Result<(), &'static str> {
     info!("Synchronizing with node");
@@ -28,8 +25,8 @@ pub fn sync_and_track(session: &mut Session) -> Result<(), &'static str> {
                 debug!("Done syncing, exiting now");
                 return Ok(());
             }
-            debug!("No new blocks - waiting {} seconds", POLL_INTERVAL_SECONDS);
-            thread::sleep(time::Duration::from_secs(POLL_INTERVAL_SECONDS));
+            debug!("No new blocks - waiting {} seconds", session.poll_interval);
+            thread::sleep(time::Duration::from_secs(session.poll_interval));
             continue;
         }
 
@@ -136,8 +133,8 @@ fn get_node_height_blocking(session: &Session) -> u32 {
             Ok(h) => return h,
             Err(e) => {
                 error!("{}", e);
-                info!("Retrying in {} seconds", POLL_INTERVAL_SECONDS);
-                thread::sleep(time::Duration::from_secs(POLL_INTERVAL_SECONDS));
+                info!("Retrying in {} seconds", session.poll_interval);
+                thread::sleep(time::Duration::from_secs(session.poll_interval));
                 continue;
             }
         };

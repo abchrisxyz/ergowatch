@@ -40,6 +40,7 @@ pub struct Session {
     pub db: db::DB,
     pub db_is_empty: bool,
     pub node: node::Node,
+    pub poll_interval: u64,
     pub allow_bootstrap: bool,
     pub exit_when_synced: bool,
     pub head: crate::types::Head,
@@ -115,10 +116,10 @@ impl Session {
             db,
             db_is_empty,
             node: node,
+            poll_interval: cfg.node.poll_interval,
             allow_bootstrap: !cli.no_bootstrap,
             exit_when_synced: cli.exit,
             head: db_core_head,
-            // If not
             allow_rollbacks: cli.no_bootstrap || db_constraints_status.all_set,
         })
     }

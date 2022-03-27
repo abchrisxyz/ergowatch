@@ -3,6 +3,9 @@
 
 ## v0.2.0 - UNRELEASED
 
+### New features
+[Issue 13](https://github.com/abchrisxyz/ergowatch/issues/13) Made node poll interval configurable.
+
 ### Fixed
 [Issue 11](https://github.com/abchrisxyz/ergowatch/issues/11) Non-zero timestamp for genesis header.
 
