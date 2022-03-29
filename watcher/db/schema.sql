@@ -132,3 +132,15 @@ create table bal.tokens_diffs (
 	tx_id text,
 	value bigint
 );
+
+
+-------------------------------------------------------------------------------
+-- Metrics
+------------------------------------------------------------------------------- 
+create schema mtr;
+
+-- UTxO counts
+create table mtr.utxos (
+	height int,
+	value bigint
+);

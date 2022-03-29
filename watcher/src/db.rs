@@ -1,8 +1,10 @@
 pub mod balances;
 pub mod core;
+pub mod metrics;
 mod migrations;
 pub mod unspent;
 
+use crate::session::cache;
 use log::debug;
 use log::info;
 use postgres::{Client, NoTls};
@@ -165,6 +167,8 @@ impl DB {
     pub fn apply_constraints_tier2(&self) -> anyhow::Result<()> {
         info!("Loading tier-2 constraints and indexes");
         let statements: Vec<&'static str> = vec![
+            // Metrics
+            metrics::utxos::constraints::ADD_PK,
             // Finally
             "update ew.constraints set tier_2 = true;",
         ];
@@ -251,6 +255,15 @@ impl DB {
             .unwrap();
         let exists: bool = row.get(0);
         exists
+    }
+
+    /// Return initialized cache
+    pub fn load_cache(&self) -> cache::Cache {
+        info!("Preparing cache");
+        let mut client = Client::connect(&self.conn_str, NoTls).unwrap();
+        cache::Cache {
+            metrics: metrics::load_cache(&mut client),
+        }
     }
 }
 

@@ -95,6 +95,8 @@ def generate_bootstrap_sql(blocks: List[Dict]) -> str:
     # Other schemas
     sql += generate_bootstrap_sql_usp(outputs)
     sql += generate_bootstrap_sql_bal_erg(header, outputs)
+    # TODO: generate_bootstrap_sql_bal_tokens (works fine for now because no case has tokens initially)
+    sql += generate_bootstrap_sql_mtr(header, outputs)
 
     return sql
 
@@ -133,6 +135,24 @@ def generate_bootstrap_sql_bal_erg(header: Header, outputs: List[Output]) -> str
             qry_diffs.format(box.address, header.height, box.tx_id, box.value)
             + qry_bal.format(box.address, box.value)
             for box in outputs
+        ]
+    )
+
+
+def generate_bootstrap_sql_mtr(header: Header, outputs: List[Output]) -> str:
+    """
+    Bootstrap sql for mtr tables.
+    """
+    # All outputs are still unspent
+    qry_utxos = dedent(
+        f"""
+        insert into mtr.utxos(height, value)
+        values ({header.height}, {len(outputs)});\n
+    """
+    )
+    return "".join(
+        [
+            qry_utxos,
         ]
     )
 

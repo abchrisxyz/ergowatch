@@ -5,6 +5,7 @@
 
 ### New features
 [Issue 13](https://github.com/abchrisxyz/ergowatch/issues/13) Made node poll interval configurable.
+[Issue 14](https://github.com/abchrisxyz/ergowatch/issues/14) Added utxo count API.
 
 ### Fixed
 [Issue 11](https://github.com/abchrisxyz/ergowatch/issues/11) Non-zero timestamp for genesis header.
