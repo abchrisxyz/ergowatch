@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import List, Dict
 
 from fixtures.addresses import AddressCatalogue as AC
+from fixtures.registers import RegisterCatalogue as RC
 
 BOOTSTRAP_TX_ID = "bootstrap-tx"
 DEFAULT_BOX_VALUE = 1_000
@@ -49,6 +50,14 @@ class Output:
 
 
 @dataclass
+class Input:
+    box_id: int
+    tx_id: str
+    header_id: str
+    index: int
+
+
+@dataclass
 class Token:
     id: str
     box_id: str
@@ -57,6 +66,172 @@ class Token:
     description: str = "description"
     decimals: int = 0
     standard: str = "dummy-std"
+
+
+@dataclass
+class BoxAsset:
+    token_id: str
+    box_id: str
+    amount: int
+
+
+@dataclass
+class Register:
+    id: int
+    box_id: str
+    value_type: str
+    serialized_value: str
+    rendered_value: str
+
+
+def generate_rev1_sql(blocks: List[Dict]) -> str:
+    """
+    Generate sql statements to fill a db as it would be by v0.1.
+
+    *blocks*: list of test blocks to be processed by Watcher
+
+    Use to test migrations.
+    """
+    if blocks[0]["header"]["height"] == 1:
+        raise ValueError("Test DB should be empty when simulating start from 1st block")
+    headers = extract_headers(blocks)
+    transactions = extract_transactions(blocks)
+    outputs = extract_outputs(blocks)
+    inputs = extract_inputs(blocks)
+    tokens = extract_tokens(blocks)
+    assets = extract_assets(blocks)
+    registers = extract_registers(blocks)
+
+    sql = ""
+    # Core tables
+    for header in headers:
+        sql += format_header_sql(header)
+    for tx in transactions:
+        sql += format_transaction_sql(tx)
+    for box in outputs:
+        sql += format_output_sql(box)
+    for box in inputs:
+        sql += format_input_sql(box)
+    for token in tokens:
+        sql += format_token_sql(token)
+    for asset in assets:
+        sql += format_asset_sql(asset)
+    for register in registers:
+        sql += format_register_sql(register)
+
+    # Unspent
+    sql += """
+        insert into usp.boxes (box_id)
+        select op.box_id
+        from core.outputs op
+        left join core.inputs ip on ip.box_id = op.box_id
+        where ip.box_id is null;
+        """
+
+    # ERG balance diffs
+    sql += """
+        with transactions as (	
+            select height, id
+            from core.transactions
+        ), inputs as (
+            select tx.height
+                , tx.id as tx_id
+                , op.address
+                , sum(op.value) as value
+            from transactions tx
+            join core.inputs ip on ip.tx_id = tx.id
+            join core.outputs op on op.box_id = ip.box_id
+            group by 1, 2, 3
+        ), outputs as (
+            select tx.height
+                , tx.id as tx_id
+                , op.address
+                , sum(op.value) as value
+            from transactions tx
+            join core.outputs op on op.tx_id = tx.id
+            group by 1, 2, 3
+        )
+        insert into bal.erg_diffs (address, height, tx_id, value)
+        select coalesce(i.address, o.address) as address
+            , coalesce(i.height, o.height) as height
+            , coalesce(i.tx_id, o.tx_id) as tx_id
+            , sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) as value
+        from inputs i
+        full outer join outputs o
+            on o.address = i.address
+            and o.tx_id = i.tx_id
+        group by 1, 2, 3 having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) <> 0
+        order by 2, 3;
+    """
+
+    # ERG balances
+    sql += """
+        insert into bal.erg(address, value)
+        select address,
+            sum(value)
+        from bal.erg_diffs
+        group by 1 having sum(value) <> 0
+        order by 1;
+    """
+
+    # Token balance diffs
+    sql += """
+        with inputs as (
+            with transactions as (	
+                select height, id
+                from core.transactions
+            )
+            select tx.height
+                , tx.id as tx_id
+                , op.address
+                , ba.token_id
+                , sum(ba.amount) as value
+            from transactions tx
+            join core.inputs ip on ip.tx_id = tx.id
+            join core.outputs op on op.box_id = ip.box_id
+            join core.box_assets ba on ba.box_id = ip.box_id
+            group by 1, 2, 3, 4
+        ), outputs as (
+            with transactions as (	
+                select height, id
+                from core.transactions
+            )
+            select tx.height
+                , tx.id as tx_id
+                , op.address
+                , ba.token_id
+                , sum(ba.amount) as value
+            from transactions tx
+            join core.outputs op on op.tx_id = tx.id
+            join core.box_assets ba on ba.box_id = op.box_id
+            group by 1, 2, 3, 4
+        )
+        insert into bal.tokens_diffs (address, token_id, height, tx_id, value)
+        select coalesce(i.address, o.address) as address
+            , coalesce(i.token_id, o.token_id ) as token_id
+            , coalesce(i.height, o.height) as height
+            , coalesce(i.tx_id, o.tx_id) as tx_id
+            , sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) as value
+        from inputs i
+        full outer join outputs o
+            on o.address = i.address
+            and o.tx_id = i.tx_id
+            and o.token_id = i.token_id
+        group by 1, 2, 3, 4 having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) <> 0;
+    """
+
+    # Token balances
+    sql += """
+        insert into bal.tokens(address, token_id, value)
+        select address,
+            token_id,
+            sum(value)
+        from bal.tokens_diffs
+        group by 1, 2 having sum(value) <> 0
+        order by 1, 2;
+    """
+
+    return sql
 
 
 def generate_bootstrap_sql(blocks: List[Dict]) -> str:
@@ -172,12 +347,37 @@ def extract_existing_header(blocks: List[Dict]) -> Header:
     )
 
 
+def extract_headers(blocks: List[Dict]) -> List[Header]:
+    return [extract_existing_header(blocks),] + [
+        Header(
+            height=b["header"]["height"],
+            id=b["header"]["id"],
+            parent_id=b["header"]["parentId"],
+            timestamp=b["header"]["timestamp"],
+        )
+        for b in blocks
+    ]
+
+
 def extract_existing_transaction(blocks: List[Dict]) -> Header:
     """A single tx that is supposed to have produced any outputs, tokens, etc."""
     header = extract_existing_header(blocks)
     return Transaction(
         id=BOOTSTRAP_TX_ID, header_id=header.id, height=header.height, index=0
     )
+
+
+def extract_transactions(blocks: List[Dict]) -> Header:
+    return [extract_existing_transaction(blocks),] + [
+        Transaction(
+            id=tx["id"],
+            header_id=b["header"]["id"],
+            height=b["header"]["height"],
+            index=idx,
+        )
+        for b in blocks
+        for idx, tx in enumerate(b["blockTransactions"]["transactions"])
+    ]
 
 
 def extract_existing_outputs(blocks: List[Dict]) -> List[Output]:
@@ -234,6 +434,43 @@ def extract_existing_outputs(blocks: List[Dict]) -> List[Output]:
     return outputs
 
 
+def extract_outputs(blocks: List[Dict]) -> List[Output]:
+    """
+    All output boxes
+    """
+    return extract_existing_outputs(blocks) + [
+        Output(
+            box_id=box["boxId"],
+            address=AC.boxid2addr(box["boxId"]),
+            index=idx,
+            header_id=b["header"]["id"],
+            creation_height=box["creationHeight"],
+            tx_id=tx["id"],
+            value=box["value"],
+        )
+        for b in blocks
+        for tx in b["blockTransactions"]["transactions"]
+        for idx, box in enumerate(tx["outputs"])
+    ]
+
+
+def extract_inputs(blocks: List[Dict]) -> List[Input]:
+    """
+    All input boxes
+    """
+    return [
+        Input(
+            box_id=box["boxId"],
+            header_id=b["header"]["id"],
+            tx_id=tx["id"],
+            index=idx,
+        )
+        for b in blocks
+        for tx in b["blockTransactions"]["transactions"]
+        for idx, box in enumerate(tx["inputs"])
+    ]
+
+
 def extract_existing_tokens(blocks: List[Dict]) -> List[Token]:
     """
     Returns tokens that the db should contain to satisfy asset FKs
@@ -256,6 +493,62 @@ def extract_existing_tokens(blocks: List[Dict]) -> List[Token]:
                             )
                         )
     return tokens
+
+
+def extract_tokens(blocks: List[Dict]) -> List[Token]:
+    """
+    All tokens
+    """
+    return extract_existing_tokens(blocks) + [
+        Token(
+            id=tk["tokenId"],
+            box_id=op["boxId"],
+            emission_amount=tk["amount"],
+            # TODO: should be parsed from registers
+            decimals=0,
+        )
+        for b in blocks
+        for tx in b["blockTransactions"]["transactions"]
+        for op in tx["outputs"]
+        for tk in op["assets"]
+        if tk["tokenId"] == tx["inputs"][0]["boxId"]
+    ]
+
+
+def extract_assets(blocks: List[Dict]) -> List[BoxAsset]:
+    """
+    All box assets
+    """
+    return extract_existing_tokens(blocks) + [
+        BoxAsset(
+            token_id=tk["tokenId"],
+            box_id=op["boxId"],
+            amount=tk["amount"],
+        )
+        for b in blocks
+        for tx in b["blockTransactions"]["transactions"]
+        for op in tx["outputs"]
+        for tk in op["assets"]
+    ]
+
+
+def extract_registers(blocks: List[Dict]) -> List[Register]:
+    """
+    All box assets
+    """
+    return [
+        Register(
+            id=int(rid[1]),
+            box_id=op["boxId"],
+            value_type=RC.from_raw(raw).type,
+            serialized_value=raw,
+            rendered_value=RC.from_raw(raw).rendered,
+        )
+        for b in blocks
+        for tx in b["blockTransactions"]["transactions"]
+        for op in tx["outputs"]
+        for (rid, raw) in op["additionalRegisters"].items()
+    ]
 
 
 def format_header_sql(h: Header):
@@ -303,6 +596,20 @@ def format_output_sql(box: Output):
     )
 
 
+def format_input_sql(box: Input):
+    return dedent(
+        f"""
+        insert into core.inputs(box_id, tx_id, header_id, index)
+        values (
+            '{box.box_id}',
+            '{box.tx_id}',
+            '{box.header_id}',
+            {box.index}
+        );
+    """
+    )
+
+
 def format_token_sql(t: Token):
     return dedent(
         f"""
@@ -315,6 +622,34 @@ def format_token_sql(t: Token):
             '{t.description}',
             {t.decimals},
             '{t.standard}'
+        );
+    """
+    )
+
+
+def format_asset_sql(a: BoxAsset):
+    return dedent(
+        f"""
+        insert into core.box_assets (token_id, box_id, amount)
+        values (
+            '{a.token_id}',
+            '{a.box_id}',
+            {a.amount}
+        );
+    """
+    )
+
+
+def format_register_sql(r: Register):
+    return dedent(
+        f"""
+        insert into core.box_registers (id, box_id, value_type, serialized_value, rendered_value)
+        values (
+            '{r.id}',
+            '{r.box_id}',
+            '{r.value_type}',
+            '{r.serialized_value}',
+            '{r.rendered_value}'
         );
     """
     )

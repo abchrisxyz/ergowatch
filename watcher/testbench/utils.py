@@ -13,6 +13,7 @@ def run_watcher(
     backtrace=False,
     timeout=10,
     log_file: str = None,
+    allow_migrations: bool = False,
 ) -> subprocess.CompletedProcess:
     exe = str(
         Path(__file__).parent.parent.absolute() / Path(f"target/{target}/watcher")
@@ -21,6 +22,8 @@ def run_watcher(
     args.append("--exit")
     if no_bootstrap:
         args.append("--no-bootstrap")
+    if allow_migrations:
+        args.append("-m")
 
     env = dict(
         os.environ,

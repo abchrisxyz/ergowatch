@@ -10,7 +10,6 @@ P2PK's start with a 9.
 """
 
 from collections import namedtuple
-from multiprocessing.sharedctypes import Value
 
 Box = namedtuple("Box", ["address", "ergo_tree"])
 
