@@ -13,6 +13,7 @@ DB should contain headers and txs references by any outputs present at bootstrap
 from textwrap import dedent
 from dataclasses import dataclass
 from typing import List, Dict
+from copy import deepcopy
 
 from fixtures.addresses import AddressCatalogue as AC
 from fixtures.registers import RegisterCatalogue as RC
@@ -92,7 +93,13 @@ def generate_rev1_sql(blocks: List[Dict]) -> str:
 
     Use to test migrations.
     """
-    if blocks[0]["header"]["height"] == 1:
+    blocks = filter_main_chain_blocks(blocks)
+    heights = [b["header"]["height"] for b in blocks]
+    if len(heights) != len(set(heights)):
+        raise ValueError(
+            "generate_rev1_sql does not handle forks. Ensure 1 block per height only."
+        )
+    if heights[0] == 1:
         raise ValueError("Test DB should be empty when simulating start from 1st block")
     headers = extract_headers(blocks)
     transactions = extract_transactions(blocks)
@@ -330,6 +337,20 @@ def generate_bootstrap_sql_mtr(header: Header, outputs: List[Output]) -> str:
             qry_utxos,
         ]
     )
+
+
+def filter_main_chain_blocks(blocks: List[Dict]) -> List[Dict]:
+    """
+    Filter out blocks not part of main chain
+    """
+    blocks = deepcopy(blocks)
+    main_chain = [blocks.pop()]
+    blocks.reverse()
+    for block in blocks:
+        if block["header"]["id"] == main_chain[-1]["header"]["parentId"]:
+            main_chain.append(block)
+    main_chain.reverse()
+    return main_chain
 
 
 def extract_existing_header(blocks: List[Dict]) -> Header:

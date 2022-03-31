@@ -339,6 +339,12 @@ class TestRev1DB:
             pub1-box1 1000     pub1-box2  999
                                fees-box1    1
 
+        ----------------fork-----------------
+        block x:
+            base-box1 1000 --> base-box2  950
+                               con1-box1   50
+        -------------------------------------
+
         block b:
             pub1-box2  999 --> pub2-box1  999
         """
@@ -474,6 +480,22 @@ class TestRev1DB:
             },
         }
 
+        block_x = {
+            "header": {
+                "votes": "000000",
+                "timestamp": 1234560100000,
+                "height": 600000,
+                "id": "block-x",
+                "parentId": "parent-of-block-a",
+            },
+            "blockTransactions": {
+                "headerId": "block-a",
+                "transactions": [tx_a1],
+                "blockVersion": 2,
+                "size": 1155,
+            },
+        }
+
         block_b = {
             "header": {
                 "votes": "000000",
@@ -490,7 +512,7 @@ class TestRev1DB:
             },
         }
 
-        return [block_a, block_b]
+        return [block_a, block_x, block_b]
 
     @pytest.fixture(scope="class")
     def cur(self, temp_db_rev1_class_scoped, blocks):

@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Dict
 from typing import List
-from dataclasses import dataclass
 
 import psycopg as pg
 from psycopg.sql import Identifier, SQL
@@ -34,13 +33,13 @@ TEST_DB_NAME = "ew_pytest"
 
 
 @pytest.fixture
-def temp_db(scope="class"):
+def temp_db():
     with TempDB() as db_name:
         yield conn_str(db_name)
 
 
 @pytest.fixture
-def temp_db_class_scoped(scope="class"):
+def temp_db_class_scoped():
     with TempDB() as db_name:
         yield conn_str(db_name)
 
@@ -58,6 +57,12 @@ def unconstrained_db_class_scoped():
 
 
 # Rev 1 mocks
+@pytest.fixture
+def temp_db_rev1():
+    with TempDB(rev1=True) as db_name:
+        yield conn_str(db_name)
+
+
 @pytest.fixture(scope="class")
 def temp_db_rev1_class_scoped():
     with TempDB(rev1=True) as db_name:

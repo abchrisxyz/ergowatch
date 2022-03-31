@@ -230,6 +230,7 @@ pub mod bootstrap {
             let mut sql_statements: Vec<db::SQLStatement> = vec![];
             sql_statements.append(&mut db::unspent::prep_bootstrap(h));
             sql_statements.append(&mut db::balances::prep_bootstrap(h));
+            // TODO: utxo counts can be sped up using cache
             sql_statements.append(&mut db::metrics::prep_bootstrap(h));
 
             // Execute statements in single transaction
