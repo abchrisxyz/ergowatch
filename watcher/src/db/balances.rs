@@ -2,11 +2,10 @@
 //!
 //! Process blocks into balance tables data.
 
-// TODO undo pub once genesis refactoring is done
-pub mod erg;
-pub mod erg_diffs;
-pub mod tokens;
-pub mod tokens_diffs;
+pub(super) mod erg;
+pub(super) mod erg_diffs;
+pub(super) mod tokens;
+pub(super) mod tokens_diffs;
 
 use super::SQLStatement;
 use crate::parsing::BlockData;
