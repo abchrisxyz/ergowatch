@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use log::info;
 use postgres::Client;
 
-const CURRENT_VERSION: i32 = 2;
+const CURRENT_VERSION: i32 = 3;
 
 /// Check db version and apply migrations if needed.
 pub fn check(client: &mut Client, allow_migrations: bool) -> anyhow::Result<()> {
@@ -46,6 +46,7 @@ fn apply_migration(client: &mut Client, migration_id: i32) -> Result<(), postgre
     );
     match migration_id {
         1 => mig_001(client),
+        2 => mig_002(client),
         _ => panic!("Attempted to apply migration with unknown ID"),
     }
 }
@@ -114,6 +115,22 @@ fn mig_001(client: &mut Client) -> Result<(), postgres::Error> {
         SQLStatement::from("alter table mtr.utxos set logged;"),
         SQLStatement::from("drop procedure mtr.fill_utxos;"),
         // Update revision
+        SQLStatement::from("update ew.revision set version = version + 1;"),
+    ];
+    let mut transaction = client.transaction()?;
+    for stmt in statements {
+        stmt.execute(&mut transaction)?;
+    }
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Migration 2
+///
+/// Fixes genesis box timestamps
+fn mig_002(client: &mut Client) -> Result<(), postgres::Error> {
+    let statements = vec![
+        SQLStatement::from("update core.headers set timestamp = 1561978800000 where height = 0"),
         SQLStatement::from("update ew.revision set version = version + 1;"),
     ];
     let mut transaction = client.transaction()?;

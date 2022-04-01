@@ -7,7 +7,7 @@ create table ew.revision (
 	version integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (version) values (2);
+insert into ew.revision (version) values (3);
 
 create table ew.constraints (
 	singleton int primary key default 1,

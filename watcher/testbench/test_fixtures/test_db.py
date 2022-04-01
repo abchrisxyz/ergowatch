@@ -663,7 +663,7 @@ class TestRev1DB:
         )
         rows = cur.fetchall()
         assert len(rows) == 1
-        assert rows[0] == ("con2-box1", "con2-box2", 50, 0)
+        assert rows[0] == ("con2-box1", "con2-box2", 50, None)
 
     def test_core_assets(self, cur):
         cur.execute(
@@ -987,10 +987,10 @@ class TestHelpers:
         assert t.id == "token-1"
         assert t.box_id == "dummy-token-box-id-1"
         assert t.emission_amount == 5000
-        assert t.name == "name"
-        assert t.description == "description"
-        assert t.decimals == 0
-        assert t.standard == "dummy-std"
+        assert t.name == None
+        assert t.description == None
+        assert t.decimals == None
+        assert t.standard == None
 
     def test_extract_outputs(self, blocks):
         boxes = extract_existing_outputs(blocks)

@@ -4,7 +4,9 @@ import psycopg as pg
 from fixtures.api import MockApi, ApiUtil, GENESIS_ID
 from fixtures.config import temp_cfg
 from fixtures.db import bootstrap_db
+from fixtures.db import fill_rev1_db
 from fixtures.db import temp_db_class_scoped
+from fixtures.db import temp_db_rev1_class_scoped
 from fixtures.db import unconstrained_db_class_scoped
 from fixtures.addresses import AddressCatalogue as AC
 from utils import run_watcher
@@ -495,6 +497,41 @@ class TestGenesisNoBootstrap:
             assert "Synchronizing with node" in cp.stdout.decode()
 
             with pg.connect(unconstrained_db_class_scoped) as conn:
+                yield conn
+
+    def test_db_state(self, synced_db: pg.Connection):
+        _test_db_state(synced_db, self.start_height)
+
+
+@pytest.mark.order(ORDER)
+class TestMigrations:
+    """
+    Aplly migration to synced db
+    """
+
+    start_height = 599_999
+
+    @pytest.fixture(scope="class")
+    def synced_db(self, temp_cfg, temp_db_rev1_class_scoped):
+        """
+        Run watcher with mock api and return cursor to test db.
+        """
+        blocks = make_blocks(self.start_height)
+        with MockApi() as api:
+            api = ApiUtil()
+            api.set_blocks(blocks)
+
+            # Prepare db
+            with pg.connect(temp_db_rev1_class_scoped) as conn:
+                fill_rev1_db(conn, blocks)
+
+            # Run
+            cp = run_watcher(temp_cfg, allow_migrations=True)
+            assert cp.returncode == 0
+            assert "Applying migration 1 (revision 2)" in cp.stdout.decode()
+            assert "Applying migration 2 (revision 3)" in cp.stdout.decode()
+
+            with pg.connect(temp_db_rev1_class_scoped) as conn:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):

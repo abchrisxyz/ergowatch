@@ -59,14 +59,22 @@ class Input:
 
 
 @dataclass
+class DataInput:
+    box_id: int
+    tx_id: str
+    header_id: str
+    index: int
+
+
+@dataclass
 class Token:
     id: str
     box_id: str
     emission_amount: int = DEFAULT_TOKEN_EMISSION_AMOUNT
-    name: str = "name"
-    description: str = "description"
-    decimals: int = 0
-    standard: str = "dummy-std"
+    name: str = None
+    description: str = None
+    decimals: int = None
+    standard: str = None
 
 
 @dataclass
@@ -105,6 +113,7 @@ def generate_rev1_sql(blocks: List[Dict]) -> str:
     transactions = extract_transactions(blocks)
     outputs = extract_outputs(blocks)
     inputs = extract_inputs(blocks)
+    data_inputs = extract_data_inputs(blocks)
     tokens = extract_tokens(blocks)
     assets = extract_assets(blocks)
     registers = extract_registers(blocks)
@@ -119,6 +128,8 @@ def generate_rev1_sql(blocks: List[Dict]) -> str:
         sql += format_output_sql(box)
     for box in inputs:
         sql += format_input_sql(box)
+    for box in data_inputs:
+        sql += format_data_input_sql(box)
     for token in tokens:
         sql += format_token_sql(token)
     for asset in assets:
@@ -492,6 +503,23 @@ def extract_inputs(blocks: List[Dict]) -> List[Input]:
     ]
 
 
+def extract_data_inputs(blocks: List[Dict]) -> List[DataInput]:
+    """
+    All data inputs
+    """
+    return [
+        DataInput(
+            box_id=box["boxId"],
+            header_id=b["header"]["id"],
+            tx_id=tx["id"],
+            index=idx,
+        )
+        for b in blocks
+        for tx in b["blockTransactions"]["transactions"]
+        for idx, box in enumerate(tx["dataInputs"])
+    ]
+
+
 def extract_existing_tokens(blocks: List[Dict]) -> List[Token]:
     """
     Returns tokens that the db should contain to satisfy asset FKs
@@ -524,9 +552,12 @@ def extract_tokens(blocks: List[Dict]) -> List[Token]:
         Token(
             id=tk["tokenId"],
             box_id=op["boxId"],
-            emission_amount=tk["amount"],
+            emission_amount=tk["amount"]
+            # name=None,
+            # description=None,
             # TODO: should be parsed from registers
-            decimals=0,
+            # decimals=0,
+            # standard="dummy-std",
         )
         for b in blocks
         for tx in b["blockTransactions"]["transactions"]
@@ -631,18 +662,40 @@ def format_input_sql(box: Input):
     )
 
 
+def format_data_input_sql(box: DataInput):
+    return dedent(
+        f"""
+        insert into core.data_inputs(box_id, tx_id, header_id, index)
+        values (
+            '{box.box_id}',
+            '{box.tx_id}',
+            '{box.header_id}',
+            {box.index}
+        );
+    """
+    )
+
+
 def format_token_sql(t: Token):
     return dedent(
         f"""
-        insert into core.tokens (id, box_id, emission_amount, name, description, decimals, standard)
+        insert into core.tokens (
+            id,
+            box_id,
+            emission_amount,
+            name,
+            description,
+            decimals,
+            standard
+        )
         values (
             '{t.id}',
             '{t.box_id}',
             {t.emission_amount},
-            '{t.name}',
-            '{t.description}',
-            {t.decimals},
-            '{t.standard}'
+            {'null' if t.name is None else f"'{t.name}'"},
+            {'null' if t.name is None else f"'{t.description}'"},
+            {'null' if t.decimals is None else t.decimals},
+            {'null' if t.name is None else f"'{t.standard}'"}
         );
     """
     )

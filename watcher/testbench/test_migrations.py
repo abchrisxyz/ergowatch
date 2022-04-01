@@ -311,13 +311,14 @@ class TestMigrations:
             cur.execute("select count(*) from core.headers;")
             assert cur.fetchone()[0] == 2
             cur.execute("select version from ew.revision;")
-            assert cur.fetchone()[0] == current_revision - 1
+            db_revision = cur.fetchone()[0]
+            assert db_revision < current_revision
 
         cp = run_watcher(temp_cfg)
 
         # Check logs
         assert (
-            f"Database is {current_revision - 1} revision(s) behind. Run with the -m option to allow migrations to be applied."
+            f"Database is {current_revision - db_revision} revision(s) behind. Run with the -m option to allow migrations to be applied."
             in cp.stdout.decode()
         )
 
