@@ -10,6 +10,7 @@ try:
     from api.routes.contracts import contracts_router
     from api.routes.ranking import ranking_router
     from api.routes.tokens import tokens_router
+    from api.routes.status import status_router
 except ImportError:
     # When running pytest
     from .api.routes.addresses import addresses_router
@@ -17,6 +18,7 @@ except ImportError:
     from .api.routes.contracts import contracts_router
     from .api.routes.ranking import ranking_router
     from .api.routes.tokens import tokens_router
+    from .api.routes.status import status_router
 
 root_path = "/api/v0"
 description = f"""
@@ -36,6 +38,10 @@ Most API's will accept a `?token_id=` query parameter to return data relating to
 # TODO: explain history vs series
 
 tags_metadata = [
+    {
+        "name": "status",
+        "description": "Database status",
+    },
     {
         "name": "addresses",
         "description": "Address specific data",
@@ -79,6 +85,7 @@ async def startup_event():
     app.state.db = await asyncpg.create_pool(dsn)
 
 
+app.include_router(status_router, tags=["status"])
 app.include_router(addresses_router, prefix="/addresses", tags=["addresses"])
 app.include_router(p2pk_router, prefix="/p2pk", tags=["p2pk"])
 app.include_router(contracts_router, prefix="/contracts", tags=["contracts"])
