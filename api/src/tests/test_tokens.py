@@ -12,6 +12,7 @@ TOKEN_X = "validxtokenxidxofxnonxexistingxtokenxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 @pytest.fixture(scope="module")
 def client():
+    P2PK = "9" * 51
     sql = f"""
         insert into core.headers (height, id, parent_id, timestamp) values 
         (10, 'header10', 'header09', 1567123456789),
@@ -37,13 +38,13 @@ def client():
         ('addr1', '{TOKEN_A}', 20, 'tx_2',  -200),
         ('addr2', '{TOKEN_A}', 20, 'tx_2',   150),
         ('addr1', '{TOKEN_A}', 30, 'tx_3',  -300),
-        ('addr3', '{TOKEN_A}', 30, 'tx_3',   300);
+        ('{P2PK}', '{TOKEN_A}', 30, 'tx_3',   300);
 
         insert into bal.tokens (address, token_id, value) values
         ('addr1', '{TOKEN_A}', 400),
         ('addr1', '{TOKEN_B}', 800),
         ('addr2', '{TOKEN_A}', 150),
-        ('addr3', '{TOKEN_A}', 300);
+        ('{P2PK}', '{TOKEN_A}', 300);
     """
     with MockDB(sql=sql) as _:
         with TestClient(app) as client:
@@ -89,8 +90,9 @@ class TestSupply:
         response = client.get(url)
         assert response.status_code == 200
         assert response.json() == {
-            "total": 900,
-            "circulating": 850,
+            "emitted": 900,
+            "in_p2pks": 300,
+            "in_contracts": 550,
             "burned": 50,
         }
 

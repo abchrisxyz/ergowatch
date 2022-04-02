@@ -9,6 +9,8 @@
 [Issue 16](https://github.com/abchrisxyz/ergowatch/issues/17) - Added token details endpoint
 [Issue 17](https://github.com/abchrisxyz/ergowatch/issues/17) - Added sync status API.
 
+### Changed
+[Issue 19](https://github.com/abchrisxyz/ergowatch/issues/19) - Token supply endpoint breaks down circulating supply between P2PK and contract addresses.
 
 ### Fixed
 [Issue 11](https://github.com/abchrisxyz/ergowatch/issues/11) - Non-zero timestamp for genesis header.
