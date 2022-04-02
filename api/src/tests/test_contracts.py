@@ -116,3 +116,19 @@ class TestCount:
         assert response.status_code == 200
         assert response.json() == 0
 
+
+class TestSupply:
+    def test_default(self, client):
+        url = "/contracts/supply"
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.json() == 15_000_000
+
+        response = client.get(url + f"?token_id={TOKEN_A}")
+        assert response.status_code == 200
+        assert response.json() == 19_000_000
+
+    def test_unknown_token_id(self, client):
+        url = "/contracts/supply"
+        response = client.get(url + f"?token_id={TOKEN_X}")
+        assert response.status_code == 404
