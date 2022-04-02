@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from fastapi import HTTPException
 from fastapi import Query
 from fastapi import Request
 
@@ -43,5 +44,7 @@ async def get_contract_address_count(
         query += f" and value < ${len(args)}"
 
     async with request.app.state.db.acquire() as conn:
-        res = await conn.fetchrow(query, *args)
-        return res["cnt"]
+        row = await conn.fetchrow(query, *args)
+    if row["cnt"] is None:
+        raise HTTPException(status_code=404)
+    return row["cnt"]

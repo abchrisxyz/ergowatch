@@ -43,81 +43,76 @@ def client():
             yield client
 
 
-def test_count_total(client):
-    url = "/contracts/count"
-    response = client.get(url)
-    assert response.status_code == 200
-    assert response.json() == 5
+class TestCount:
+    def test_count_total(self, client):
+        url = "/contracts/count"
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.json() == 5
 
-    response = client.get(url + f"?token_id={TOKEN_A}")
-    assert response.status_code == 200
-    assert response.json() == 6
+        response = client.get(url + f"?token_id={TOKEN_A}")
+        assert response.status_code == 200
+        assert response.json() == 6
 
+    def test_count_query_ge(self, client):
+        url = "/contracts/count?bal_ge=2000000"
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.json() == 4
 
-def test_count_query_ge(client):
-    url = "/contracts/count?bal_ge=2000000"
-    response = client.get(url)
-    assert response.status_code == 200
-    assert response.json() == 4
+        response = client.get(url + f"&token_id={TOKEN_A}")
+        assert response.status_code == 200
+        assert response.json() == 5
 
-    response = client.get(url + f"&token_id={TOKEN_A}")
-    assert response.status_code == 200
-    assert response.json() == 5
+    def test_count_query_lt(self, client):
+        url = "/contracts/count?bal_lt=4000000"
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.json() == 3
 
+        response = client.get(url + f"&token_id={TOKEN_A}")
+        assert response.status_code == 200
+        assert response.json() == 3
 
-def test_count_query_lt(client):
-    url = "/contracts/count?bal_lt=4000000"
-    response = client.get(url)
-    assert response.status_code == 200
-    assert response.json() == 3
+    def test_count_query_ge_lt(self, client):
+        url = "/contracts/count?bal_ge=2000000&bal_lt=4000000"
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.json() == 2
 
-    response = client.get(url + f"&token_id={TOKEN_A}")
-    assert response.status_code == 200
-    assert response.json() == 3
+        response = client.get(url + f"&token_id={TOKEN_A}")
+        assert response.status_code == 200
+        assert response.json() == 2
 
+    def test_count_zero(self, client):
+        url = "/contracts/count?bal_ge=999999999999"
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.json() == 0
 
-def test_count_query_ge_lt(client):
-    url = "/contracts/count?bal_ge=2000000&bal_lt=4000000"
-    response = client.get(url)
-    assert response.status_code == 200
-    assert response.json() == 2
+        response = client.get(url + f"&token_id={TOKEN_A}")
+        assert response.status_code == 200
+        assert response.json() == 0
 
-    response = client.get(url + f"&token_id={TOKEN_A}")
-    assert response.status_code == 200
-    assert response.json() == 2
+    def test_count_query_ge_cannot_be_negative(self, client):
+        url = "/contracts/count?bal_ge=-2000000"
+        response = client.get(url)
+        assert response.status_code == 422
 
+        response = client.get(url + f"&token_id={TOKEN_A}")
+        assert response.status_code == 422
 
-def test_count_zero(client):
-    url = "/contracts/count?bal_ge=999999999999"
-    response = client.get(url)
-    assert response.status_code == 200
-    assert response.json() == 0
+    def test_count_query_lt_cannot_be_negative(self, client):
+        url = "/contracts/count?bal_lt=-2000000"
+        response = client.get(url)
+        assert response.status_code == 422
 
-    response = client.get(url + f"&token_id={TOKEN_A}")
-    assert response.status_code == 200
-    assert response.json() == 0
+        response = client.get(url + f"&token_id={TOKEN_A}")
+        assert response.status_code == 422
 
+    def test_unknown_token_id(self, client):
+        url = "/contracts/count"
+        response = client.get(url + f"?token_id={TOKEN_X}")
+        assert response.status_code == 200
+        assert response.json() == 0
 
-def test_count_query_ge_cannot_be_negative(client):
-    url = "/contracts/count?bal_ge=-2000000"
-    response = client.get(url)
-    assert response.status_code == 422
-
-    response = client.get(url + f"&token_id={TOKEN_A}")
-    assert response.status_code == 422
-
-
-def test_count_query_lt_cannot_be_negative(client):
-    url = "/contracts/count?bal_lt=-2000000"
-    response = client.get(url)
-    assert response.status_code == 422
-
-    response = client.get(url + f"&token_id={TOKEN_A}")
-    assert response.status_code == 422
-
-
-def test_unknown_token_id(client):
-    url = "/contracts/count"
-    response = client.get(url + f"?token_id={TOKEN_X}")
-    assert response.status_code == 200
-    assert response.json() == 0
