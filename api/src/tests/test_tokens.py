@@ -6,7 +6,7 @@ from ..main import app
 from .db import MockDB
 
 TOKEN_A = "tokenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-TOKEN_B = "tokenbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+TOKEN_B = "tokenbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbeip4"
 TOKEN_X = "validxtokenxidxofxnonxexistingxtokenxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 
@@ -27,8 +27,9 @@ def client():
         ('box-2', 'tx-2', 'header20', 20, 'addr1', 0, 10000000);
         
         insert into core.tokens (id, box_id, emission_amount) values
-        ('{TOKEN_A}', 'box-1', 900),
-        ('{TOKEN_B}', 'box-2', 800);
+        ('{TOKEN_A}', 'box-1', 900);
+        insert into core.tokens (id, box_id, emission_amount, name, description, decimals, standard) values
+        ('{TOKEN_B}', 'box-2', 800, 'token_b', 'description of token b', 2, 'EIP-4');
 
         insert into bal.tokens_diffs (address, token_id, height, tx_id, value) values
         ('addr1', '{TOKEN_A}', 10, 'tx_1',   900),
@@ -47,6 +48,39 @@ def client():
     with MockDB(sql=sql) as _:
         with TestClient(app) as client:
             yield client
+
+
+class TestDetails:
+    def test_dummy_token(self, client):
+        url = f"/tokens/{TOKEN_A}"
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.json() == {
+            "token_id": TOKEN_A,
+            "emission_amount": 900,
+            "name": None,
+            "description": None,
+            "decimals": 0,
+            "standard": None,
+        }
+
+    def test_eip4_token(self, client):
+        url = f"/tokens/{TOKEN_B}"
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.json() == {
+            "token_id": TOKEN_B,
+            "name": "token_b",
+            "description": "description of token b",
+            "emission_amount": 800,
+            "decimals": 2,
+            "standard": "EIP-4",
+        }
+
+    def test_unknown_token(self, client):
+        url = f"/tokens/{TOKEN_X}"
+        response = client.get(url)
+        assert response.status_code == 404
 
 
 class TestSupply:
