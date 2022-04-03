@@ -6,11 +6,11 @@ from fastapi import Query
 from fastapi import Request
 
 
-from ..models import TokenID
+from ...models import TokenID
 
 utxos_router = r = APIRouter()
 
-HISTORY_LIMIT = 10_000
+from . import HISTORY_LIMIT
 
 
 @r.get("/count", response_model=int, description="Current number of UTxO's")

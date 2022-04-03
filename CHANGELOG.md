@@ -5,10 +5,10 @@
 
 ### New features
 [Issue 13](https://github.com/abchrisxyz/ergowatch/issues/13) - Made node poll interval configurable.
-[Issue 14](https://github.com/abchrisxyz/ergowatch/issues/14) - Added utxo count API.
 [Issue 16](https://github.com/abchrisxyz/ergowatch/issues/17) - Added token details endpoint.
 [Issue 17](https://github.com/abchrisxyz/ergowatch/issues/17) - Added sync status API.
 [Issue 21](https://github.com/abchrisxyz/ergowatch/issues/21) - Added contracts supply endpoint.
+[Issue 22](https://github.com/abchrisxyz/ergowatch/issues/22) - Added utxo metrics
 
 ### Changed
 [Issue 19](https://github.com/abchrisxyz/ergowatch/issues/19) - Token supply endpoint breaks down circulating supply between P2PK and contract addresses.
