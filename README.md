@@ -1,3 +1,7 @@
+<p align="center" style="margin-bottom: 0px !important;">
+  <img width="128" src="https://github.com/abchrisxyz/ergowatch-ui/raw/master/ewi/public/ew-logo.svg" alt="logo" align="center">
+</p>
+
 # ErgoWatch
 Ergo blockchain stats & monitoring.
 
