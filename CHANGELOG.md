@@ -1,7 +1,7 @@
 # Changelog
 
 
-## v0.2.0 - UNRELEASED
+## v0.2.0 - 2022-04-05
 
 ### New features
 [Issue 13](https://github.com/abchrisxyz/ergowatch/issues/13) - Made node poll interval configurable.
