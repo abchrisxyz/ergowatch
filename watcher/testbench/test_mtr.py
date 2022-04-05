@@ -18,7 +18,7 @@ from utils import assert_index
 from utils import assert_column_ge
 from utils import assert_column_le
 
-ORDER = 10
+ORDER = 13
 
 
 def make_blocks(height: int):
@@ -529,7 +529,6 @@ class TestMigrations:
             cp = run_watcher(temp_cfg, allow_migrations=True)
             assert cp.returncode == 0
             assert "Applying migration 1 (revision 2)" in cp.stdout.decode()
-            assert "Applying migration 2 (revision 3)" in cp.stdout.decode()
 
             with pg.connect(temp_db_rev1_class_scoped) as conn:
                 yield conn
@@ -541,319 +540,19 @@ class TestMigrations:
 def _test_db_state(conn: pg.Connection, start_height: int):
     assert_db_constraints(conn)
     with conn.cursor() as cur:
-        assert_headers(cur, start_height)
-        assert_transactions(cur, start_height)
-        assert_inputs(cur)
-        assert_data_inputs(cur)
-        assert_outputs(cur, start_height)
-        assert_box_registers(cur)
-        assert_tokens(cur)
-        assert_box_assets(cur)
+        assert_utxos(cur, start_height)
 
 
 def assert_db_constraints(conn: pg.Connection):
-    # Headers
-    assert_pk(conn, "core", "headers", ["height"])
-    assert_column_not_null(conn, "core", "headers", "id")
-    assert_column_not_null(conn, "core", "headers", "parent_id")
-    assert_column_not_null(conn, "core", "headers", "timestamp")
-    assert_unique(conn, "core", "headers", ["id"])
-    assert_unique(conn, "core", "headers", ["parent_id"])
-
-    # Transactions
-    assert_pk(conn, "core", "transactions", ["id"])
-    assert_fk(conn, "core", "transactions", "transactions_header_id_fkey")
-    assert_index(conn, "core", "transactions", "transactions_height_idx")
-
-    # Outputs
-    assert_pk(conn, "core", "outputs", ["box_id"])
-    assert_column_not_null(conn, "core", "outputs", "tx_id")
-    assert_column_not_null(conn, "core", "outputs", "header_id")
-    assert_column_not_null(conn, "core", "outputs", "address")
-    assert_fk(conn, "core", "outputs", "outputs_tx_id_fkey")
-    assert_fk(conn, "core", "outputs", "outputs_header_id_fkey")
-    assert_index(conn, "core", "outputs", "outputs_tx_id_idx")
-    assert_index(conn, "core", "outputs", "outputs_header_id_idx")
-    assert_index(conn, "core", "outputs", "outputs_address_idx")
-    assert_index(conn, "core", "outputs", "outputs_index_idx")
-
-    # Inputs
-    assert_pk(conn, "core", "inputs", ["box_id"])
-    assert_column_not_null(conn, "core", "inputs", "tx_id")
-    assert_column_not_null(conn, "core", "inputs", "header_id")
-    assert_fk(conn, "core", "inputs", "inputs_tx_id_fkey")
-    assert_fk(conn, "core", "inputs", "inputs_header_id_fkey")
-    assert_index(conn, "core", "inputs", "inputs_tx_id_idx")
-    assert_index(conn, "core", "inputs", "inputs_header_id_idx")
-    assert_index(conn, "core", "inputs", "inputs_index_idx")
-
-    # Data-inputs
-    assert_pk(conn, "core", "data_inputs", ["box_id", "tx_id"])
-    assert_column_not_null(conn, "core", "data_inputs", "header_id")
-    assert_fk(conn, "core", "data_inputs", "data_inputs_tx_id_fkey")
-    assert_fk(conn, "core", "data_inputs", "data_inputs_header_id_fkey")
-    assert_fk(conn, "core", "data_inputs", "data_inputs_box_id_fkey")
-    assert_index(conn, "core", "data_inputs", "data_inputs_tx_id_idx")
-    assert_index(conn, "core", "data_inputs", "data_inputs_header_id_idx")
-
-    # Box registers
-    assert_pk(conn, "core", "box_registers", ["id", "box_id"])
-    assert_fk(conn, "core", "box_registers", "box_registers_box_id_fkey")
-    assert_column_ge(conn, "core", "box_registers", "id", 4)
-    assert_column_le(conn, "core", "box_registers", "id", 9)
-
-    # Tokens
-    assert_pk(conn, "core", "tokens", ["id", "box_id"])
-    assert_column_not_null(conn, "core", "tokens", "box_id")
-    assert_fk(conn, "core", "tokens", "tokens_box_id_fkey")
-    assert_column_ge(conn, "core", "tokens", "emission_amount", 0)
-
-    # Box assets
-    assert_pk(conn, "core", "box_assets", ["box_id", "token_id"])
-    assert_column_not_null(conn, "core", "box_assets", "box_id")
-    assert_column_not_null(conn, "core", "box_assets", "token_id")
-    assert_fk(conn, "core", "box_assets", "box_assets_box_id_fkey")
-    assert_column_ge(conn, "core", "box_assets", "amount", 0)
+    # Utxos
+    assert_pk(conn, "mtr", "utxos", ["height"])
 
 
-def assert_headers(cur: pg.Cursor, start_height: int):
-    # 4 headers: 1 parent + 3 from blocks
-    cur.execute(
-        "select height, id, parent_id, timestamp from core.headers order by 1, 2;"
-    )
+def assert_utxos(cur: pg.Cursor, start_height: int):
+    cur.execute("select height, value from mtr.utxos order by 1;")
     rows = cur.fetchall()
     assert len(rows) == 4
-    if start_height == 0:
-        # Genesis parent_id and timestamp are set by watcher
-        assert rows[0] == (
-            start_height,
-            GENESIS_ID,
-            "genesis",
-            1561978800000,
-        )
-    else:
-        # Genesis parent_id and timestamp are set by db fixture
-        assert rows[0] == (
-            start_height,
-            GENESIS_ID,
-            "bootstrap-parent-header-id",
-            1234560000000,
-        )
-    assert rows[1] == (start_height + 1, "block-a", GENESIS_ID, 1234560100000)
-    assert rows[2] == (start_height + 2, "block-b", "block-a", 1234560200000)
-    assert rows[3] == (start_height + 3, "block-c", "block-b", 1234560300000)
-
-
-def assert_transactions(cur: pg.Cursor, start_height: int):
-    # 5 txs: 1 bootstrap + 4 from blocks
-    cur.execute(
-        "select height, header_id, index, id from core.transactions order by 1, 3;"
-    )
-    rows = cur.fetchall()
-    assert len(rows) == 5
-    bootstrap_tx_id = GENESIS_ID if start_height == 0 else "bootstrap-tx"
-    assert rows[0] == (start_height, GENESIS_ID, 0, bootstrap_tx_id)
-    assert rows[1] == (start_height + 1, "block-a", 0, "tx-a1")
-    assert rows[2] == (start_height + 2, "block-b", 0, "tx-b1")
-    assert rows[3] == (start_height + 3, "block-c", 0, "tx-c1")
-    assert rows[4] == (start_height + 3, "block-c", 1, "tx-c2")
-
-
-def assert_inputs(cur: pg.Cursor):
-    # 4 inputs
-    cur.execute(
-        "select header_id, tx_id, index, box_id from core.inputs order by 1, 2;"
-    )
-    rows = cur.fetchall()
-    assert len(rows) == 4
-    assert rows[0] == ("block-a", "tx-a1", 0, "base-box1")
-    assert rows[1] == ("block-b", "tx-b1", 0, "con1-box1")
-    assert rows[2] == ("block-c", "tx-c1", 0, "pub1-box1")
-    assert rows[3] == ("block-c", "tx-c2", 0, "fees-box1")
-
-
-def assert_data_inputs(cur: pg.Cursor):
-    # 1 data-inputs
-    cur.execute(
-        "select header_id, tx_id, index, box_id from core.data_inputs order by 1, 2;"
-    )
-    rows = cur.fetchall()
-    assert len(rows) == 1
-    assert rows[0] == ("block-c", "tx-c1", 0, "con2-box1")
-
-
-def assert_outputs(cur: pg.Cursor, start_height: int):
-    # 9 outputs: 1 bootstrap + 8 from blocks
-    cur.execute(
-        """
-        select creation_height
-            , header_id
-            , tx_id
-            , index
-            , box_id
-            , value
-            , address
-        from core.outputs
-        order by creation_height, tx_id, index;
-    """
-    )
-    rows = cur.fetchall()
-    assert len(rows) == 9
-    bootstrap_tx_id = GENESIS_ID if start_height == 0 else "bootstrap-tx"
-    assert rows[0] == (
-        start_height + 0,
-        GENESIS_ID,
-        bootstrap_tx_id,
-        0,
-        "base-box1",
-        1000,
-        AC.coinbase.address,
-    )
-    assert rows[1] == (
-        start_height + 1,
-        "block-a",
-        "tx-a1",
-        0,
-        "base-box2",
-        950,
-        AC.boxid2addr("base-box2"),
-    )
-    assert rows[2] == (
-        start_height + 1,
-        "block-a",
-        "tx-a1",
-        1,
-        "con1-box1",
-        50,
-        AC.boxid2addr("con1-box1"),
-    )
-    assert rows[3] == (
-        start_height + 2,
-        "block-b",
-        "tx-b1",
-        0,
-        "con2-box1",
-        40,
-        AC.boxid2addr("con2-box1"),
-    )
-    assert rows[4] == (
-        start_height + 2,
-        "block-b",
-        "tx-b1",
-        1,
-        "pub1-box1",
-        10,
-        AC.boxid2addr("pub1-box1"),
-    )
-    assert rows[5] == (
-        start_height + 3,
-        "block-c",
-        "tx-c1",
-        0,
-        "pub1-box2",
-        5,
-        AC.boxid2addr("pub1-box2"),
-    )
-    assert rows[6] == (
-        start_height + 3,
-        "block-c",
-        "tx-c1",
-        1,
-        "pub2-box1",
-        4,
-        AC.boxid2addr("pub2-box1"),
-    )
-    assert rows[7] == (
-        start_height + 3,
-        "block-c",
-        "tx-c1",
-        2,
-        "fees-box1",
-        1,
-        AC.boxid2addr("fees-box1"),
-    )
-    assert rows[8] == (
-        start_height + 3,
-        "block-c",
-        "tx-c2",
-        0,
-        "con1-box2",
-        1,
-        AC.boxid2addr("con1-box2"),
-    )
-
-
-def assert_box_registers(cur: pg.Cursor):
-    # 3 registers
-    cur.execute(
-        """
-        select id
-            , box_id
-            , value_type
-            , serialized_value
-            , rendered_value
-        from core.box_registers
-        order by 1;
-        """
-    )
-    rows = cur.fetchall()
-    assert len(rows) == 3
-    assert rows[0] == (
-        4,
-        "con2-box1",
-        "SGroupElement",
-        "0703553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8",
-        "03553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8",
-    )
-    assert rows[1] == (
-        5,
-        "con2-box1",
-        "Coll[SByte]",
-        "0e2098479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8",
-        "98479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8",
-    )
-    assert rows[2] == (
-        6,
-        "con2-box1",
-        "SLong",
-        "05a4c3edd9998877",
-        "261824656027858",
-    )
-
-
-def assert_tokens(cur: pg.Cursor):
-    # 1 minted token
-    cur.execute(
-        """
-        select id
-            , box_id
-            , emission_amount
-            , name
-            , description
-            , decimals
-            , standard
-        from core.tokens
-        order by 1;
-        """
-    )
-    rows = cur.fetchall()
-    assert len(rows) == 1
-    assert rows[0] == ("con1-box1", "pub1-box1", 2000, None, None, None, None)
-
-
-def assert_box_assets(cur: pg.Cursor):
-    # 3 boxes containing some tokens
-    cur.execute(
-        """
-        select box_id
-            , token_id
-            , amount
-        from core.box_assets
-        order by 1;
-        """
-    )
-    rows = cur.fetchall()
-    assert len(rows) == 3
-    assert rows[0] == ("pub1-box1", "con1-box1", 2000)
-    assert rows[1] == ("pub1-box2", "con1-box1", 1500)
-    assert rows[2] == ("pub2-box1", "con1-box1", 500)
+    assert rows[0] == (start_height + 0, 1)  # initial state
+    assert rows[1] == (start_height + 1, 2)  # spend 1 create 2 (+1)
+    assert rows[2] == (start_height + 2, 3)  # spend 1 create 2 (+1)
+    assert rows[3] == (start_height + 3, 5)  # spend 2 create 4 (+2)

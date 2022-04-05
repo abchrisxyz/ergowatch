@@ -40,10 +40,12 @@ pub struct Session {
     pub db: db::DB,
     pub db_is_empty: bool,
     pub node: node::Node,
+    pub poll_interval: u64,
     pub allow_bootstrap: bool,
     pub exit_when_synced: bool,
     pub head: crate::types::Head,
     pub allow_rollbacks: bool,
+    pub cache: cache::Cache,
 }
 
 // Common tasks for both normal and bootstrap mode
@@ -84,7 +86,10 @@ impl Session {
         };
         let db_constraints_status = db.constraints_status().unwrap();
         let db_core_head = db.get_head().unwrap();
-        let db_bootstrap_height = db.get_bootstrap_height().unwrap();
+        let unfinished_bootstrap = match db.get_bootstrap_height().unwrap() {
+            Some(h) => h < db_core_head.height as i32,
+            None => false,
+        };
 
         // Check cli args and db state
         if db_is_empty && db_constraints_status.tier_1 {
@@ -92,7 +97,7 @@ impl Session {
                 "Database should be initialized without constraints or indexes. Pass --no-bootstrap flag to override.",
             );
         }
-        if cli.no_bootstrap && db_bootstrap_height < db_core_head.height as i32 {
+        if cli.no_bootstrap && unfinished_bootstrap {
             return Err("Cannot use --no-boostrap after unfinished bootstrapping");
         }
         if cli.no_bootstrap {
@@ -108,15 +113,47 @@ impl Session {
         // Check db version and migrations if allowed
         db.check_migrations(cli.allow_migrations).unwrap();
 
+        // Fill cache from db
+        let cache = if db_is_empty {
+            cache::Cache::new()
+        } else {
+            db.load_cache()
+        };
+
         Ok(Session {
             db,
             db_is_empty,
             node: node,
+            poll_interval: cfg.node.poll_interval,
             allow_bootstrap: !cli.no_bootstrap,
             exit_when_synced: cli.exit,
             head: db_core_head,
-            // If not
             allow_rollbacks: cli.no_bootstrap || db_constraints_status.all_set,
+            cache: cache,
         })
+    }
+}
+
+pub mod cache {
+    pub struct Cache {
+        pub metrics: Metrics,
+    }
+    pub struct Metrics {
+        pub utxos: i64,
+    }
+
+    impl Cache {
+        /// Initialize a cache with default values, representing an empty database.
+        pub fn new() -> Self {
+            Self {
+                metrics: Metrics::new(),
+            }
+        }
+    }
+
+    impl Metrics {
+        pub fn new() -> Self {
+            Self { utxos: 0 }
+        }
     }
 }

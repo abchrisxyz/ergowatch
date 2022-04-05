@@ -17,6 +17,8 @@ pub struct Database {
 #[allow(unused)]
 pub struct Node {
     pub url: String,
+    // Time between two node polls, in seconds
+    pub poll_interval: u64,
 }
 
 #[derive(Debug, Deserialize)]

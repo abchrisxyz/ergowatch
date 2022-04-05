@@ -1,4 +1,8 @@
 /*****************************************************************************
+	This is snapshot of the db schema that shipped with v0.1.
+	It's only purpose is to test db migrations.
+*****************************************************************************/
+/*****************************************************************************
  *
  * DO NOT LOAD THIS - YOU ONLY NEED SCHEMA.SQL
  *
@@ -117,12 +121,6 @@ create index on bal.tokens(value);
 
 alter table bal.tokens_diffs add primary key(address, token_id, height, tx_id);
 create index on bal.tokens_diffs(height);
-
-
--------------------------------------------------------------------------------
--- Metrics
--------------------------------------------------------------------------------
-alter table mtr.utxos add primary key(height);
 
 
 -------------------------------------------------------------------------------

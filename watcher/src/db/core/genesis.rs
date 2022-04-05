@@ -1,11 +1,10 @@
-use crate::db::balances;
-use crate::db::balances::erg_diffs::ErgDiffQuery;
 use crate::db::core::sql::header::HeaderRow;
 use crate::db::core::sql::outputs::OutputRow;
 use crate::db::core::sql::transaction::TransactionRow;
-use crate::db::unspent;
 use crate::db::SQLStatement;
 use crate::parsing::Output;
+
+const GENESIS_TIMESTAMP: i64 = 1561978800000;
 
 /// Helper function to include genesis boxes in db.
 ///
@@ -17,7 +16,7 @@ pub fn prep(node_boxes: Vec<crate::node::models::Output>) -> Vec<SQLStatement> {
             height: 0,
             id: "0000000000000000000000000000000000000000000000000000000000000000",
             parent_id: "genesis",
-            timestamp: 0,
+            timestamp: GENESIS_TIMESTAMP,
         }
         .to_statement(),
         TransactionRow {
@@ -57,27 +56,6 @@ pub fn prep(node_boxes: Vec<crate::node::models::Output>) -> Vec<SQLStatement> {
             })
             .collect(),
     );
-    // TODO: refactor genesis out of core unit since it affects multiple schemas
-    // TODO: test db state after genesis boxes inclusion (in testbench)
-    // Unspent boxes
-    statements.append(
-        &mut node_boxes
-            .iter()
-            .map(|node_box| {
-                let output = Output::from_node_output(node_box);
-                unspent::usp::insert_new_box_statement(&output.box_id)
-            })
-            .collect(),
-    );
-    // Erg balance diffs
-    statements.push(
-        ErgDiffQuery {
-            tx_id: "0000000000000000000000000000000000000000000000000000000000000000",
-        }
-        .to_statement(),
-    );
-    // Erg balance
-    statements.push(balances::erg::insert_statement(0));
 
     statements
 }
@@ -92,8 +70,7 @@ mod tests {
     #[test]
     fn statements() -> () {
         let statements: Vec<db::SQLStatement> = prep(genesis_boxes());
-        assert_eq!(statements.len(), 16);
-        // Core
+        assert_eq!(statements.len(), 11);
         assert_eq!(statements[0].sql, sql::header::INSERT_HEADER);
         assert_eq!(statements[1].sql, sql::transaction::INSERT_TRANSACTION);
         assert_eq!(statements[2].sql, sql::outputs::INSERT_OUTPUT);
@@ -105,12 +82,13 @@ mod tests {
         assert_eq!(statements[8].sql, sql::registers::INSERT_BOX_REGISTER);
         assert_eq!(statements[9].sql, sql::registers::INSERT_BOX_REGISTER);
         assert_eq!(statements[10].sql, sql::registers::INSERT_BOX_REGISTER);
-        // Others
-        assert_eq!(statements[11].sql, db::unspent::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[12].sql, db::unspent::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[13].sql, db::unspent::usp::INSERT_NEW_BOX);
-        assert_eq!(statements[14].sql, db::balances::erg_diffs::INSERT_DIFFS);
-        assert_eq!(statements[15].sql, db::balances::erg::INSERT_BALANCES);
+
+        // Timestamp of genesis header
+        let statement = &statements[0];
+        assert_eq!(
+            statement.args[3],
+            db::SQLArg::BigInt(super::GENESIS_TIMESTAMP)
+        );
 
         // First box statement
         let statement = &statements[2];

@@ -13,6 +13,7 @@ def run_watcher(
     backtrace=False,
     timeout=10,
     log_file: str = None,
+    allow_migrations: bool = False,
 ) -> subprocess.CompletedProcess:
     exe = str(
         Path(__file__).parent.parent.absolute() / Path(f"target/{target}/watcher")
@@ -21,6 +22,8 @@ def run_watcher(
     args.append("--exit")
     if no_bootstrap:
         args.append("--no-bootstrap")
+    if allow_migrations:
+        args.append("-m")
 
     env = dict(
         os.environ,
@@ -114,10 +117,19 @@ def assert_unique(conn: pg.Connection, schema: str, table: str, columns: List[st
 def assert_column_not_null(conn: pg.Connection, schema: str, table: str, column: str):
     """Assert not null constraint is set on column"""
     with conn.cursor() as cur:
-        with pytest.raises(pg.errors.NotNullViolation):
-            cur.execute(f"update {schema}.{table} set {column} = null;")
-        # Roll back to prevent psycopg.errors.InFailedSqlTransaction in subsequent call
-        conn.rollback()
+        cur.execute(
+            f"""
+            select exists (
+                select column_name
+                from information_schema.columns
+                where table_schema = '{schema}'
+                    and table_name = '{table}'
+                    and column_name = '{column}'
+                    and is_nullable = 'NO'
+            );
+        """
+        )
+        assert cur.fetchone()[0]
 
 
 def assert_column_ge(

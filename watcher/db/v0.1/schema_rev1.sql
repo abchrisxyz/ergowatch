@@ -1,3 +1,7 @@
+/*****************************************************************************
+	This is snapshot of the db schema that shipped with v0.1.
+	It's only purpose is to test db migrations.
+*****************************************************************************/
 -------------------------------------------------------------------------------
 -- Migrations
 -------------------------------------------------------------------------------
@@ -7,7 +11,7 @@ create table ew.revision (
 	version integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (version) values (3);
+insert into ew.revision (version) values (1);
 
 create table ew.constraints (
 	singleton int primary key default 1,
@@ -130,17 +134,5 @@ create table bal.tokens_diffs (
 	token_id text,
 	height int,
 	tx_id text,
-	value bigint
-);
-
-
--------------------------------------------------------------------------------
--- Metrics
-------------------------------------------------------------------------------- 
-create schema mtr;
-
--- UTxO counts
-create table mtr.utxos (
-	height int,
 	value bigint
 );

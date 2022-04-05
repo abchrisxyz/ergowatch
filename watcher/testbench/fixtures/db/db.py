@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Dict
 from typing import List
-from dataclasses import dataclass
 
 import psycopg as pg
 from psycopg.sql import Identifier, SQL
@@ -9,7 +8,9 @@ import pytest
 
 from local import DB_HOST, DB_PORT, DB_USER, DB_PASS
 from .sql import generate_bootstrap_sql
+from .sql import generate_rev1_sql
 
+# Latest schema
 SCHEMA_PATH = (
     Path(__file__).parent.parent.absolute() / Path("../../db/schema.sql")
 ).absolute()
@@ -18,18 +19,27 @@ CONSTRAINTS_PATH = (
     Path(__file__).parent.parent.absolute() / Path("../../db/_constraints.sql")
 ).absolute()
 
+# V1 schema (to test migrations)
+SCHEMA_PATH_REV1 = (
+    Path(__file__).parent.parent.absolute() / Path("../../db/v0.1/schema_rev1.sql")
+).absolute()
+
+CONSTRAINTS_PATH_REV1 = (
+    Path(__file__).parent.parent.absolute() / Path("../../db/v0.1/constraints_rev1.sql")
+).absolute()
+
 
 TEST_DB_NAME = "ew_pytest"
 
 
 @pytest.fixture
-def temp_db(scope="class"):
+def temp_db():
     with TempDB() as db_name:
         yield conn_str(db_name)
 
 
 @pytest.fixture
-def temp_db_class_scoped(scope="class"):
+def temp_db_class_scoped():
     with TempDB() as db_name:
         yield conn_str(db_name)
 
@@ -46,6 +56,25 @@ def unconstrained_db_class_scoped():
         yield conn_str(db_name)
 
 
+# Rev 1 mocks
+@pytest.fixture
+def temp_db_rev1():
+    with TempDB(rev1=True) as db_name:
+        yield conn_str(db_name)
+
+
+@pytest.fixture(scope="class")
+def temp_db_rev1_class_scoped():
+    with TempDB(rev1=True) as db_name:
+        yield conn_str(db_name)
+
+
+@pytest.fixture(scope="class")
+def unconstrained_db_rev1_class_scoped():
+    with TempDB(set_constraints=False, rev1=True) as db_name:
+        yield conn_str(db_name)
+
+
 def conn_str(dbname: str) -> str:
     """
     Return connection string for given db name.
@@ -56,12 +85,14 @@ def conn_str(dbname: str) -> str:
 class TempDB:
     # Most mocks will represent a db with some data in it already,
     # so have constraints set as default.
-    def __init__(self, set_constraints=True):
+    def __init__(self, set_constraints=True, rev1=False):
         self._dbname: str = TEST_DB_NAME
-        with open(SCHEMA_PATH) as f:
+        schema_path = SCHEMA_PATH_REV1 if rev1 else SCHEMA_PATH
+        constraints_path = CONSTRAINTS_PATH_REV1 if rev1 else CONSTRAINTS_PATH
+        with open(schema_path) as f:
             self._sql = f.read()
         if set_constraints:
-            with open(CONSTRAINTS_PATH) as f:
+            with open(constraints_path) as f:
                 self._sql += f.read()
 
     def _create_db(self):
@@ -103,4 +134,14 @@ def load_sql(conn: pg.Connection, sql: str):
 
 
 def bootstrap_db(conn: pg.Connection, blocks: List[Dict]):
+    """
+    Initialize db data to satisfy any constraints for incoming blocks.
+    """
     load_sql(conn, generate_bootstrap_sql(blocks))
+
+
+def fill_rev1_db(conn: pg.Connection, blocks: List[Dict]):
+    """
+    Initialize db data to satisfy any constraints for incoming blocks.
+    """
+    load_sql(conn, generate_rev1_sql(blocks))
