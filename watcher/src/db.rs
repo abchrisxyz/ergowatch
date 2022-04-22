@@ -1,4 +1,5 @@
 pub mod balances;
+pub mod cexs;
 pub mod core;
 pub mod metrics;
 mod migrations;
@@ -41,6 +42,7 @@ impl DB {
         core::include_block(&mut tx, block)?;
         unspent::include_block(&mut tx, block)?;
         balances::include_block(&mut tx, block)?;
+        cexs::include_block(&mut tx, block)?;
         metrics::include_block(&mut tx, block, &mut cache.metrics)?;
 
         tx.commit()?;
@@ -54,6 +56,7 @@ impl DB {
         let mut tx = client.transaction()?;
 
         metrics::rollback_block(&mut tx, block, &mut cache.metrics)?;
+        cexs::rollback_block(&mut tx, block)?;
         balances::rollback_block(&mut tx, block)?;
         unspent::rollback_block(&mut tx, block)?;
         core::rollback_block(&mut tx, block)?;
@@ -78,6 +81,7 @@ impl DB {
 
         unspent::bootstrap(&mut tx)?;
         balances::bootstrap(&mut tx)?;
+        cexs::bootstrap(&mut tx)?;
         metrics::bootstrap(&mut tx)?;
 
         tx.commit()?;

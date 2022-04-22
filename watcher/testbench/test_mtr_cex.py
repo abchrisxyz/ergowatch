@@ -15,43 +15,62 @@ from utils import assert_fk
 from utils import assert_unique
 from utils import assert_column_not_null
 from utils import assert_index
-from utils import assert_column_ge
-from utils import assert_column_le
 
-ORDER = 14
+ORDER = 13
 
 
 def make_blocks(height: int):
     """
-    Returns test blocks starting at giving height
+    Returns test blocks starting at giving height.
 
-    block a - coinbase tx:
+    block a:
+        -- coinbase tx:
         base-box1 1000 --> base-box2  950
                            con1-box1   50
 
-    ----------------------fork-of-b----------------------
-    block x - fork of block b to be ignored/rolled back:
-        con1-box1   50 --> con9-box1   30
-                           pub9-box1   20 (3000 con1-box1)
+    block b:
+        -- deposit 10 to CEX 1:
+        con1-box1   50 --> pub1-box1   10
+                           con1-box2   40
+
+    block c:
+        -- deposit 15 to CEX 2
+        con1-box2   40 --> pub2-box1   15
+                           con1-box3   25
+
+        -- deposit 5 to CEX 3
+        con1-box3   25 --> pub3-box1   20
+                           con1-box4    5
+
+        -- cex 1 claiming deposit (deposit was sold)
+        pub1-box1   10 --> cex1-box1   10
+
+    ----------------------fork-of-d----------------------
+    block x - fork of block d to be ignored/rolled back:
+        -- cex 3 claiming deposit (deposit was sold)
+        pub3-box1   20 --> cex3-box1   20
     ------------------------------------------------------
 
-    block b - minting a token and using registers:
-        con1-box1   50 --> con2-box1   40
-                           pub1-box1   10 (2000 con1-box1)
-
-    block c using a datainput (in {}) and spending tokens:
-        pub1-box1   10 --> pub1-box2    5 (1500 con1-box1)
-       {con2-box1}         pub2-box1    4 ( 500 con1-box1)
+    block d:
+        -- cex 2 claiming part of deposit (some deposit was sold)
+        pub2-box1   15 --> cex2-box1    5
+                           pub2-box2    9
                            fees-box1    1
 
-        fees-box1    1 --> con1-box2    1
+    block e - one more block to tell d and x appart
+        -- dummy tx
+        fees-box1    1 --> fees-box2  1
+
     """
     base = AC.coinbase
     fees = AC.fees
     con1 = AC.get("con1")
-    con2 = AC.get("con2")
     pub1 = AC.get("pub1")
     pub2 = AC.get("pub2")
+    pub3 = AC.get("pub3")
+    cex1 = AC.get("cex1")
+    cex2 = AC.get("cex2")
+    cex3 = AC.get("cex3")
 
     h = height + 1
     tx_a1 = {
@@ -88,73 +107,26 @@ def make_blocks(height: int):
     }
 
     h += 1
-    tx_x1 = {
-        "id": "tx-x1",
-        "inputs": [{"boxId": "con1-box1"}],
-        "dataInputs": [],
-        "outputs": [
-            {
-                "boxId": "con9-box1",
-                "value": 30,
-                "ergoTree": con2.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {
-                    "R4": "0703553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8",
-                    "R5": "0e2098479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8",
-                    "R6": "05a4c3edd9998877",
-                },
-                "transactionId": "tx-x1",
-                "index": 0,
-            },
-            {
-                "boxId": "pub9-box1",
-                "value": 20,
-                "ergoTree": pub1.ergo_tree,
-                "assets": [
-                    {
-                        "tokenId": "con1-box1",
-                        "amount": 3000,
-                    }
-                ],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-x1",
-                "index": 1,
-            },
-        ],
-        "size": 674,
-    }
-
     tx_b1 = {
         "id": "tx-b1",
         "inputs": [{"boxId": "con1-box1"}],
         "dataInputs": [],
         "outputs": [
             {
-                "boxId": "con2-box1",
-                "value": 40,
-                "ergoTree": con2.ergo_tree,
+                "boxId": "pub1-box1",
+                "value": 10,
+                "ergoTree": pub1.ergo_tree,
                 "assets": [],
                 "creationHeight": h,
-                "additionalRegisters": {
-                    "R4": "0703553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8",
-                    "R5": "0e2098479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8",
-                    "R6": "05a4c3edd9998877",
-                },
+                "additionalRegisters": {},
                 "transactionId": "tx-b1",
                 "index": 0,
             },
             {
-                "boxId": "pub1-box1",
-                "value": 10,
-                "ergoTree": pub1.ergo_tree,
-                "assets": [
-                    {
-                        "tokenId": "con1-box1",
-                        "amount": 2000,
-                    }
-                ],
+                "boxId": "con1-box2",
+                "value": 40,
+                "ergoTree": con1.ergo_tree,
+                "assets": [],
                 "creationHeight": h,
                 "additionalRegisters": {},
                 "transactionId": "tx-b1",
@@ -167,38 +139,125 @@ def make_blocks(height: int):
     h += 1
     tx_c1 = {
         "id": "tx-c1",
-        "inputs": [{"boxId": "pub1-box1"}],
-        "dataInputs": [{"boxId": "con2-box1"}],
+        "inputs": [{"boxId": "con1-box2"}],
+        "dataInputs": [],
         "outputs": [
             {
-                "boxId": "pub1-box2",
-                "value": 5,
-                "ergoTree": pub1.ergo_tree,
-                "assets": [
-                    {
-                        "tokenId": "con1-box1",
-                        "amount": 1500,
-                    }
-                ],
+                "boxId": "pub2-box1",
+                "value": 15,
+                "ergoTree": pub2.ergo_tree,
+                "assets": [],
                 "creationHeight": h,
                 "additionalRegisters": {},
                 "transactionId": "tx-c1",
                 "index": 0,
             },
             {
-                "boxId": "pub2-box1",
-                "value": 4,
-                "ergoTree": pub2.ergo_tree,
-                "assets": [
-                    {
-                        "tokenId": "con1-box1",
-                        "amount": 500,
-                    }
-                ],
+                "boxId": "con1-box3",
+                "value": 25,
+                "ergoTree": con1.ergo_tree,
+                "assets": [],
                 "creationHeight": h,
                 "additionalRegisters": {},
                 "transactionId": "tx-c1",
                 "index": 1,
+            },
+        ],
+        "size": 100,
+    }
+
+    tx_c2 = {
+        "id": "tx-c2",
+        "inputs": [{"boxId": "con1-box3"}],
+        "dataInputs": [],
+        "outputs": [
+            {
+                "boxId": "pub3-box1",
+                "value": 20,
+                "ergoTree": pub3.ergo_tree,
+                "assets": [],
+                "creationHeight": h,
+                "additionalRegisters": {},
+                "transactionId": "tx-c2",
+                "index": 0,
+            },
+            {
+                "boxId": "con1-box4",
+                "value": 5,
+                "ergoTree": con1.ergo_tree,
+                "assets": [],
+                "creationHeight": h,
+                "additionalRegisters": {},
+                "transactionId": "tx-c2",
+                "index": 1,
+            },
+        ],
+        "size": 100,
+    }
+
+    tx_c3 = {
+        "id": "tx-c3",
+        "inputs": [{"boxId": "pub1-box1"}],
+        "dataInputs": [],
+        "outputs": [
+            {
+                "boxId": "cex1-box1",
+                "value": 10,
+                "ergoTree": cex1.ergo_tree,
+                "assets": [],
+                "creationHeight": h,
+                "additionalRegisters": {},
+                "transactionId": "tx-c3",
+                "index": 0,
+            },
+        ],
+        "size": 100,
+    }
+
+    h += 1
+    tx_x1 = {
+        "id": "tx-x1",
+        "inputs": [{"boxId": "pub3-box1"}],
+        "dataInputs": [],
+        "outputs": [
+            {
+                "boxId": "cex3-box1",
+                "value": 20,
+                "ergoTree": cex3.ergo_tree,
+                "assets": [],
+                "creationHeight": h,
+                "additionalRegisters": {},
+                "transactionId": "tx-x1",
+                "index": 0,
+            },
+        ],
+        "size": 674,
+    }
+
+    tx_d1 = {
+        "id": "tx-d1",
+        "inputs": [{"boxId": "pub2-box1"}],
+        "dataInputs": [],
+        "outputs": [
+            {
+                "boxId": "cex2-box1",
+                "value": 5,
+                "ergoTree": cex2.ergo_tree,
+                "assets": [],
+                "creationHeight": h,
+                "additionalRegisters": {},
+                "transactionId": "tx-d1",
+                "index": 0,
+            },
+            {
+                "boxId": "pub2-box2",
+                "value": 9,
+                "ergoTree": pub2.ergo_tree,
+                "assets": [],
+                "creationHeight": h,
+                "additionalRegisters": {},
+                "transactionId": "tx-d1",
+                "index": 0,
             },
             {
                 "boxId": "fees-box1",
@@ -207,32 +266,29 @@ def make_blocks(height: int):
                 "assets": [],
                 "creationHeight": h,
                 "additionalRegisters": {},
-                "transactionId": "tx-c1",
-                "index": 2,
+                "transactionId": "tx-d1",
+                "index": 1,
             },
         ],
         "size": 100,
     }
 
-    tx_c2 = {
-        "id": "tx-c2",
-        "inputs": [
-            {
-                "boxId": "fees-box1",
-            }
-        ],
+    h = +1
+    tx_e1 = {
+        "id": "tx-e1",
+        "inputs": [{"boxId": "fees-box1"}],
         "dataInputs": [],
         "outputs": [
             {
-                "boxId": "con1-box2",
+                "boxId": "fees-box2",
                 "value": 1,
-                "ergoTree": con1.ergo_tree,
+                "ergoTree": fees.ergo_tree,
                 "assets": [],
                 "creationHeight": h,
                 "additionalRegisters": {},
-                "transactionId": "tx-c2",
+                "transactionId": "tx-e1",
                 "index": 0,
-            }
+            },
         ],
         "size": 100,
     }
@@ -249,24 +305,6 @@ def make_blocks(height: int):
         "blockTransactions": {
             "headerId": "block-a",
             "transactions": [tx_a1],
-            "blockVersion": 2,
-            "size": 1155,
-        },
-        "size": 1000,
-    }
-
-    block_x = {
-        "header": {
-            "votes": "000000",
-            "timestamp": 1234560200000,
-            "size": 123,
-            "height": height + 2,
-            "id": "block-x",
-            "parentId": "block-a",
-        },
-        "blockTransactions": {
-            "headerId": "block-x",
-            "transactions": [tx_x1],
             "blockVersion": 2,
             "size": 1155,
         },
@@ -302,16 +340,71 @@ def make_blocks(height: int):
         },
         "blockTransactions": {
             "headerId": "block-c",
-            "transactions": [tx_c1, tx_c2],
+            "transactions": [tx_c1, tx_c2, tx_c3],
             "blockVersion": 2,
             "size": 1155,
         },
         "size": 1000,
     }
 
-    return [block_a, block_x, block_b, block_c]
+    block_x = {
+        "header": {
+            "votes": "000000",
+            "timestamp": 1234560400000,
+            "size": 123,
+            "height": height + 4,
+            "id": "block-x",
+            "parentId": "block-c",
+        },
+        "blockTransactions": {
+            "headerId": "block-x",
+            "transactions": [tx_x1],
+            "blockVersion": 2,
+            "size": 1155,
+        },
+        "size": 1000,
+    }
+
+    block_d = {
+        "header": {
+            "votes": "000000",
+            "timestamp": 1234560400000,
+            "size": 123,
+            "height": height + 4,
+            "id": "block-d",
+            "parentId": "block-c",
+        },
+        "blockTransactions": {
+            "headerId": "block-d",
+            "transactions": [tx_d1],
+            "blockVersion": 2,
+            "size": 1155,
+        },
+        "size": 1000,
+    }
+
+    block_e = {
+        "header": {
+            "votes": "000000",
+            "timestamp": 1234560500000,
+            "size": 123,
+            "height": height + 5,
+            "id": "block-e",
+            "parentId": "block-d",
+        },
+        "blockTransactions": {
+            "headerId": "block-e",
+            "transactions": [tx_e1],
+            "blockVersion": 2,
+            "size": 1155,
+        },
+        "size": 1000,
+    }
+
+    return [block_a, block_b, block_c, block_x, block_d, block_e]
 
 
+@pytest.mark.skip("Not implemented")
 @pytest.mark.order(ORDER)
 class TestSync:
     """
@@ -346,6 +439,7 @@ class TestSync:
         _test_db_state(synced_db, self.start_height)
 
 
+@pytest.mark.skip("Not implemented")
 @pytest.mark.order(ORDER)
 class TestSyncRollback:
     """
@@ -393,55 +487,7 @@ class TestSyncRollback:
         _test_db_state(synced_db, self.start_height)
 
 
-@pytest.mark.order(ORDER)
-class TestSyncNoForkChild:
-    """
-    Start with bootstrapped db.
-    Scenario where node has two block candidates for last height.
-    """
-
-    start_height = 599_999
-
-    @pytest.fixture(scope="class")
-    def synced_db(self, temp_cfg, temp_db_class_scoped):
-        """
-        Run watcher with mock api and return cursor to test db.
-        """
-        blocks = make_blocks(self.start_height)
-        with MockApi() as api:
-            api = ApiUtil()
-
-            # Initially have blocks a, b and x
-            first_blocks = blocks[0:3]
-            api.set_blocks(first_blocks)
-
-            # Bootstrap db
-            with pg.connect(temp_db_class_scoped) as conn:
-                bootstrap_db(conn, first_blocks)
-
-            # 1 st run
-            # No way to tell fork appart, should pick 1st block in alphabetical order (block-b)
-            cp = run_watcher(temp_cfg)
-            assert cp.returncode == 0
-            assert "Including block block-b" in cp.stdout.decode()
-            assert "Including block block-x" not in cp.stdout.decode()
-            assert "no child" not in cp.stdout.decode()
-
-            # Now make all blocks visible
-            api.set_blocks(blocks)
-
-            # Run again
-            cp = run_watcher(temp_cfg)
-            assert cp.returncode == 0
-            assert "Including block block-c" in cp.stdout.decode()
-
-            with pg.connect(temp_db_class_scoped) as conn:
-                yield conn
-
-    def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.start_height)
-
-
+@pytest.mark.skip("Not implemented")
 @pytest.mark.order(ORDER)
 class TestGenesis:
     """
@@ -472,6 +518,7 @@ class TestGenesis:
         _test_db_state(synced_db, self.start_height)
 
 
+@pytest.mark.skip("Not implemented")
 @pytest.mark.order(ORDER)
 class TestMigrations:
     """
@@ -509,19 +556,58 @@ class TestMigrations:
 def _test_db_state(conn: pg.Connection, start_height: int):
     assert_db_constraints(conn)
     with conn.cursor() as cur:
-        assert_utxos(cur, start_height)
+        assert_supply_details(cur, start_height)
+        assert_supply(cur, start_height)
 
 
 def assert_db_constraints(conn: pg.Connection):
-    # Utxos
-    assert_pk(conn, "mtr", "utxos", ["height"])
+    # mtr.cex_supply_details
+    assert_pk(conn, "mtr", "cex_supply_details", ["height", "cex_id"])
+    assert_fk(conn, "mtr", "cex_supply_details", "cex_supply_details_cex_id_fkey")
+    # mtr.cex_supply
+    assert_pk(conn, "mtr", "cex_supply", ["address"])
 
 
-def assert_utxos(cur: pg.Cursor, start_height: int):
-    cur.execute("select height, value from mtr.utxos order by 1;")
+def assert_supply_details(cur: pg.Cursor, start_height: int):
+    height_c = start_height + 3
+    height_d = start_height + 4
+    cur.execute(
+        """
+        select height
+            , cex_id
+            , main
+            , deposit
+        from mtr.cex_supply_details
+        order by 1, 2;
+        """
+    )
     rows = cur.fetchall()
-    assert len(rows) == 4
-    assert rows[0] == (start_height + 0, 1)  # initial state
-    assert rows[1] == (start_height + 1, 2)  # spend 1 create 2 (+1)
-    assert rows[2] == (start_height + 2, 3)  # spend 1 create 2 (+1)
-    assert rows[3] == (start_height + 3, 5)  # spend 2 create 4 (+2)
+    for row in rows:
+        print(row)
+    assert len(rows) == 2
+    # At b, pub1 not linked to cex 1 yet
+    # At c, pub2 not linked to cex 2 yet
+    assert rows[0] == (height_c, 1, 10, 0)
+    assert rows[1] == (height_d, 2, 5, 9)
+
+
+def assert_supply(cur: pg.Cursor, start_height: int):
+    cur.execute(
+        """
+        select height
+            , total
+            , deposit
+        from mtr.cex_supply
+        order by 1, 2;
+        """
+    )
+    rows = cur.fetchall()
+    for row in rows:
+        print(row)
+    assert len(rows) == 5
+    assert rows[0] == (start_height + 0, 0, 0)
+    assert rows[1] == (start_height + 1, 0, 0)
+    assert rows[2] == (start_height + 2, 0, 0)
+    assert rows[3] == (start_height + 3, 10, 0)
+    assert rows[4] == (start_height + 4, 15, 9)
+    assert rows[5] == (start_height + 5, 15, 9)

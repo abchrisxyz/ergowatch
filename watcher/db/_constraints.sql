@@ -120,6 +120,41 @@ create index on bal.tokens_diffs(height);
 
 
 -------------------------------------------------------------------------------
+-- CEX's
+-------------------------------------------------------------------------------
+alter table cex.cexs add primary key (id);
+alter table cex.cexs add constraint cexs_unique_name unique (name);
+
+alter table cex.addresses add primary key (address);
+alter table cex.addresses add foreign key (cex_id)
+	references cex.cexs (id)
+	on delete cascade;
+alter table cex.addresses alter column type set not null;
+create index on cex.addresses(cex_id);
+create index on cex.addresses(type);
+
+alter table cex.new_deposit_addresses add primary key (address);
+alter table cex.new_deposit_addresses add foreign key (cex_id)
+	references cex.cexs (id)
+	on delete cascade;
+alter table cex.new_deposit_addresses alter column spot_height set not null;
+create index on cex.new_deposit_addresses(spot_height);
+
+alter table cex.block_processing_log add primary key (header_id);
+create index on cex.block_processing_log (status);
+
+-------------------------------------------------------------------------------
 -- Metrics
 -------------------------------------------------------------------------------
+-- CEX's
+alter table mtr.cex_supply_details add primary key (height, cex_id);
+alter table mtr.cex_supply_details add foreign key (cex_id)
+	references cex.cexs (id)
+	on delete cascade;
+
+alter table mtr.cex_supply add primary key (height);
+
+-- UTxO's
 alter table mtr.utxos add primary key(height);
+
+

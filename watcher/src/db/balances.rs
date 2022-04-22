@@ -29,12 +29,10 @@ pub(super) fn rollback_block(tx: &mut Transaction, block: &BlockData) -> anyhow:
 }
 
 pub(super) fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
-    info!("Bootstrapping balances");
-
     if is_bootstrapped(tx) {
-        info!("Already bootstrapped");
         return Ok(());
     }
+    info!("Bootstrapping balances");
 
     tx.execute("set local work_mem = '32MB';", &[]).unwrap();
 

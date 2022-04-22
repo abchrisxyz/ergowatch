@@ -22,7 +22,7 @@ pub fn sync_and_track(session: &mut Session) -> Result<(), &'static str> {
 
         if node_height <= session.head.height {
             if session.exit_when_synced {
-                debug!("Done syncing, exiting now");
+                info!("Done syncing, exiting now");
                 return Ok(());
             }
             debug!("No new blocks - waiting {} seconds", session.poll_interval);

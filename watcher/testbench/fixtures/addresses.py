@@ -7,6 +7,8 @@ Fees address starts with 2iH
 Coinbase starts with 2Z4
 Selected contracts start with 3 or 4.
 P2PK's start with a 9.
+CEX addresses are P2PK's and match real main CEX addresses.
+When sorted alphabetically, CEX addresses appear after dummy P2PK's.
 """
 
 from collections import namedtuple
@@ -53,6 +55,24 @@ P2PK_BOXES = [
     Box(
         "9fjoLKBiuRAf1vWzhjnYEFhDrNuFoxXPPLjFHtrTxNXmiiMXkuS",
         "0008cd02a09eaf3bbaa2d7a00a6f745146a8d5860ba930b103c972cec054ad9181705258",
+    ),
+]
+
+CEX_BOXES = [
+    # Coinex (CEX ID 1)
+    Box(
+        "9fPiW45mZwoTxSwTLLXaZcdekqi72emebENmScyTGsjryzrntUe",
+        "0008cd027304abbaebe8bb3a9e963dfa9fa4964d7d001e6a1bd225eadc84048ae49b627c",
+    ),
+    # Gate (CEX ID 2)
+    Box(
+        "9i7134eY3zUotQyS8nBeZDJ3SWbTPn117nCJYi977FBn9AaxhZY",
+        "0008cd03d8273c1ed49f83f8182baa9aba6948241cbf9a73163f5a66066ef9c7607a9b92",
+    ),
+    # KuCoin (CEX ID 3)
+    Box(
+        "9i8Mci4ufn8iBQhzohh4V3XM3PjiJbxuDG1hctouwV4fjW5vBi3",
+        "0008cd03db3ac4dccd3546c949e23a2c1f49cd2bb2559c298d6babd451e7469c57e92507",
     ),
 ]
 
@@ -117,12 +137,14 @@ class _AddressCatalogue:
         self._key2box = {
             **{f"pub{i+1}": box for i, box in enumerate(P2PK_BOXES)},
             **{f"con{i+1}": box for i, box in enumerate(CONTRACT_BOXES)},
+            **{f"cex{i+1}": box for i, box in enumerate(CEX_BOXES)},
             "base": COINBASE_BOX,
             "fees": FEES_BOX,
         }
         self._tree2addr = {
             **{box.ergo_tree: box.address for box in P2PK_BOXES},
             **{box.ergo_tree: box.address for box in CONTRACT_BOXES},
+            **{box.ergo_tree: box.address for box in CEX_BOXES},
             COINBASE_BOX.ergo_tree: COINBASE_BOX.address,
             FEES_BOX.ergo_tree: FEES_BOX.address,
         }
@@ -131,7 +153,7 @@ class _AddressCatalogue:
 
     def get(self, key: str) -> Box:
         """
-        pub<i> | con<i> | base | fees
+        pub<i> | con<i> | base | fees | cex<i>
         """
         return self._key2box[key]
 
@@ -144,8 +166,9 @@ class _AddressCatalogue:
         Keys are mapped to boxes like so:
             base --> coinbase address
             fees --> fees collection address
-            pub<i> --> P2PK address at index i+1
-            con<i> --> contract address at index i+1
+            pub<i> --> P2PK address at index i-1
+            con<i> --> contract address at index i-1
+            cex<i> --> cex address at index i-1
         """
         key = box_id.split("-")[0]
         return self._key2box[key].address

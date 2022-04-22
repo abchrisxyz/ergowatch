@@ -126,6 +126,7 @@ pub mod cache {
     pub struct Cache {
         pub metrics: Metrics,
     }
+
     pub struct Metrics {
         pub utxos: i64,
     }
