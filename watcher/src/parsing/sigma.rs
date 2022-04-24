@@ -210,8 +210,8 @@ fn render_register_val(val: &Value) -> RenderedRegister {
         // Header, PreHeader, Global and Lambda) should not occur.
         // If unhandled values were to occur, they can be handled retroactively through migrations.
         _ => RenderedRegister {
-            value_type: String::from("unhandled"),
-            value: String::from("unhandled"),
+            value_type: String::from("_unhandled"),
+            value: String::from("_unhandled"),
         },
     }
 }
