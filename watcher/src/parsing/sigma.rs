@@ -11,6 +11,8 @@ use ergotree_ir::sigma_protocol::sigma_boolean::SigmaBoolean;
 use ergotree_ir::sigma_protocol::sigma_boolean::SigmaProofOfKnowledgeTree;
 use ergotree_ir::types::stype::SType;
 
+use log::warn;
+
 pub(super) fn base16_to_address(base16_str: &str) -> String {
     let tree_bytes = base16::decode(base16_str.as_bytes()).unwrap();
     let tree = ErgoTree::sigma_parse_bytes(&tree_bytes).unwrap();
@@ -26,8 +28,26 @@ pub struct RenderedRegister {
 }
 
 pub(super) fn render_register_value(base16_str: &str) -> RenderedRegister {
-    let bytes = base16::decode(base16_str.as_bytes()).unwrap();
-    let cst = Constant::sigma_parse_bytes(&bytes).unwrap();
+    let bytes = match base16::decode(base16_str.as_bytes()) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            warn!("Base16 decoding error: {:?}", err);
+            return RenderedRegister {
+                value_type: String::from("_Base16DecodeError"),
+                value: String::from("_Base16DecodeError"),
+            };
+        }
+    };
+    let cst = match Constant::sigma_parse_bytes(&bytes) {
+        Ok(cst) => cst,
+        Err(err) => {
+            warn!("Sigma bytes parsing error: {:?}", err);
+            return RenderedRegister {
+                value_type: String::from("_SigmaParsingError"),
+                value: String::from("_SigmaParsingError"),
+            };
+        }
+    };
     let val = Value::from(cst.v);
     render_register_val(&val)
 }
@@ -190,8 +210,8 @@ fn render_register_val(val: &Value) -> RenderedRegister {
         // Header, PreHeader, Global and Lambda) should not occur.
         // If unhandled values were to occur, they can be handled retroactively through migrations.
         _ => RenderedRegister {
-            value_type: String::from("unhandled"),
-            value: String::from("unhandled"),
+            value_type: String::from("_unhandled"),
+            value: String::from("_unhandled"),
         },
     }
 }
@@ -467,5 +487,14 @@ mod tests {
         let rr = render_register_value(base16_str);
         assert_eq!(rr.value_type, "SCBox");
         assert_eq!(rr.value, "{\"boxId\":\"1010ff69fabe02798af4765600fef9dd3983ff5aacb717d2aaa642eb1e129c57\",\"value\":22000000,\"ergoTree\":\"100d0400040004000500040405020580b489130e8702101404000e240008cd02df65e86fbc84e0534a9170de4cfcf3c31f28367c07ef68f38d2b346f752ec49204000400040004000580dac40904020580dac409050005c083ccb2f95e050004010101010004020e000500058092f4010404d803d601b2a5730000d602db63087201d6037301d1ecededededededed91b17202730293e5c67201040ec5b2a4730300720393e5c67201050ec5b2a4730400720393b2e4c672010611730500730693b2e4c672010611730700730893e5c6720107057309730a93e5c672010805730b7e730c05ec730ded730e938cb27202730f00017310eded92c1720199b0a47311d9010441639a8c720401c18c720402731293c27201720393b1a573130e0201010e20c72af9dd2e78700de6b55ea472025e9f9eaadd602ec4f4bb64b7ae4927ceed5805000580a4e8030e240008cd02d84d2e1ca735ce23f224bd43cd43ed67053356713a8a6920965b3bde933648dcd804d601b2a5730000d602c17201d603c5b2a4730100d604b2db63087201730201860272037303d1ed93b1a57304ecededededed9372038c720401938c7204027305937202730693c27201730793e4c67201070e730893e4c67201080e7309ed92720299b0a4730ad9010541639a8c720501c18c720502730b93c27201730c\",\"assets\":[],\"additionalRegisters\":{},\"creationHeight\":573052,\"transactionId\":\"fa12ef1163fa3bd6ac7178f344a6ed3a3bacb1a0ccf1eab1cc74ebf0d8583dc2\",\"index\":0}");
+    }
+
+    #[test]
+    fn render_register_error_handling() {
+        // Invalid ByteCode
+        let base16_str = "62";
+        let rr = render_register_value(base16_str);
+        assert_eq!(rr.value_type, "_SigmaParsingError");
+        assert_eq!(rr.value, "_SigmaParsingError");
     }
 }

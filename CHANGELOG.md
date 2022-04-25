@@ -4,6 +4,11 @@
 ## v0.3.0 - UNRELEASED
 
 
+## v0.2.1 - 2022-04-25
+### Fixed
+[Issue 24](https://github.com/abchrisxyz/ergowatch/issues/24) - Prevent panics from register parsing
+
+
 ## v0.2.0 - 2022-04-05
 
 ### New features
