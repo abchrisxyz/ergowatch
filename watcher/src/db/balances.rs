@@ -7,151 +7,126 @@ pub(super) mod erg_diffs;
 pub(super) mod tokens;
 pub(super) mod tokens_diffs;
 
-use super::SQLStatement;
 use crate::parsing::BlockData;
+use log::info;
+use postgres::types::Type;
+use postgres::Transaction;
 
-pub fn prep(block: &BlockData) -> Vec<SQLStatement> {
-    let tx_ids: Vec<&str> = block.transactions.iter().map(|tx| tx.id).collect();
-    let mut sql_statements: Vec<SQLStatement> = Vec::new();
-    // Erg
-    sql_statements.append(
-        &mut tx_ids
-            .iter()
-            .map(|tx_id| erg_diffs::ErgDiffQuery { tx_id: &tx_id }.to_statement())
-            .collect(),
-    );
-    sql_statements.push(erg::update_statement(block.height));
-    sql_statements.push(erg::insert_statement(block.height));
-    sql_statements.push(erg::delete_zero_balances_statement());
-    // Tokens
-    sql_statements.append(
-        &mut tx_ids
-            .iter()
-            .map(|tx_id| tokens_diffs::TokenDiffQuery { tx_id: &tx_id }.to_statement())
-            .collect(),
-    );
-    sql_statements.push(tokens::update_statement(block.height));
-    sql_statements.push(tokens::insert_statement(block.height));
-    sql_statements.push(tokens::delete_zero_balances_statement());
-
-    sql_statements
+pub(super) fn include_block(tx: &mut Transaction, block: &BlockData) -> anyhow::Result<()> {
+    erg_diffs::include(tx, block);
+    erg::include(tx, block);
+    tokens_diffs::include(tx, block);
+    tokens::include(tx, block);
+    Ok(())
 }
 
-pub fn prep_rollback(block: &BlockData) -> Vec<SQLStatement> {
-    let mut sql_statements: Vec<SQLStatement> = vec![];
-    // Tokens
-    sql_statements.push(tokens::rollback_delete_zero_balances_statement(
-        block.height,
-    ));
-    sql_statements.push(tokens::rollback_update_statement(block.height));
-    sql_statements.push(tokens::delete_zero_balances_statement());
-    sql_statements.append(
-        &mut block
-            .transactions
-            .iter()
-            .map(|tx| tokens_diffs::rollback_statement(&tx.id))
-            .collect(),
-    );
-    // Erg
-    sql_statements.push(erg::rollback_delete_zero_balances_statement(block.height));
-    sql_statements.push(erg::rollback_update_statement(block.height));
-    sql_statements.push(erg::delete_zero_balances_statement());
-    sql_statements.append(
-        &mut block
-            .transactions
-            .iter()
-            .map(|tx| erg_diffs::rollback_statement(&tx.id))
-            .collect(),
-    );
-    sql_statements
+pub(super) fn rollback_block(tx: &mut Transaction, block: &BlockData) -> anyhow::Result<()> {
+    tokens::rollback(tx, block);
+    tokens_diffs::rollback(tx, block);
+    erg::rollback(tx, block);
+    erg_diffs::rollback(tx, block);
+    Ok(())
 }
 
-pub fn prep_bootstrap(height: i32) -> Vec<SQLStatement> {
-    vec![
-        erg_diffs::bootstrapping::insert_diffs_statement(height),
-        erg::update_statement(height),
-        erg::insert_statement(height),
-        erg::delete_zero_balances_statement(),
-        tokens_diffs::bootstrapping::insert_diffs_statement(height),
-        tokens::update_statement(height),
-        tokens::insert_statement(height),
-        tokens::delete_zero_balances_statement(),
-    ]
+pub(super) fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
+    info!("Bootstrapping balances");
+
+    if is_bootstrapped(tx) {
+        info!("Already bootstrapped");
+        return Ok(());
+    }
+
+    tx.execute("set local work_mem = '32MB';", &[]).unwrap();
+
+    let row = tx.query_one(
+        "
+        select min(height) as min_height
+            , max(height) as max_height
+        from core.headers;",
+        &[],
+    )?;
+    let first_height: i32 = row.get("min_height");
+    let sync_height: i32 = row.get("max_height");
+
+    // Bootstrapping queries rely on indexes, so constraints are set now.
+    set_constraints(tx);
+
+    // Prepare statements
+    let stmt_erg_diffs_insert =
+        tx.prepare_typed(erg_diffs::INSERT_DIFFS_FOR_HEIGHT, &[Type::INT4])?;
+    let stmt_erg_update = tx.prepare_typed(erg::UPDATE_BALANCES, &[Type::INT4])?;
+    let stmt_erg_insert = tx.prepare_typed(erg::INSERT_BALANCES, &[Type::INT4])?;
+    let stmt_erg_delete = tx.prepare_typed(erg::DELETE_ZERO_BALANCES, &[])?;
+    let stmt_tokens_diffs_insert =
+        tx.prepare_typed(tokens_diffs::INSERT_DIFFS_FOR_HEIGHT, &[Type::INT4])?;
+    let stmt_tokens_update = tx.prepare_typed(tokens::UPDATE_BALANCES, &[Type::INT4])?;
+    let stmt_tokens_insert = tx.prepare_typed(tokens::INSERT_BALANCES, &[Type::INT4])?;
+    let stmt_tokens_delete = tx.prepare_typed(tokens::DELETE_ZERO_BALANCES, &[])?;
+
+    set_tables_unlogged(tx);
+
+    for h in first_height..sync_height + 1 {
+        // Diffs go first
+        tx.execute(&stmt_erg_diffs_insert, &[&h]).unwrap();
+        // then balances
+        tx.execute(&stmt_erg_update, &[&h]).unwrap();
+        tx.execute(&stmt_erg_insert, &[&h]).unwrap();
+        tx.execute(&stmt_erg_delete, &[]).unwrap();
+
+        // Same for tokens, diffs first
+        tx.execute(&stmt_tokens_diffs_insert, &[&h]).unwrap();
+        // then balances
+        tx.execute(&stmt_tokens_update, &[&h]).unwrap();
+        tx.execute(&stmt_tokens_insert, &[&h]).unwrap();
+        tx.execute(&stmt_tokens_delete, &[]).unwrap();
+    }
+
+    set_tables_logged(tx);
+
+    Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::erg;
-    use super::erg_diffs;
-    use super::tokens;
-    use super::tokens_diffs;
-    use crate::db::SQLArg;
-    use crate::parsing::testing::block_600k;
-    use pretty_assertions::assert_eq;
+fn is_bootstrapped(tx: &mut Transaction) -> bool {
+    // If tables are not empty, tables are bootstrapped already.
+    // All tables are progressed in sync, so enough to check only one.
+    let row = tx
+        .query_one("select exists(select * from bal.erg limit 1);", &[])
+        .unwrap();
+    row.get(0)
+}
 
-    #[test]
-    fn check_prep_statements() -> () {
-        let statements = super::prep(&block_600k());
-        assert_eq!(statements.len(), 12);
-        assert_eq!(statements[0].sql, erg_diffs::INSERT_DIFFS);
-        assert_eq!(statements[1].sql, erg_diffs::INSERT_DIFFS);
-        assert_eq!(statements[2].sql, erg_diffs::INSERT_DIFFS);
-        assert_eq!(statements[3].sql, erg::UPDATE_BALANCES);
-        assert_eq!(statements[4].sql, erg::INSERT_BALANCES);
-        assert_eq!(statements[5].sql, erg::DELETE_ZERO_BALANCES);
+fn set_constraints(tx: &mut Transaction) {
+    tx.execute(erg::constraints::ADD_PK, &[]).unwrap();
+    tx.execute(erg::constraints::CHECK_VALUE_GE0, &[]).unwrap();
+    tx.execute(erg::constraints::IDX_VALUE, &[]).unwrap();
+    tx.execute(erg_diffs::constraints::ADD_PK, &[]).unwrap();
+    tx.execute(erg_diffs::constraints::IDX_HEIGHT, &[]).unwrap();
+    tx.execute(tokens::constraints::ADD_PK, &[]).unwrap();
+    tx.execute(tokens::constraints::CHECK_VALUE_GE0, &[])
+        .unwrap();
+    tx.execute(tokens::constraints::IDX_VALUE, &[]).unwrap();
+    tx.execute(tokens_diffs::constraints::ADD_PK, &[]).unwrap();
+    tx.execute(tokens_diffs::constraints::IDX_HEIGHT, &[])
+        .unwrap();
+}
 
-        assert_eq!(statements[6].sql, tokens_diffs::INSERT_DIFFS);
-        assert_eq!(statements[7].sql, tokens_diffs::INSERT_DIFFS);
-        assert_eq!(statements[8].sql, tokens_diffs::INSERT_DIFFS);
-        assert_eq!(statements[9].sql, tokens::UPDATE_BALANCES);
-        assert_eq!(statements[10].sql, tokens::INSERT_BALANCES);
-        assert_eq!(statements[11].sql, tokens::DELETE_ZERO_BALANCES);
-    }
+fn set_tables_logged(tx: &mut Transaction) {
+    tx.execute("alter table bal.erg set logged;", &[]).unwrap();
+    tx.execute("alter table bal.erg_diffs set logged;", &[])
+        .unwrap();
+    tx.execute("alter table bal.tokens set logged;", &[])
+        .unwrap();
+    tx.execute("alter table bal.tokens_diffs set logged;", &[])
+        .unwrap();
+}
 
-    #[test]
-    fn check_rollback_statements() -> () {
-        let statements = super::prep_rollback(&block_600k());
-        assert_eq!(statements.len(), 12);
-        assert_eq!(statements[0].sql, tokens::ROLLBACK_DELETE_ZERO_BALANCES);
-        assert_eq!(statements[1].sql, tokens::ROLLBACK_BALANCE_UPDATES);
-        assert_eq!(statements[2].sql, tokens::DELETE_ZERO_BALANCES);
-        assert_eq!(statements[3].sql, tokens_diffs::DELETE_DIFFS);
-        assert_eq!(statements[4].sql, tokens_diffs::DELETE_DIFFS);
-        assert_eq!(statements[5].sql, tokens_diffs::DELETE_DIFFS);
-
-        assert_eq!(statements[6].sql, erg::ROLLBACK_DELETE_ZERO_BALANCES);
-        assert_eq!(statements[7].sql, erg::ROLLBACK_BALANCE_UPDATES);
-        assert_eq!(statements[8].sql, erg::DELETE_ZERO_BALANCES);
-        assert_eq!(statements[9].sql, erg_diffs::DELETE_DIFFS);
-        assert_eq!(statements[10].sql, erg_diffs::DELETE_DIFFS);
-        assert_eq!(statements[11].sql, erg_diffs::DELETE_DIFFS);
-    }
-
-    #[test]
-    fn check_bootstrap_statements() -> () {
-        let statements = super::prep_bootstrap(600000);
-        assert_eq!(statements.len(), 8);
-        // Erg
-        assert_eq!(
-            statements[0].sql,
-            erg_diffs::bootstrapping::INSERT_DIFFS_AT_HEIGHT
-        );
-        assert_eq!(statements[1].sql, erg::UPDATE_BALANCES);
-        assert_eq!(statements[2].sql, erg::INSERT_BALANCES);
-        assert_eq!(statements[3].sql, erg::DELETE_ZERO_BALANCES);
-
-        assert_eq!(statements[0].args[0], SQLArg::Integer(600000));
-        assert_eq!(statements[1].args[0], SQLArg::Integer(600000));
-        assert_eq!(statements[2].args[0], SQLArg::Integer(600000));
-        assert_eq!(statements[3].args.len(), 0);
-
-        // Tokens
-        assert_eq!(
-            statements[4].sql,
-            tokens_diffs::bootstrapping::INSERT_DIFFS_AT_HEIGHT
-        );
-        assert_eq!(statements[5].sql, tokens::UPDATE_BALANCES);
-        assert_eq!(statements[6].sql, tokens::INSERT_BALANCES);
-        assert_eq!(statements[7].sql, tokens::DELETE_ZERO_BALANCES);
-    }
+fn set_tables_unlogged(tx: &mut Transaction) {
+    tx.execute("alter table bal.erg set unlogged;", &[])
+        .unwrap();
+    tx.execute("alter table bal.erg_diffs set unlogged;", &[])
+        .unwrap();
+    tx.execute("alter table bal.tokens set unlogged;", &[])
+        .unwrap();
+    tx.execute("alter table bal.tokens_diffs set unlogged;", &[])
+        .unwrap();
 }

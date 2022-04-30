@@ -9,9 +9,8 @@ import pytest
 def run_watcher(
     cfg_path: Path,
     target="release",
-    no_bootstrap=False,
     backtrace=False,
-    timeout=10,
+    timeout=15,
     log_file: str = None,
     allow_migrations: bool = False,
 ) -> subprocess.CompletedProcess:
@@ -20,8 +19,6 @@ def run_watcher(
     )
     args = [exe, "-c", cfg_path]
     args.append("--exit")
-    if no_bootstrap:
-        args.append("--no-bootstrap")
     if allow_migrations:
         args.append("-m")
 
@@ -57,6 +54,25 @@ def run_watcher(
 def extract_db_conn_str(db_conn) -> str:
     db_info = db_conn.info
     return f"host={db_info.host} port={db_info.port} dbname={db_info.dbname} user={db_info.user} password={db_info.password}"
+
+
+def table_has_pk(conn: pg.Connection, schema: str, table: str):
+    """Return true if a primary key is set for specified table"""
+    # https://wiki.postgresql.org/wiki/Retrieve_primary_key_columns
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            select exists(
+                select *
+                from pg_index i
+                join pg_attribute a on a.attrelid = i.indrelid
+                    and a.attnum = any(i.indkey)
+                where i.indrelid = '{schema}.{table}'::regclass
+                and i.indisprimary
+            );
+        """
+        )
+        return cur.fetchone()[0]
 
 
 def assert_pk(conn: pg.Connection, schema: str, table: str, pk_columns: List[str]):

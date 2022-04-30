@@ -2,76 +2,114 @@
 //!
 //! Maintain set of unspent boxes.
 
-// TODO undo pub once genesis refactoring is done
-pub mod usp;
-
-use crate::db::SQLStatement;
+use super::Transaction;
 use crate::parsing::BlockData;
-use usp::bootstrapping;
-use usp::delete_spent_box_statement;
-use usp::insert_new_box_statement;
+use log::info;
 
-/// Insert output boxes, then delete input boxes
-pub fn prep(block: &BlockData) -> Vec<SQLStatement> {
-    let mut sql_statements: Vec<SQLStatement> = block
+pub(super) fn include_block(tx: &mut Transaction, block: &BlockData) -> anyhow::Result<()> {
+    // Insert output boxes
+    for box_id in extract_outputs(block) {
+        tx.execute("insert into usp.boxes (box_id) values ($1);", &[&box_id])
+            .unwrap();
+    }
+
+    // then delete input boxes
+    for box_id in extract_inputs(block) {
+        tx.execute("delete from usp.boxes where box_id = $1;", &[&box_id])
+            .unwrap();
+    }
+
+    Ok(())
+}
+
+pub(super) fn rollback_block(tx: &mut Transaction, block: &BlockData) -> anyhow::Result<()> {
+    // Insert input boxes
+    for box_id in extract_inputs(block) {
+        tx.execute("insert into usp.boxes (box_id) values ($1);", &[&box_id])
+            .unwrap();
+    }
+
+    // then delete output boxes
+    for box_id in extract_outputs(block) {
+        tx.execute("delete from usp.boxes where box_id = $1;", &[&box_id])
+            .unwrap();
+    }
+
+    Ok(())
+}
+
+pub(super) fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
+    if is_bootstrapped(tx) {
+        return Ok(());
+    }
+
+    info!("Bootstrapping unspent");
+    tx.execute("set local work_mem = '32MB';", &[]).unwrap();
+    tx.execute("alter table usp.boxes set unlogged;", &[])
+        .unwrap();
+    // Find all unspent boxes: outputs not used as input
+    tx.execute(
+        "
+        with inputs as (
+            select ip.box_id
+            from core.inputs ip
+            join core.headers hs on hs.id = ip.header_id
+        )
+        insert into usp.boxes (box_id)
+        select op.box_id
+        from core.outputs op
+        join core.headers hs on hs.id = op.header_id
+        left join inputs ip on ip.box_id = op.box_id
+        where ip.box_id is null;",
+        &[],
+    )
+    .unwrap();
+    tx.execute("alter table usp.boxes set logged;", &[])
+        .unwrap();
+    set_constraints(tx);
+    Ok(())
+}
+
+fn is_bootstrapped(tx: &mut Transaction) -> bool {
+    let row = tx
+        .query_one("select exists(select * from usp.boxes limit 1);", &[])
+        .unwrap();
+    row.get(0)
+}
+
+fn set_constraints(tx: &mut Transaction) {
+    let statements = vec!["alter table usp.boxes add primary key (box_id);"];
+
+    for statement in statements {
+        tx.execute(statement, &[]).unwrap();
+    }
+}
+
+fn extract_outputs<'a>(block: &'a BlockData) -> Vec<&'a str> {
+    block
         .transactions
         .iter()
-        .flat_map(|tx| {
-            tx.outputs
-                .iter()
-                .map(|op| insert_new_box_statement(op.box_id))
-        })
-        .collect();
-    sql_statements.append(
-        &mut block
-            .transactions
-            .iter()
-            .flat_map(|tx| {
-                tx.input_box_ids
-                    .iter()
-                    .map(|box_id| delete_spent_box_statement(box_id))
-            })
-            .collect(),
-    );
-    sql_statements
+        .flat_map(|tx| tx.outputs.iter().map(|op| op.box_id))
+        .collect()
 }
 
-/// Insert input boxes, then delete output boxes
-pub fn prep_rollback(block: &BlockData) -> Vec<SQLStatement> {
-    let mut sql_statements: Vec<SQLStatement> = block
+fn extract_inputs<'a>(block: &'a BlockData) -> Vec<&'a str> {
+    block
         .transactions
         .iter()
-        .flat_map(|tx| {
-            tx.input_box_ids
-                .iter()
-                .map(|box_id| insert_new_box_statement(box_id))
-        })
-        .collect();
-    sql_statements.append(
-        &mut block
-            .transactions
-            .iter()
-            .flat_map(|tx| {
-                tx.outputs
-                    .iter()
-                    .map(|op| delete_spent_box_statement(op.box_id))
-            })
-            .collect(),
-    );
-    sql_statements
+        .flat_map(|tx| tx.input_box_ids.iter().map(|&box_id| box_id))
+        .collect()
 }
 
-pub fn prep_bootstrap(height: i32) -> Vec<SQLStatement> {
-    vec![
-        bootstrapping::insert_new_boxes_statement(height),
-        bootstrapping::delete_spent_boxes_statement(height),
-    ]
-}
+// pub fn prep_bootstrap(height: i32) -> Vec<SQLStatement> {
+//     vec![
+//         bootstrapping::insert_new_boxes_statement(height),
+//         bootstrapping::delete_spent_boxes_statement(height),
+//     ]
+// }
 
 #[cfg(test)]
 mod tests {
-    use super::usp;
-    use crate::db::SQLArg;
     use crate::parsing::testing::block_600k;
 
     /*
@@ -92,51 +130,33 @@ mod tests {
     */
 
     #[test]
-    fn check_prep_statements() -> () {
-        let statements = super::prep(&block_600k());
-        assert_eq!(statements.len(), 6 + 4);
-        assert_eq!(statements[0].sql, usp::INSERT_NEW_BOX);
-        assert_eq!(statements[1].sql, usp::INSERT_NEW_BOX);
-        assert_eq!(statements[2].sql, usp::INSERT_NEW_BOX);
-        assert_eq!(statements[3].sql, usp::INSERT_NEW_BOX);
-        assert_eq!(statements[4].sql, usp::INSERT_NEW_BOX);
-        assert_eq!(statements[5].sql, usp::INSERT_NEW_BOX);
-        assert_eq!(statements[6].sql, usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[7].sql, usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[8].sql, usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[9].sql, usp::DELETE_SPENT_BOX);
+    fn outputs() -> () {
+        let block = block_600k();
+        let box_ids = super::extract_outputs(&block);
+        assert_eq!(box_ids.len(), 6);
     }
 
     #[test]
-    fn check_rollback_statements() -> () {
-        let statements = super::prep_rollback(&block_600k());
-        assert_eq!(statements.len(), 4 + 6);
-        assert_eq!(statements[0].sql, usp::INSERT_NEW_BOX);
-        assert_eq!(statements[1].sql, usp::INSERT_NEW_BOX);
-        assert_eq!(statements[2].sql, usp::INSERT_NEW_BOX);
-        assert_eq!(statements[3].sql, usp::INSERT_NEW_BOX);
-        assert_eq!(statements[4].sql, usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[5].sql, usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[6].sql, usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[7].sql, usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[8].sql, usp::DELETE_SPENT_BOX);
-        assert_eq!(statements[9].sql, usp::DELETE_SPENT_BOX);
+    fn inputs() -> () {
+        let block = block_600k();
+        let box_ids = super::extract_inputs(&block);
+        assert_eq!(box_ids.len(), 4);
     }
 
-    #[test]
-    fn check_bootstrap_statements() -> () {
-        let statements = super::prep_bootstrap(600000);
-        assert_eq!(statements.len(), 2);
-        assert_eq!(
-            statements[0].sql,
-            usp::bootstrapping::INSERT_NEW_BOXES_AT_HEIGHT
-        );
-        assert_eq!(
-            statements[1].sql,
-            usp::bootstrapping::DELETE_SPENT_BOXES_AT_HEIGHT
-        );
+    // #[test]
+    // fn check_bootstrap_statements() -> () {
+    //     let statements = super::prep_bootstrap(600000);
+    //     assert_eq!(statements.len(), 2);
+    //     assert_eq!(
+    //         statements[0].sql,
+    //         usp::bootstrapping::INSERT_NEW_BOXES_AT_HEIGHT
+    //     );
+    //     assert_eq!(
+    //         statements[1].sql,
+    //         usp::bootstrapping::DELETE_SPENT_BOXES_AT_HEIGHT
+    //     );
 
-        assert_eq!(statements[0].args[0], SQLArg::Integer(600000));
-        assert_eq!(statements[1].args[0], SQLArg::Integer(600000));
-    }
+    //     assert_eq!(statements[0].args[0], SQLArg::Integer(600000));
+    //     assert_eq!(statements[1].args[0], SQLArg::Integer(600000));
+    // }
 }

@@ -14,6 +14,7 @@ from fixtures.db.sql import extract_existing_outputs
 from fixtures.db.sql import extract_existing_tokens
 from fixtures.addresses import AddressCatalogue as AC
 from fixtures.registers import RegisterCatalogue as RC
+from utils import table_has_pk
 
 
 @pytest.mark.order(3)
@@ -29,10 +30,8 @@ class TestGenesisDB:
         row = cur.fetchone()
         assert row[0] == 0
 
-    def test_constraints_flags_not_set(self, cur):
-        cur.execute("select tier_1 or tier_2 from ew.constraints;")
-        row = cur.fetchone()
-        assert row[0] == False
+    def test_core_constraints_not_set(self, cur):
+        assert table_has_pk(cur.connection, "core", "headers") == False
 
 
 @pytest.mark.order(3)
@@ -235,10 +234,8 @@ class TestPopulatedDB:
             with conn.cursor() as cur:
                 yield cur
 
-    def test_constraints_flags_are_set(self, cur):
-        cur.execute("select tier_1 and tier_2 from ew.constraints;")
-        row = cur.fetchone()
-        assert row[0] == True
+    def test_core_constraints_are_set(self, cur):
+        assert table_has_pk(cur.connection, "core", "headers") == True
 
     def test_db_state_core(self, cur):
         """Check core tables state"""
@@ -521,10 +518,8 @@ class TestRev1DB:
             with conn.cursor() as cur:
                 yield cur
 
-    def test_constraints_flags_are_set(self, cur):
-        cur.execute("select tier_1 and tier_2 from ew.constraints;")
-        row = cur.fetchone()
-        assert row[0] == True
+    def test_core_constraints_are_set(self, cur):
+        assert table_has_pk(cur.connection, "core", "headers") == True
 
     def test_core_headers(self, cur):
         """Check core tables state"""

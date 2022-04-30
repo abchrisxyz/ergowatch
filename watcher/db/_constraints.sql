@@ -123,10 +123,3 @@ create index on bal.tokens_diffs(height);
 -- Metrics
 -------------------------------------------------------------------------------
 alter table mtr.utxos add primary key(height);
-
-
--------------------------------------------------------------------------------
--- Finally
-------------------------------------------------------------------------------- 
-update ew.constraints set tier_1 = true;
-update ew.constraints set tier_2 = true;

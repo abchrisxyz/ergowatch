@@ -281,6 +281,7 @@ pub mod testing {
         }
     }
 
+    #[allow(dead_code)]
     pub fn genesis_boxes() -> Vec<Output> {
         vec![
             Output {

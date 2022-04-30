@@ -504,37 +504,6 @@ class TestGenesis:
         _test_db_state(synced_db, self.start_height)
 
 
-@pytest.mark.order(ORDER)
-class TestGenesisNoBootstrap:
-    """
-    Start with empty, unconstrained db and --no-bootstrap flag.
-    """
-
-    start_height = 0
-
-    @pytest.fixture(scope="class")
-    def synced_db(self, temp_cfg, unconstrained_db_class_scoped):
-        """
-        Run watcher with mock api and return cursor to test db.
-        """
-        blocks = make_blocks(self.start_height)
-        with MockApi() as api:
-            api = ApiUtil()
-            api.set_blocks(blocks)
-
-            # Run
-            cp = run_watcher(temp_cfg, no_bootstrap=True)
-            assert cp.returncode == 0
-            assert "Found --no-bootstrap flag" in cp.stdout.decode()
-            assert "Synchronizing with node" in cp.stdout.decode()
-
-            with pg.connect(unconstrained_db_class_scoped) as conn:
-                yield conn
-
-    def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.start_height)
-
-
 def _test_db_state(conn: pg.Connection, start_height: int):
     assert_db_constraints(conn)
     with conn.cursor() as cur:

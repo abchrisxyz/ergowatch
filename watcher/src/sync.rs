@@ -4,7 +4,6 @@ use log::info;
 use log::warn;
 use std::{thread, time};
 
-use crate::db;
 use crate::parsing::BlockData;
 use crate::session::Session;
 
@@ -12,11 +11,11 @@ use crate::session::Session;
 pub fn sync_and_track(session: &mut Session) -> Result<(), &'static str> {
     info!("Synchronizing with node");
 
-    if session.db.is_empty().unwrap() {
-        // --no-bootstrap option
-        session.db.apply_constraints_all().unwrap();
-        include_genesis_boxes(session)?;
-    };
+    // if session.db.is_empty().unwrap() {
+    //     // --no-bootstrap option
+    //     session.db.apply_constraints_all().unwrap();
+    //     include_genesis_boxes(session)?;
+    // };
 
     loop {
         let node_height = get_node_height_blocking(session);
@@ -87,7 +86,6 @@ fn sync_to_height(session: &mut Session, node_height: u32) -> Result<(), &'stati
 
 /// Add genesis boxes to core tables
 fn include_genesis_boxes(session: &mut Session) -> Result<(), &'static str> {
-    info!("Including genesis boxes (core only)");
     let boxes = match session.node.get_genesis_blocks() {
         Ok(boxes) => boxes,
         Err(e) => {
@@ -95,13 +93,23 @@ fn include_genesis_boxes(session: &mut Session) -> Result<(), &'static str> {
             return Err("Failed to retrieve genesis boxes from node");
         }
     };
-    let mut sql_statements = vec![];
-    sql_statements.append(&mut db::core::genesis::prep(boxes));
-    // TODO: replace prep_bootstrap(0) with prep_genesis
-    sql_statements.append(&mut db::unspent::prep_bootstrap(0));
-    sql_statements.append(&mut db::balances::prep_bootstrap(0));
-    sql_statements.append(&mut db::metrics::prep_genesis());
-    session.db.execute_in_transaction(sql_statements).unwrap();
+    session.db.include_genesis_boxes(boxes).unwrap();
+
+    // info!("Including genesis boxes (core only)");
+    // let boxes = match session.node.get_genesis_blocks() {
+    //     Ok(boxes) => boxes,
+    //     Err(e) => {
+    //         error!("{}", e);
+    //         return Err("Failed to retrieve genesis boxes from node");
+    //     }
+    // };
+    // let mut sql_statements = vec![];
+    // sql_statements.append(&mut db::core::genesis::prep(boxes));
+    // // TODO: replace prep_bootstrap(0) with prep_genesis
+    // sql_statements.append(&mut db::unspent::prep_bootstrap(0));
+    // sql_statements.append(&mut db::balances::prep_bootstrap(0));
+    // sql_statements.append(&mut db::metrics::prep_genesis());
+    // session.db.execute_in_transaction(sql_statements).unwrap();
 
     // Resync cache now that db got modified
     // Not needed currently, but calling anyway in case we rely on the cache
@@ -113,30 +121,15 @@ fn include_genesis_boxes(session: &mut Session) -> Result<(), &'static str> {
 
 /// Process block data into database
 fn include_block(session: &mut Session, block: &BlockData) {
-    // Prepare statements
-    let mut sql_statements = db::core::prep(block);
-    sql_statements.append(&mut db::unspent::prep(block));
-    sql_statements.append(&mut db::balances::prep(block));
-    sql_statements.append(&mut db::metrics::prep(block, &mut session.cache.metrics));
-
-    // Execute statements in single transaction
-    session.db.execute_in_transaction(sql_statements).unwrap();
+    session.db.include_block(block, &mut session.cache).unwrap();
 }
 
 /// Discard block data from database
 fn rollback_block(session: &mut Session, block: &BlockData) {
-    // Collect rollback statements, in reverse order
-    let mut sql_statements: Vec<db::SQLStatement> = vec![];
-    sql_statements.append(&mut db::metrics::prep_rollback(
-        block,
-        &mut session.cache.metrics,
-    ));
-    sql_statements.append(&mut db::balances::prep_rollback(block));
-    sql_statements.append(&mut db::unspent::prep_rollback(block));
-    sql_statements.append(&mut db::core::prep_rollback(block));
-
-    // Execute statements in single transaction
-    session.db.execute_in_transaction(sql_statements).unwrap();
+    session
+        .db
+        .rollback_block(block, &mut session.cache)
+        .unwrap();
 }
 
 /// Get latest block height from node.
@@ -157,20 +150,19 @@ fn get_node_height_blocking(session: &Session) -> u32 {
 
 pub mod bootstrap {
     use super::get_node_height_blocking;
-    use crate::db;
     use crate::parsing::BlockData;
     use crate::session::Session;
     use log::info;
 
-    pub fn phase_1(session: &mut Session) -> Result<(), &'static str> {
-        sync_core(session)?;
-        session.db.apply_constraints_tier1().unwrap();
-        Ok(())
-    }
-
-    pub fn phase_2(session: &mut Session) -> Result<(), &'static str> {
-        bootstrap_tier2_tables(session)?;
-        session.db.apply_constraints_tier2().unwrap();
+    pub fn run(session: &mut Session) -> Result<(), &'static str> {
+        if !session.db.has_constraints().unwrap() {
+            // Bootstrap core
+            sync_core(session)?;
+            session.db.apply_core_constraints().unwrap();
+            session.allow_rollbacks = true;
+            info!("Core bootstrapping completed");
+        }
+        session.db.bootstrap_derived_schemas().unwrap();
         Ok(())
     }
 
@@ -190,53 +182,6 @@ pub mod bootstrap {
             sync_core_to_height(session, node_height)?;
         }
         info!("Core sync completed");
-        Ok(())
-    }
-
-    pub fn db_is_bootstrapped(session: &Session) -> bool {
-        // Compare last height of derived tables.
-        match session.db.get_bootstrap_height().unwrap() {
-            Some(h) => h == session.head.height as i32,
-            None => false,
-        }
-    }
-
-    /// Boostrapping phase 2
-    fn bootstrap_tier2_tables(session: &mut Session) -> Result<(), &'static str> {
-        info!("Bootstrapping step 2/2 - populating secondary tables");
-        // Set tier 1 db constraints if absent.
-        // Constraints may already be set if bootstrap process got interrupted.
-        // TODO: Won't the tier 1 constraints always be set at this point? Check for dead code
-        let constraints_status = session.db.constraints_status().unwrap();
-        assert_eq!(constraints_status.tier_2, false);
-        if !constraints_status.tier_1 {
-            session.db.apply_constraints_tier1().unwrap();
-        } else {
-            info!("Tier 1 constraints have already been set. Likely recovering from interrupted bootstrapping.")
-        }
-
-        // Get last height of derived tables
-        let bootstrap_height: i32 = match session.db.get_bootstrap_height().unwrap() {
-            Some(h) => h,
-            None => -1, // Empty tables, next height should be genesis (i.e. 0)
-                        // TODO: None will never occur as genesis boxes handled separately
-        };
-
-        // Iterate from session.head.height to core_height
-        // Run queries for each block height
-        for h in bootstrap_height + 1..session.head.height as i32 + 1 {
-            info!("Processing block {}/{}", h, session.head.height);
-            // Collect statements
-            let mut sql_statements: Vec<db::SQLStatement> = vec![];
-            sql_statements.append(&mut db::unspent::prep_bootstrap(h));
-            sql_statements.append(&mut db::balances::prep_bootstrap(h));
-            // TODO: utxo counts can be sped up using cache
-            sql_statements.append(&mut db::metrics::prep_bootstrap(h));
-
-            // Execute statements in single transaction
-            session.db.execute_in_transaction(sql_statements).unwrap();
-        }
-
         Ok(())
     }
 
@@ -266,10 +211,6 @@ pub mod bootstrap {
     /// Process block data into database.
     /// Core tables only.
     fn include_block(session: &Session, block: &BlockData) {
-        // Init parsing units
-        let sql_statements = db::core::prep(block);
-
-        // Execute statements in single transaction
-        session.db.execute_in_transaction(sql_statements).unwrap();
+        session.db.include_block_core_only(block).unwrap();
     }
 }

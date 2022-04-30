@@ -7,15 +7,7 @@ create table ew.revision (
 	version integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (version) values (3);
-
-create table ew.constraints (
-	singleton int primary key default 1,
-	tier_1 boolean not null default false,
-	tier_2 boolean not null default false,
-	check(singleton = 1)
-);
-insert into ew.constraints (singleton) values (1);
+insert into ew.revision (version) values (4);
 
 
 -------------------------------------------------------------------------------
