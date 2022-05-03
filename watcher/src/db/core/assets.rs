@@ -1,8 +1,7 @@
 use super::sql::assets::BoxAssetRow;
 use crate::db::SQLStatement;
-use crate::parsing::Asset;
 use crate::parsing::BlockData;
-use itertools::Itertools;
+use std::collections::HashMap;
 
 pub(super) fn extract_assets(block: &BlockData) -> Vec<SQLStatement> {
     block
@@ -12,22 +11,17 @@ pub(super) fn extract_assets(block: &BlockData) -> Vec<SQLStatement> {
             tx.outputs.iter().flat_map(|op| {
                 op.assets
                     .iter()
-                    // Make a copy, so we can group aggregate later on
-                    .map(|a| Asset {
-                        token_id: a.token_id,
-                        amount: a.amount,
-                    })
                     // Sum tokens by id
-                    .group_by(|a| a.token_id)
-                    .into_iter()
-                    .map(|(_, group)| group.reduce(|a, b| a + b))
-                    .filter(|opt| opt.is_some())
-                    .map(|opt| opt.unwrap())
-                    .map(|a| {
+                    .fold(HashMap::new(), |mut acc, a| {
+                        *acc.entry(a.token_id).or_insert(0) += a.amount;
+                        acc
+                    })
+                    .iter()
+                    .map(|(token_id, amount)| {
                         BoxAssetRow {
                             box_id: &op.box_id,
-                            token_id: a.token_id,
-                            amount: a.amount,
+                            token_id: token_id,
+                            amount: *amount,
                         }
                         .to_statement()
                     })
@@ -42,6 +36,7 @@ mod tests {
     use super::extract_assets;
     use crate::db;
     use crate::parsing::testing::block_600k;
+    use crate::parsing::testing::block_issue27;
     use crate::parsing::testing::block_multi_asset_mint;
 
     #[test]
@@ -74,7 +69,35 @@ mod tests {
         );
         assert_eq!(statements[0].args[2], db::SQLArg::BigInt(10 + 10));
         // Check amount of other 2 tokens, for good measure
-        assert_eq!(statements[1].args[2], db::SQLArg::BigInt(100));
-        assert_eq!(statements[2].args[2], db::SQLArg::BigInt(2));
+        if statements[1].args[1]
+            == db::SQLArg::Text(String::from(
+                "2fc8abf612bc8b36af382e8c10a8e9df6227afdbe508c9b08b0a575fc4937b5e",
+            ))
+        {
+            assert_eq!(statements[1].args[2], db::SQLArg::BigInt(100));
+            assert_eq!(statements[2].args[2], db::SQLArg::BigInt(2));
+        } else {
+            assert_eq!(statements[1].args[2], db::SQLArg::BigInt(2));
+            assert_eq!(statements[2].args[2], db::SQLArg::BigInt(100));
+        }
+    }
+
+    #[test]
+    fn issue_27() -> () {
+        let statements = extract_assets(&block_issue27());
+        // 2 assets in first box, 7 in second
+        assert_eq!(statements.len(), 0 + 2);
+        assert_eq!(statements[0].sql, db::core::sql::assets::INSERT_BOX_ASSET);
+        if statements[0].args[1]
+            == db::SQLArg::Text(String::from(
+                "a699d8e6467a9d0bb32d84c135b05dfb0cdddd4fc8e2caa9b9af0aa2666a3a6f",
+            ))
+        {
+            assert_eq!(statements[0].args[2], db::SQLArg::BigInt(4500));
+            assert_eq!(statements[1].args[2], db::SQLArg::BigInt(1500));
+        } else {
+            assert_eq!(statements[0].args[2], db::SQLArg::BigInt(1500));
+            assert_eq!(statements[1].args[2], db::SQLArg::BigInt(4500));
+        }
     }
 }

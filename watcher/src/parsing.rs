@@ -620,4 +620,50 @@ pub mod testing {
             transactions: vec![tx_1_multi_asset_mint],
         }
     }
+
+    /// https://github.com/abchrisxyz/ergowatch/issues/27
+    /// Reproducing issue where 2nd output of this tx causes a box_assets PK violation
+    /// https://explorer.ergoplatform.com/en/transactions/467c9a4becd81354989fbc5101da03ca9fd407d7808b1269af9f793d8e65d3c9
+    pub fn block_issue27<'a>() -> BlockData<'a> {
+        let tx_1_multi_asset_mint = Transaction {
+            id: "467c9a4becd81354989fbc5101da03ca9fd407d7808b1269af9f793d8e65d3c9",
+            index: 0,
+            outputs: vec![
+                Output {
+                    box_id: "067d2db48bc674c277a2488293d58396b22bc04280542259fa4186abd42d0860",
+                    creation_height: 740228,
+                    address: String::from("9h7abJG9Er7zqUp72PfboshWnqycXdkSZtahPrdi77TfWEJHmYR"),
+                    index: 0,
+                    value: 8705880108,
+                    additional_registers: [None, None, None, None, None, None],
+                    assets: vec![
+                        Asset {
+                            token_id: "a699d8e6467a9d0bb32d84c135b05dfb0cdddd4fc8e2caa9b9af0aa2666a3a6f",
+                            amount: 1500,
+                        },
+                        Asset {
+                            token_id: "0cd8c9f416e5b1ca9f986a7f10a84191dfb85941619e49e53c0dc30ebf83324b",
+                            amount: 1500,
+                        },
+                        Asset {
+                            token_id: "a699d8e6467a9d0bb32d84c135b05dfb0cdddd4fc8e2caa9b9af0aa2666a3a6f",
+                            amount: 3000,
+                        },
+                    ],
+                },
+            ],
+            input_box_ids: vec![
+                "b10c94a1c0452196307e62207b27f90b78d2249ee277f1bce722709ac4a4122f",
+                "8bd6912ec5bdd8fb839dd53e84854e91f5e753acca831347adfba9b73a65f056",
+            ],
+            data_input_box_ids: vec![],
+        };
+        BlockData {
+            height: 500117,
+            header_id: "bdecd56368e9c62ac51802b5cc5bb2446852227a7dd9448db817f9d5335c05ec",
+            parent_header_id: "c2b3b5905965ebbf023dc092622e02301e711b346cf2459de9efe29c47c47ad5",
+            timestamp: 1622328822475,
+            transactions: vec![tx_1_multi_asset_mint],
+        }
+    }
 }
