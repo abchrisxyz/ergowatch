@@ -2,9 +2,15 @@
 
 
 ## v0.3.0 - UNRELEASED
+
+## v0.2.2 - 2022-05-04
+
+### Fixed
+[Issue 27](https://github.com/abchrisxyz/ergowatch/issues/27) - Handle non-consecutive duplicated assets
 
 
-## v0.2.1 - 2022-04-25
+## v0.2.1 - 2022-04-25
+
 ### Fixed
 [Issue 24](https://github.com/abchrisxyz/ergowatch/issues/24) - Prevent panics from register parsing
 

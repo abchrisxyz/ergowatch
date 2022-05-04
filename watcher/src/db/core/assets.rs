@@ -1,8 +1,7 @@
-use crate::parsing::Asset;
 use crate::parsing::BlockData;
-use itertools::Itertools;
 use postgres::types::Type;
 use postgres::Transaction;
+use std::collections::HashMap;
 
 struct BoxAsset<'a> {
     pub box_id: &'a str,
@@ -61,21 +60,16 @@ fn extract_assets<'a>(block: &'a BlockData) -> Vec<BoxAsset<'a>> {
             tx.outputs.iter().flat_map(|op| {
                 op.assets
                     .iter()
-                    // Make a copy, so we can group aggregate later on
-                    .map(|a| Asset {
-                        token_id: a.token_id,
-                        amount: a.amount,
-                    })
                     // Sum tokens by id
-                    .group_by(|a| a.token_id)
-                    .into_iter()
-                    .map(|(_, group)| group.reduce(|a, b| a + b))
-                    .filter(|opt| opt.is_some())
-                    .map(|opt| opt.unwrap())
-                    .map(|a| BoxAsset {
+                    .fold(HashMap::new(), |mut acc, a| {
+                        *acc.entry(a.token_id).or_insert(0) += a.amount;
+                        acc
+                    })
+                    .iter()
+                    .map(|(token_id, amount)| BoxAsset {
                         box_id: &op.box_id,
-                        token_id: a.token_id,
-                        amount: a.amount,
+                        token_id: token_id,
+                        amount: *amount,
                     })
                     .collect::<Vec<BoxAsset>>()
             })
@@ -87,6 +81,7 @@ fn extract_assets<'a>(block: &'a BlockData) -> Vec<BoxAsset<'a>> {
 mod tests {
     use super::extract_assets;
     use crate::parsing::testing::block_600k;
+    use crate::parsing::testing::block_issue27;
     use crate::parsing::testing::block_multi_asset_mint;
 
     #[test]
@@ -122,7 +117,28 @@ mod tests {
         );
         assert_eq!(assets[0].amount, 10 + 10);
         // Check amount of other 2 tokens, for good measure
-        assert_eq!(assets[1].amount, 100);
-        assert_eq!(assets[2].amount, 2);
+        if assets[1].token_id == "2fc8abf612bc8b36af382e8c10a8e9df6227afdbe508c9b08b0a575fc4937b5e"
+        {
+            assert_eq!(assets[1].amount, 100);
+            assert_eq!(assets[2].amount, 2);
+        } else {
+            assert_eq!(assets[1].amount, 2);
+            assert_eq!(assets[2].amount, 100);
+        }
+    }
+
+    #[test]
+    fn issue_27() -> () {
+        let block = block_issue27();
+        let assets = extract_assets(&block);
+        assert_eq!(assets.len(), 2);
+        if assets[0].token_id == "a699d8e6467a9d0bb32d84c135b05dfb0cdddd4fc8e2caa9b9af0aa2666a3a6f"
+        {
+            assert_eq!(assets[0].amount, 4500);
+            assert_eq!(assets[1].amount, 1500);
+        } else {
+            assert_eq!(assets[0].amount, 1500);
+            assert_eq!(assets[1].amount, 4500);
+        }
     }
 }
