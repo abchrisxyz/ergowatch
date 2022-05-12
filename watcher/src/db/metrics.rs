@@ -50,3 +50,7 @@ pub fn load_cache(client: &mut postgres::Client) -> cache::Metrics {
 
     cache::Metrics { utxos: utxos }
 }
+
+pub(super) fn repair(_tx: &mut Transaction, _height: i32) {
+    // todo!()
+}

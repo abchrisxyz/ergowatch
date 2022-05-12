@@ -148,17 +148,10 @@ create type cex.t_address_type as enum ('main', 'deposit');
 create table cex.addresses (
 	address text,
 	cex_id integer,
-	type cex.t_address_type
+	type cex.t_address_type,
+	spot_height int
 );
 
--- Store new deposit addresses as they get found.
--- Will be cleared periodically.
--- Spot height is to allow for easier rollbacks.
-create table cex.new_deposit_addresses (
-	address text,
-	cex_id integer,
-	spot_height integer
-);
 
 /*
 	Track CEX deposit addresses processing.
@@ -193,8 +186,6 @@ create table cex.new_deposit_addresses (
 create type cex.t_block_status as enum (
 	'pending',
 	'pending_rollback',
-	'processing',
-	'processing_rollback',
 	'processed',
 	'processed_rollback'
 );

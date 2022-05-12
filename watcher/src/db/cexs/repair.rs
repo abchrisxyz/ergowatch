@@ -1,69 +1,54 @@
-// repair event utils
-use postgres::Transaction;
-/*
-   When repair event is due, repair is prepped:
-       - cex.new_deposit_addresses is copied to work table
-       - cex.new_deposit_addresses are moved to cex.addresses
-       - record current sync height
+// // repair event utils
+// use postgres::Transaction;
 
-   This is quick and allows new blocks to see new cex addresses.
-   Now repair only needs run till current sync height (i.e. no need to cover
-   new blocks).
+// /// Prepare a repair cycle.
+// pub fn prepare(tx: &mut Transaction) {
+//     // Make a working copy of new deposit addresses.
 
-   Repair thread should keep progress log so it can resume in case
-   of an interruption.
-   Commit each height as it is processed.
-*/
+//     // Set pending(_rollback) to processing_(rollback)
 
-/// Prepare a repair cycle.
-pub fn prepare(tx: &mut Transaction) {
-    // Make a working copy of new deposit addresses.
+//     // Delete from cex.addresses for any pending_rollback block
 
-    // Set pending(_rollback) to processing_(rollback)
+//     // Add new deposit addresses to cex.addresses.
 
-    // Delete from cex.addresses for any pending_rollback block
+//     // Clear new deposit addresses.
 
-    // Add new deposit addresses to cex.addresses.
+//     // Record current sync height, so we know when to stop.
 
-    // Clear new deposit addresses.
+//     let sql = "
+//         create table cex._repair (
+//             from_height int,
+//             to_height int,
+//             started timestamp,
+//         )
+//     ";
 
-    // Record current sync height, so we know when to stop.
+//     todo!()
+// }
 
-    let sql = "
-        create table cex._repair (
-            from_height int,
-            to_height int,
-            started timestamp,
-        )
-    ";
+// /// Start repair thread
+// pub fn start() {
+//     // loop over heights
 
-    todo!()
-}
+//     // Set processing(_rollback) to processed(_rollback)
+//     // If processing block got rolled back during the repair event,
+//     // it will be marked as pending_rollback and will be picked up
+//     // during next repair event.
+// }
 
-/// Start repair thread
-pub fn start() {
-    // loop over heights
+// fn repair(height: i32) {
 
-    // Set processing(_rollback) to processed(_rollback)
-    // If processing block got rolled back during the repair event,
-    // it will be marked as pending_rollback and will be picked up
-    // during next repair event.
-}
+//     // repair_cex_supply()
+//     // repair_metrics()
+//     // record progress
 
-fn repair(height: i32) {
+//     // commit
+// }
 
-    repair_cex_supply()
-    repair_metrics()
-    
-    // record progress
+// fn repair_cex_supply() {
+//     todo!()
+// }
 
-    // commit
-}
-
-fn repair_cex_supply() {
-    todo!()
-}
-
-fn repair_metrics() {
-    todo!()
-}
+// fn repair_metrics() {
+//     todo!()
+// }

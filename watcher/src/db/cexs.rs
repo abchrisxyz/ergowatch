@@ -1,7 +1,7 @@
 use crate::parsing::BlockData;
 use log::info;
 
-mod new_deposit_addresses;
+mod addresses;
 mod processing_log;
 
 use postgres::Transaction;
@@ -38,14 +38,14 @@ use postgres::Transaction;
 */
 
 pub fn include_block(tx: &mut Transaction, block: &BlockData) -> anyhow::Result<()> {
-    new_deposit_addresses::include(tx, block);
     processing_log::include(tx, block);
+    addresses::include(tx, block);
     Ok(())
 }
 
 pub fn rollback_block(tx: &mut Transaction, block: &BlockData) -> anyhow::Result<()> {
+    addresses::rollback(tx, block);
     processing_log::rollback(tx, block);
-    new_deposit_addresses::rollback(tx, block);
     Ok(())
 }
 
@@ -91,20 +91,15 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
                     , txs.cex_id 
                 from bal.erg_diffs dif
                 join to_main_txs txs on txs.tx_id = dif.tx_id
-                -- be aware of main addresses
-                left join cex.addresses mas
-                    on mas.address = dif.address
-                    and mas.cex_id = txs.cex_id
                 -- be aware of known addresses
-                    left join cex._bootstrapping_data bds
-                        on bds.address = dif.address
-                        and bds.cex_id = txs.cex_id
+                left join cex.addresses cas
+                    on cas.address = dif.address
+                    and cas.cex_id = txs.cex_id
                 where dif.value < 0
                     and dif.height = _height
-                    -- exclude txs from main addresses
-                    and mas.address is null
-                    -- exclude txs from known deposit addresses
-                    and bds.address is null
+                    -- exclude txs from known addresses
+                    and cas.address is null
+                -- dissolve duplicates from multiple txs in same block
                 group by 1, 2
             )
             insert into cex._bootstrapping_data (
@@ -146,9 +141,6 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
     )?;
 
     // Copy bootstrapping data to actual tables.
-    // Storing new deposit addresses directly in cex.addresses.
-    // No need to buffer them in cex.new_deposit_addresses since
-    // no repair events will occur during bootstrap.
     tx.execute(
         "
         insert into cex.addresses (address, cex_id, type)
@@ -214,12 +206,7 @@ fn set_constraints(tx: &mut Transaction) {
         "alter table cex.addresses alter column type set not null;",
         "create index on cex.addresses(cex_id);",
         "create index on cex.addresses(type);",
-        // cex.new_deposit_addresses
-        "alter table cex.new_deposit_addresses add primary key (address);",
-        "alter table cex.new_deposit_addresses add foreign key (cex_id)
-                references cex.cexs (id) on delete cascade;",
-        "alter table cex.new_deposit_addresses alter column spot_height set not null;",
-        "create index on cex.new_deposit_addresses(spot_height);",
+        "create index on cex.addresses(spot_height);",
         // cex.block_processing_log
         "alter table cex.block_processing_log add primary key (header_id);",
         "create index on cex.block_processing_log (status);",
@@ -227,5 +214,38 @@ fn set_constraints(tx: &mut Transaction) {
 
     for statement in statements {
         tx.execute(statement, &[]).unwrap();
+    }
+}
+
+pub mod repair {
+    use super::processing_log;
+    use postgres::Client;
+    use postgres::Transaction;
+
+    /// Get height at which repairs should start
+    pub fn get_start_height(client: &mut Client, max_height: i32) -> Option<i32> {
+        client
+            .query_one(
+                "
+            select min(invalidation_height) as fr_height
+            from cex.block_processing_log
+            where height <= $1
+                and (
+                    status = 'pending'
+                    or status = 'pending_rollback'
+                );
+            ",
+                &[&max_height],
+            )
+            .unwrap()
+            .get(0)
+    }
+
+    pub fn set_height_pending_to_processed(tx: &mut Transaction, height: i32) {
+        processing_log::repair::set_height_pending_to_processed(tx, height);
+    }
+
+    pub fn process_non_invalidating_blocks(tx: &mut Transaction) {
+        processing_log::repair::set_non_invalidating_blocks_to_processed(tx);
     }
 }

@@ -108,14 +108,7 @@ fn mig_004(client: &mut Client) -> anyhow::Result<()> {
         "create table cex.addresses (
             address text,
             cex_id integer,
-            type cex.t_address_type
-        );",
-        &[],
-    )?;
-    tx.execute(
-        "create table cex.new_deposit_addresses (
-            address text,
-            cex_id integer,
+            type cex.t_address_type,
             spot_height integer
         );",
         &[],

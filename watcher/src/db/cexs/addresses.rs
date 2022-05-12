@@ -9,8 +9,7 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
 
 /// Remove deposit addresses
 pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
-    tx.execute(DELETE_NEW_ADDRESSES_AT_H, &[&block.height])
-        .unwrap();
+    tx.execute(DELETE_ADDRESSES_AT_H, &[&block.height]).unwrap();
 }
 
 /// Find new deposit addresses.
@@ -30,9 +29,10 @@ const FIND_NEW_ADDRESSES_AT_H: &str = "
             and dif.height = $1
             and dif.value > 0
     )
-    insert into cex.new_deposit_addresses (address, cex_id, spot_height)
+    insert into cex.addresses (address, cex_id, type, spot_height)
     select dif.address
         , txs.cex_id 
+        , 'deposit'
         , $1
     from bal.erg_diffs dif
     join to_main_txs txs on txs.tx_id = dif.tx_id
@@ -40,18 +40,13 @@ const FIND_NEW_ADDRESSES_AT_H: &str = "
     left join cex.addresses cas
         on cas.address = dif.address
         and cas.cex_id = txs.cex_id
-    -- be aware of recent new addresses
-    left join cex.new_deposit_addresses nas
-        on nas.address = dif.address
-        and nas.cex_id = txs.cex_id
     where dif.value < 0
         and dif.height = $1
         -- exclude txs from known cex addresses
         and cas.address is null
-        and nas.address is null
+    -- dissolve duplicates from multiple txs in same block
     group by 1, 2;
     ";
 
-pub const DELETE_NEW_ADDRESSES_AT_H: &str = "
-    delete from cex.new_deposit_addresses
-    where spot_height = $1;";
+/// Delete deposit addresses found at given height
+const DELETE_ADDRESSES_AT_H: &str = "delete from cex.addresses where spot_height = $1;";

@@ -21,6 +21,10 @@ CONFIG = textwrap.dedent(
     [node]
     url = "http://{MOCK_NODE_HOST}"
     poll_interval = 5
+
+    [repairs]
+    interval = 5 # blocks
+    offset = 1 # blocks
     """
 )
 

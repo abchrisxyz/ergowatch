@@ -132,13 +132,7 @@ alter table cex.addresses add foreign key (cex_id)
 alter table cex.addresses alter column type set not null;
 create index on cex.addresses(cex_id);
 create index on cex.addresses(type);
-
-alter table cex.new_deposit_addresses add primary key (address);
-alter table cex.new_deposit_addresses add foreign key (cex_id)
-	references cex.cexs (id)
-	on delete cascade;
-alter table cex.new_deposit_addresses alter column spot_height set not null;
-create index on cex.new_deposit_addresses(spot_height);
+create index on cex.addresses(spot_height);
 
 alter table cex.block_processing_log add primary key (header_id);
 create index on cex.block_processing_log (status);

@@ -4,7 +4,6 @@ use serde::Deserialize;
 use std::env;
 
 #[derive(Debug, Deserialize)]
-#[allow(unused)]
 pub struct Database {
     pub host: String,
     pub port: u16,
@@ -14,7 +13,6 @@ pub struct Database {
 }
 
 #[derive(Debug, Deserialize)]
-#[allow(unused)]
 pub struct Node {
     pub url: String,
     // Time between two node polls, in seconds
@@ -22,10 +20,18 @@ pub struct Node {
 }
 
 #[derive(Debug, Deserialize)]
-#[allow(unused)]
+pub struct Repairs {
+    /// Number of blocks between repair event triggers
+    pub interval: u32,
+    // Wait *offset* blocks after a trigger before starting a repair event.
+    pub offset: u32,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Settings {
     pub database: Database,
     pub node: Node,
+    pub repairs: Repairs,
 }
 
 impl Settings {

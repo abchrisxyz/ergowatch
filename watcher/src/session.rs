@@ -41,6 +41,8 @@ pub struct Session {
     pub head: crate::types::Head,
     pub allow_rollbacks: bool,
     pub cache: cache::Cache,
+    pub repair_interval: u32,
+    pub repair_offset: u32,
 }
 
 impl Session {
@@ -118,6 +120,8 @@ impl Session {
             head: db_core_head,
             allow_rollbacks: db_has_constraints,
             cache: cache,
+            repair_interval: cfg.repairs.interval,
+            repair_offset: cfg.repairs.offset,
         })
     }
 }

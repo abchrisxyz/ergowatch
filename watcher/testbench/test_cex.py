@@ -549,6 +549,42 @@ class TestMigrations:
         _test_db_state(synced_db, self.start_height, bootstrapped=True)
 
 
+@pytest.mark.order(ORDER)
+class TestRepair:
+    """
+    Same as TestSync, but triggering a repair event after full sync.
+    """
+
+    # Start one block later so last block has height multiple of 5
+    # and trigger a repair event.
+    start_height = 599_999 + 1
+
+    @pytest.fixture(scope="class")
+    def synced_db(self, temp_cfg, temp_db_class_scoped):
+        """
+        Run watcher with mock api and return cursor to test db.
+        """
+        blocks = make_blocks(self.start_height)
+        with MockApi() as api:
+            api = ApiUtil()
+            api.set_blocks(blocks)
+
+            # Bootstrap db
+            with pg.connect(temp_db_class_scoped) as conn:
+                bootstrap_db(conn, blocks)
+
+            # Run
+            cp = run_watcher(temp_cfg)
+            assert cp.returncode == 0
+            assert "Including block block-c" in cp.stdout.decode()
+
+            with pg.connect(temp_db_class_scoped) as conn:
+                yield conn
+
+    def test_db_state(self, synced_db: pg.Connection):
+        _test_db_state(synced_db, self.start_height, bootstrapped=True)
+
+
 def _test_db_state(conn: pg.Connection, start_height: int, bootstrapped=False):
     """
     Test outcomes can be different for cases that trigger bootstrapping code.
@@ -558,8 +594,7 @@ def _test_db_state(conn: pg.Connection, start_height: int, bootstrapped=False):
     with conn.cursor() as cur:
         assert_cex_ids(cur)
         assert_main_addresses(cur)
-        assert_deposit_addresses(cur, bootstrapped)
-        assert_new_deposit_addresses(cur, start_height, bootstrapped)
+        assert_deposit_addresses(cur)
         assert_processing_log(cur, start_height, bootstrapped)
 
 
@@ -573,13 +608,7 @@ def assert_db_constraints(conn: pg.Connection):
     assert_column_not_null(conn, "cex", "addresses", "type")
     assert_index(conn, "cex", "addresses", "addresses_cex_id_idx")
     assert_index(conn, "cex", "addresses", "addresses_type_idx")
-    # cex.new_deposit_addresses
-    assert_pk(conn, "cex", "new_deposit_addresses", ["address"])
-    assert_fk(conn, "cex", "new_deposit_addresses", "new_deposit_addresses_cex_id_fkey")
-    assert_column_not_null(conn, "cex", "new_deposit_addresses", "spot_height")
-    assert_index(
-        conn, "cex", "new_deposit_addresses", "new_deposit_addresses_spot_height_idx"
-    )
+    assert_index(conn, "cex", "addresses", "addresses_spot_height_idx")
     # cex.block_processing_log
     assert_pk(conn, "cex", "block_processing_log", ["header_id"])
     assert_index(conn, "cex", "block_processing_log", "block_processing_log_status_idx")
@@ -640,7 +669,7 @@ def assert_main_addresses(cur: pg.Cursor):
     ]
 
 
-def assert_deposit_addresses(cur: pg.Cursor, bootstrapped: bool):
+def assert_deposit_addresses(cur: pg.Cursor):
     pub1 = AC.get("pub1")
     pub2 = AC.get("pub2")
     cur.execute(
@@ -653,35 +682,12 @@ def assert_deposit_addresses(cur: pg.Cursor, bootstrapped: bool):
         """
     )
     rows = cur.fetchall()
-    if bootstrapped:
-        assert len(rows) == 2
-        assert rows == [
-            (1, pub1.address),
-            (2, pub2.address),
-        ]
-    else:
-        assert len(rows) == 0
 
-
-def assert_new_deposit_addresses(cur: pg.Cursor, start_height: int, bootstrapped: bool):
-    pub1 = AC.get("pub1")
-    pub2 = AC.get("pub2")
-    cur.execute(
-        """
-        select address
-            , cex_id
-            , spot_height
-        from cex.new_deposit_addresses
-        order by 1;
-        """
-    )
-    rows = cur.fetchall()
-    if bootstrapped:
-        assert len(rows) == 0
-    else:
-        assert len(rows) == 2
-        assert rows[0] == (pub1.address, 1, start_height + 3)
-        assert rows[1] == (pub2.address, 2, start_height + 4)
+    assert len(rows) == 2
+    assert rows == [
+        (1, pub1.address),
+        (2, pub2.address),
+    ]
 
 
 def assert_processing_log(cur: pg.Cursor, start_height: int, bootstrapped):

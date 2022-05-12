@@ -3,6 +3,7 @@ pub mod cexs;
 pub mod core;
 pub mod metrics;
 mod migrations;
+pub mod repair;
 pub mod unspent;
 
 use crate::session::cache;
@@ -17,6 +18,7 @@ use crate::types::Head;
 #[derive(Debug)]
 pub struct DB {
     conn_str: String,
+    repair_event: Option<repair::RepairEvent>,
 }
 
 impl DB {
@@ -101,6 +103,7 @@ impl DB {
                 "host={} port={} dbname={} user={} password={}",
                 host, port, name, user, pass
             ),
+            repair_event: None,
         }
     }
 
