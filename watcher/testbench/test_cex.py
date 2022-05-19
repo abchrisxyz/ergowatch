@@ -25,13 +25,20 @@ def make_blocks(height: int):
 
     block a:
         -- coinbase tx:
-        base-box1 1000 --> base-box2  950
-                           con1-box1   50
+        base-box1 1000 --> base-box2  840
+                           con1-box1   60
+                           con2-box1  100
 
     block b:
         -- deposit 10 to CEX 1:
-        con1-box1   50 --> pub1-box1   10
+        con1-box1   60 --> pub1-box1   10
+                           pub1-box2   10
                            con1-box2   40
+
+        -- false positive
+        -- con2 will be linked to more than 1 cex
+        con2-box1  100 --> cex1-box2   10
+                           con2-box2   90
 
     block c:
         -- deposit 15 to CEX 2
@@ -49,6 +56,11 @@ def make_blocks(height: int):
     block x - fork of block d to be ignored/rolled back:
         -- cex 3 claiming deposit (deposit was sold)
         pub3-box1   20 --> cex3-box1   20
+
+        -- fake false positive
+        -- would link pub1 to cex 2 as well
+        -- to test a conflict rollback
+        pub1-box2   10 --> cex2-box1   10
     ------------------------------------------------------
 
     block d:
@@ -57,14 +69,22 @@ def make_blocks(height: int):
                            pub2-box2    9
                            fees-box1    1
 
-    block e - one more block to tell d and x appart
-        -- dummy tx
-        fees-box1    1 --> fees-box2  1
+    block e
+    one more block to tell d and x appart and test known deposit addresses
+        -- new cex 2 claim (to test same address is added only once)
+        pub2-box2    9 --> cex2-box2   3
+                           pub2-box3   6
+
+        -- false positive
+        -- now linked to a second cex
+        con2-box2   90 --> cex3-box2   90
+
 
     """
     base = AC.coinbase
     fees = AC.fees
     con1 = AC.get("con1")
+    con2 = AC.get("con2")
     pub1 = AC.get("pub1")
     pub2 = AC.get("pub2")
     pub3 = AC.get("pub3")
@@ -84,7 +104,7 @@ def make_blocks(height: int):
         "outputs": [
             {
                 "boxId": "base-box2",
-                "value": 950,
+                "value": 840,
                 "ergoTree": base.ergo_tree,
                 "assets": [],
                 "creationHeight": h,
@@ -94,13 +114,23 @@ def make_blocks(height: int):
             },
             {
                 "boxId": "con1-box1",
-                "value": 50,
+                "value": 60,
                 "ergoTree": con1.ergo_tree,
                 "assets": [],
                 "creationHeight": h,
                 "additionalRegisters": {},
                 "transactionId": "tx-a1",
                 "index": 1,
+            },
+            {
+                "boxId": "con2-box1",
+                "value": 100,
+                "ergoTree": con2.ergo_tree,
+                "assets": [],
+                "creationHeight": h,
+                "additionalRegisters": {},
+                "transactionId": "tx-a1",
+                "index": 2,
             },
         ],
         "size": 344,
@@ -123,6 +153,16 @@ def make_blocks(height: int):
                 "index": 0,
             },
             {
+                "boxId": "pub1-box2",
+                "value": 10,
+                "ergoTree": pub1.ergo_tree,
+                "assets": [],
+                "creationHeight": h,
+                "additionalRegisters": {},
+                "transactionId": "tx-b1",
+                "index": 1,
+            },
+            {
                 "boxId": "con1-box2",
                 "value": 40,
                 "ergoTree": con1.ergo_tree,
@@ -130,6 +170,35 @@ def make_blocks(height: int):
                 "creationHeight": h,
                 "additionalRegisters": {},
                 "transactionId": "tx-b1",
+                "index": 2,
+            },
+        ],
+        "size": 674,
+    }
+
+    tx_b2 = {
+        "id": "tx-b2",
+        "inputs": [{"boxId": "con2-box1"}],
+        "dataInputs": [],
+        "outputs": [
+            {
+                "boxId": "cex1-box2",
+                "value": 10,
+                "ergoTree": cex1.ergo_tree,
+                "assets": [],
+                "creationHeight": h,
+                "additionalRegisters": {},
+                "transactionId": "tx-b2",
+                "index": 0,
+            },
+            {
+                "boxId": "con2-box2",
+                "value": 90,
+                "ergoTree": con2.ergo_tree,
+                "assets": [],
+                "creationHeight": h,
+                "additionalRegisters": {},
+                "transactionId": "tx-b2",
                 "index": 1,
             },
         ],
@@ -234,6 +303,25 @@ def make_blocks(height: int):
         "size": 674,
     }
 
+    tx_x2 = {
+        "id": "tx-x2",
+        "inputs": [{"boxId": "pub1-box2"}],
+        "dataInputs": [],
+        "outputs": [
+            {
+                "boxId": "cex2-box1",
+                "value": 10,
+                "ergoTree": cex2.ergo_tree,
+                "assets": [],
+                "creationHeight": h,
+                "additionalRegisters": {},
+                "transactionId": "tx-x2",
+                "index": 0,
+            },
+        ],
+        "size": 674,
+    }
+
     tx_d1 = {
         "id": "tx-d1",
         "inputs": [{"boxId": "pub2-box1"}],
@@ -276,17 +364,46 @@ def make_blocks(height: int):
     h = +1
     tx_e1 = {
         "id": "tx-e1",
-        "inputs": [{"boxId": "fees-box1"}],
+        "inputs": [{"boxId": "pub2-box2"}],
         "dataInputs": [],
         "outputs": [
             {
-                "boxId": "fees-box2",
-                "value": 1,
-                "ergoTree": fees.ergo_tree,
+                "boxId": "cex2-box2",
+                "value": 3,
+                "ergoTree": cex2.ergo_tree,
                 "assets": [],
                 "creationHeight": h,
                 "additionalRegisters": {},
                 "transactionId": "tx-e1",
+                "index": 0,
+            },
+            {
+                "boxId": "pub2-box3",
+                "value": 6,
+                "ergoTree": pub2.ergo_tree,
+                "assets": [],
+                "creationHeight": h,
+                "additionalRegisters": {},
+                "transactionId": "tx-e1",
+                "index": 1,
+            },
+        ],
+        "size": 100,
+    }
+
+    tx_e2 = {
+        "id": "tx-e2",
+        "inputs": [{"boxId": "con2-box2"}],
+        "dataInputs": [],
+        "outputs": [
+            {
+                "boxId": "cex3-box2",
+                "value": 90,
+                "ergoTree": cex3.ergo_tree,
+                "assets": [],
+                "creationHeight": h,
+                "additionalRegisters": {},
+                "transactionId": "tx-e2",
                 "index": 0,
             },
         ],
@@ -322,7 +439,7 @@ def make_blocks(height: int):
         },
         "blockTransactions": {
             "headerId": "block-b",
-            "transactions": [tx_b1],
+            "transactions": [tx_b1, tx_b2],
             "blockVersion": 2,
             "size": 1155,
         },
@@ -358,7 +475,7 @@ def make_blocks(height: int):
         },
         "blockTransactions": {
             "headerId": "block-x",
-            "transactions": [tx_x1],
+            "transactions": [tx_x1, tx_x2],
             "blockVersion": 2,
             "size": 1155,
         },
@@ -394,7 +511,7 @@ def make_blocks(height: int):
         },
         "blockTransactions": {
             "headerId": "block-e",
-            "transactions": [tx_e1],
+            "transactions": [tx_e1, tx_e2],
             "blockVersion": 2,
             "size": 1155,
         },
@@ -609,6 +726,11 @@ def assert_db_constraints(conn: pg.Connection):
     assert_index(conn, "cex", "addresses", "addresses_cex_id_idx")
     assert_index(conn, "cex", "addresses", "addresses_type_idx")
     assert_index(conn, "cex", "addresses", "addresses_spot_height_idx")
+    # cex.addresses_conflicts
+    assert_pk(conn, "cex", "addresses_conflicts", ["address"])
+    assert_fk(
+        conn, "cex", "addresses_conflicts", "addresses_conflicts_first_cex_id_fkey"
+    )
     # cex.block_processing_log
     assert_pk(conn, "cex", "block_processing_log", ["header_id"])
     assert_index(conn, "cex", "block_processing_log", "block_processing_log_status_idx")
@@ -682,11 +804,31 @@ def assert_deposit_addresses(cur: pg.Cursor):
         """
     )
     rows = cur.fetchall()
-
     assert len(rows) == 2
     assert rows == [
         (1, pub1.address),
         (2, pub2.address),
+    ]
+
+
+def assert_addresses_conflicts(cur: pg.Cursor, start_height):
+    con2 = AC.get("con2")
+    cur.execute(
+        """
+        select address
+            , cex_id
+            , type
+            , spot_height
+            , conflict_spot_height
+        from cex.addresses_conflicts
+        order by spot_height;
+        """
+    )
+    rows = cur.fetchall()
+
+    assert len(rows) == 1
+    assert rows == [
+        (con2.address, 1, "deposit", start_height + 2, start_height + 5),
     ]
 
 

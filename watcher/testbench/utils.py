@@ -24,7 +24,7 @@ def run_watcher(
 
     env = dict(
         os.environ,
-        EW_LOG="DEBUG",
+        EW_LOG="INFO",
     )
     if backtrace:
         env["RUST_BACKTRACE"] = "full"

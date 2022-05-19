@@ -84,7 +84,7 @@ fn mig_002(client: &mut Client) -> anyhow::Result<()> {
 
 /// Migration 3
 ///
-/// Drop contraints table
+/// Drop constraints table
 fn mig_003(client: &mut Client) -> anyhow::Result<()> {
     let mut tx = client.transaction()?;
     tx.execute("drop table ew.constraints cascade;", &[])?;
@@ -110,6 +110,16 @@ fn mig_004(client: &mut Client) -> anyhow::Result<()> {
             cex_id integer,
             type cex.t_address_type,
             spot_height integer
+        );",
+        &[],
+    )?;
+    tx.execute(
+        "create table cex.addresses_conflicts (
+            address text,
+            first_cex_id integer,
+            type cex.t_address_type,
+            spot_height integer,
+            conflict_spot_height integer
         );",
         &[],
     )?;
@@ -172,6 +182,8 @@ fn mig_004(client: &mut Client) -> anyhow::Result<()> {
         ;",
         &[],
     )?;
+
+    tx.execute("update ew.revision set version = version + 1;", &[])?;
 
     tx.commit()?;
     Ok(())

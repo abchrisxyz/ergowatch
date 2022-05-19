@@ -16,4 +16,3 @@ interval = 500 # blocks
 # This is to reduce the chance of including non-main chain blocks in
 # a repair event.
 offset = 5 # blocks
-

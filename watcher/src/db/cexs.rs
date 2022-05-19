@@ -38,8 +38,8 @@ use postgres::Transaction;
 */
 
 pub fn include_block(tx: &mut Transaction, block: &BlockData) -> anyhow::Result<()> {
-    processing_log::include(tx, block);
-    addresses::include(tx, block);
+    let invalidation_height: Option<i32> = addresses::include(tx, block);
+    processing_log::include(tx, block, invalidation_height);
     Ok(())
 }
 
@@ -60,16 +60,18 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
     tx.execute(
         "
         create unlogged table cex._bootstrapping_data (
-            address text primary key,
+            address text,
             cex_id int,
             spot_height int, 
-            first_tx_height int
+            first_tx_height int,
+            primary key(address, cex_id)
         );",
         &[],
     )?;
 
-    // Add index on cex_id to speed up join in bootstrapping query
+    // Add indexes to speed up join in bootstrapping query
     tx.execute("create index on cex._bootstrapping_data (cex_id);", &[])?;
+    tx.execute("create index on cex._bootstrapping_data (address);", &[])?;
 
     // Procedure to collect new deposit addresses, their spot height
     // and first tx height.
@@ -95,10 +97,14 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
                 left join cex.addresses cas
                     on cas.address = dif.address
                     and cas.cex_id = txs.cex_id
+                left join cex._bootstrapping_data bsd
+                    on bsd.address = dif.address
+                    and bsd.cex_id = txs.cex_id
                 where dif.value < 0
                     and dif.height = _height
                     -- exclude txs from known addresses
                     and cas.address is null
+                    and bsd.address is null
                 -- dissolve duplicates from multiple txs in same block
                 group by 1, 2
             )
@@ -140,13 +146,52 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
         &[],
     )?;
 
-    // Copy bootstrapping data to actual tables.
+    // Find conflicting addresses in bootstrapping data
     tx.execute(
         "
-        insert into cex.addresses (address, cex_id, type)
+        with conflicts as (
+            select address
+                , array_agg(spot_height order by spot_height) as cex_ids
+                , array_agg(spot_height order by spot_height) as spot_heights
+            from cex._bootstrapping_data
+            group by 1 having count(*) > 1
+        )
+        insert into cex.addresses_conflicts (
+            address,
+            first_cex_id,
+            type,
+            spot_height,
+            conflict_spot_height
+        )
+        select con.address
+            , con.cex_ids[0]
+            , coalesce(mas.type, 'deposit')
+            , con.spot_heights[0]
+            , con.spot_heights[1]
+        from conflicts con
+        left join cex.addresses mas
+            on mas.address = con.address and mas.type = 'main'
+        order by 4;",
+        &[],
+    )?;
+
+    // Remove conflicting addresses from bootstrapping data
+    tx.execute(
+        "
+        delete from cex._bootstrapping_data bsd
+        using cex.addresses_conflicts con
+        where con.address = bsd.address;",
+        &[],
+    )?;
+
+    // Copy remaining deposit addresses
+    tx.execute(
+        "
+        insert into cex.addresses (address, cex_id, type, spot_height)
         select address
-        , cex_id
-        , 'deposit'
+            , cex_id
+            , 'deposit'
+            , spot_height
         from cex._bootstrapping_data
         order by spot_height;",
         &[],
@@ -201,12 +246,16 @@ fn set_constraints(tx: &mut Transaction) {
         "alter table cex.cexs add constraint cexs_unique_name unique (name);",
         // cexs addresses
         "alter table cex.addresses add primary key (address);",
-        " alter table cex.addresses add foreign key (cex_id)
-            references cex.cexs (id) on delete cascade;",
+        "alter table cex.addresses add foreign key (cex_id)
+            references cex.cexs (id);",
         "alter table cex.addresses alter column type set not null;",
         "create index on cex.addresses(cex_id);",
         "create index on cex.addresses(type);",
         "create index on cex.addresses(spot_height);",
+        // cexs addresses conflicts
+        "alter table cex.addresses_conflicts add primary key (address);",
+        "alter table cex.addresses_conflicts add foreign key (first_cex_id)
+            references cex.cexs (id);",
         // cex.block_processing_log
         "alter table cex.block_processing_log add primary key (header_id);",
         "create index on cex.block_processing_log (status);",

@@ -9,8 +9,8 @@ pub(super) enum Status {
 }
 
 /// Add new block with `pending` status
-pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
-    insert_pending_block(tx, block.header_id, block.height);
+pub(super) fn include(tx: &mut Transaction, block: &BlockData, invalidation_height: Option<i32>) {
+    insert_pending_block(tx, block.header_id, block.height, invalidation_height);
 }
 
 /// Remove block from log if still `pending` or mark for rollback
@@ -18,10 +18,7 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
 pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
     let status = get_block_status(tx, block.header_id);
     match status {
-        Status::Pending => {
-            tx.execute(DELETE_PENDING_BLOCK, &[&block.header_id])
-                .unwrap();
-        }
+        Status::Pending => delete_pending_block(tx, &block.header_id),
         Status::Processed => {
             // Mark processed block as pending_rollback
             set_block_status(tx, &block.header_id, Status::PendingRollback);
@@ -69,58 +66,58 @@ fn set_block_status(tx: &mut Transaction, header_id: &str, status: Status) {
 }
 
 /// Add block with `pending` status
-fn insert_pending_block(tx: &mut Transaction, header_id: &str, height: i32) {
+fn insert_pending_block(
+    tx: &mut Transaction,
+    header_id: &str,
+    height: i32,
+    invalidation_height: Option<i32>,
+) {
     tx.execute(
         "
-        with to_main_txs as ( 
-            select cas.cex_id
-                , dif.tx_id
-                , dif.value
-                , cas.address as main_address
-            from cex.addresses cas
-            join bal.erg_diffs dif on dif.address = cas.address
-            where cas.type = 'main'
-                and dif.height = $2
-                and dif.value > 0
-        ), new_deposit_addresses as (
-            select distinct dif.address
-            from bal.erg_diffs dif
-            join to_main_txs txs on txs.tx_id = dif.tx_id
-            -- be aware of known addresses
-            left join cex.addresses cas
-                on cas.address = dif.address
-                and cas.cex_id = txs.cex_id
-            where dif.value < 0
-                and dif.height = $2
-                -- exclude txs from known cex addresses
-                and cas.address is null
-        )
         insert into cex.block_processing_log (
             header_id,
             height,
             invalidation_height,
             status
         )
-        select $1
-            , $2 
-            , min(dif.height)
-            , 'pending'
-        from new_deposit_addresses dep
-        join bal.erg_diffs dif on dif.address = dep.address;
+        values ($1, $2, $3, 'pending');
         ",
-        &[&header_id, &height],
+        &[&header_id, &height, &invalidation_height],
     )
     .unwrap();
 }
 
-// Rollback
+/// Adjust invalidation height of specified block
+///
+/// Used when removing/restoring conflicting cex addresses.
+pub(super) fn update_invalidation_height(
+    tx: &mut Transaction,
+    header_id: &String,
+    invalidation_height: Option<i32>,
+) {
+    tx.execute(
+        "
+        update cex.block_processing_log
+        set invalidation_height = $2
+        where header_id = $1;
+        ",
+        &[&header_id, &invalidation_height],
+    )
+    .unwrap();
+}
 
 /// Removes block from log if still pending.
 ///
 /// Noop for any other block status.
-pub const DELETE_PENDING_BLOCK: &str = "
-    delete from cex.block_processing_log
-    where header_id = $1 and status = 'pending';";
+fn delete_pending_block(tx: &mut Transaction, header_id: &str) {
+    tx.execute(
+        "
+        delete from cex.block_processing_log
+        where header_id = $1 and status = 'pending';",
+        &[&header_id],
+    )
+    .unwrap();
+}
 
 pub mod repair {
     use postgres::Transaction;

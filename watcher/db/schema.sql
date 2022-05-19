@@ -152,6 +152,23 @@ create table cex.addresses (
 	spot_height int
 );
 
+/* 
+	The PK of cex.addresses is the address. An address can therefore
+	be linked to a single CEX.
+	However, we can't exclude the possibility of running into addresses
+	linked to more than one CEX. When an known address is linked to
+	a second CEX, it will get removed from cex.addresses and stored
+	here for further review.
+ */
+create table cex.addresses_conflicts (
+	-- Same columns as cex.address
+	address text,
+	first_cex_id integer,
+	type cex.t_address_type,
+	spot_height integer,
+	-- Then some info on when the conflict occurred
+	conflict_spot_height integer
+);
 
 /*
 	Track CEX deposit addresses processing.

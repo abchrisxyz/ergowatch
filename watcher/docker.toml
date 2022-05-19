@@ -8,3 +8,11 @@ pw = "ergo"
 [node]
 url = "http://node:9053"
 poll_interval = 5 # seconds
+
+[repairs]
+# Trigger a repair event every 500 blocks
+interval = 500 # blocks
+# Wait 5 blocks after a trigger height before starting a repair event.
+# This is to reduce the chance of including non-main chain blocks in
+# a repair event.
+offset = 5 # blocks

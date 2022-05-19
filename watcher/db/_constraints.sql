@@ -127,12 +127,15 @@ alter table cex.cexs add constraint cexs_unique_name unique (name);
 
 alter table cex.addresses add primary key (address);
 alter table cex.addresses add foreign key (cex_id)
-	references cex.cexs (id)
-	on delete cascade;
+	references cex.cexs (id);
 alter table cex.addresses alter column type set not null;
 create index on cex.addresses(cex_id);
 create index on cex.addresses(type);
 create index on cex.addresses(spot_height);
+
+alter table cex.addresses_conflicts add primary key (address);
+alter table cex.addresses_conflicts add foreign key (first_cex_id)
+	references cex.cexs (id);
 
 alter table cex.block_processing_log add primary key (header_id);
 create index on cex.block_processing_log (status);
