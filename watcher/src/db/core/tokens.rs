@@ -24,7 +24,7 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
 
     let sql_eip4 = "
         insert into core.tokens (id, box_id, emission_amount, name, description, decimals, standard)
-        values ($1, $2, $3, $4, $5, $6, $7);";
+        values ($1, $2, $3, $4, $5, $6, 'EIP-004');";
 
     for tkn in extract_new_tokens(block) {
         match tkn.eip4_data {
