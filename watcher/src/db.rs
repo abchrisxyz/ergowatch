@@ -81,6 +81,8 @@ impl DB {
         let mut client = Client::connect(&self.conn_str, NoTls)?;
         let mut tx = client.transaction()?;
 
+        tx.execute("set local work_mem = '32MB';", &[]).unwrap();
+
         unspent::bootstrap(&mut tx)?;
         balances::bootstrap(&mut tx)?;
         cexs::bootstrap(&mut tx)?;
