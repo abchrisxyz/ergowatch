@@ -49,6 +49,9 @@ fn spot_deposit_candidates(tx: &mut Transaction, height: i32) {
                 -- exclude txs from known cex addresses
                 and cas.address is null
                 and con.address is null
+                -- exclude contract addresses
+                and starts_with(dif.address, '9')
+                and length(dif.address) = 51
             -- dissolve duplicates from multiple txs in same block
             group by 1, 2;
         ",

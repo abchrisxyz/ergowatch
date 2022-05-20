@@ -27,7 +27,7 @@ def make_blocks(height: int):
         -- coinbase tx:
         base-box1 1000 --> base-box2  840
                            con1-box1   60
-                           con2-box1  100
+                           pub9-box1  100
 
     block b:
         -- deposit 10 to CEX 1:
@@ -36,9 +36,9 @@ def make_blocks(height: int):
                            con1-box2   40
 
         -- false positive
-        -- con2 will be linked to more than 1 cex
-        con2-box1  100 --> cex1-box2   10
-                           con2-box2   90
+        -- pub9 will be linked to more than 1 cex
+        pub9-box1  100 --> cex1-box2   10
+                           pub9-box2   90
 
     block c:
         -- deposit 15 to CEX 2
@@ -77,17 +77,20 @@ def make_blocks(height: int):
 
         -- false positive
         -- now linked to a second cex
-        con2-box2   90 --> cex3-box2   90
+        pub9-box2   90 --> cex3-box2   90
+
+        -- contract tx to be ignored
+        con1-box4    5 --> cex3-box3    5
 
 
     """
     base = AC.coinbase
     fees = AC.fees
     con1 = AC.get("con1")
-    con2 = AC.get("con2")
     pub1 = AC.get("pub1")
     pub2 = AC.get("pub2")
     pub3 = AC.get("pub3")
+    pub9 = AC.get("pub9")
     cex1 = AC.get("cex1")
     cex2 = AC.get("cex2")
     cex3 = AC.get("cex3")
@@ -123,9 +126,9 @@ def make_blocks(height: int):
                 "index": 1,
             },
             {
-                "boxId": "con2-box1",
+                "boxId": "pub9-box1",
                 "value": 100,
-                "ergoTree": con2.ergo_tree,
+                "ergoTree": pub9.ergo_tree,
                 "assets": [],
                 "creationHeight": h,
                 "additionalRegisters": {},
@@ -178,7 +181,7 @@ def make_blocks(height: int):
 
     tx_b2 = {
         "id": "tx-b2",
-        "inputs": [{"boxId": "con2-box1"}],
+        "inputs": [{"boxId": "pub9-box1"}],
         "dataInputs": [],
         "outputs": [
             {
@@ -192,9 +195,9 @@ def make_blocks(height: int):
                 "index": 0,
             },
             {
-                "boxId": "con2-box2",
+                "boxId": "pub9-box2",
                 "value": 90,
-                "ergoTree": con2.ergo_tree,
+                "ergoTree": pub9.ergo_tree,
                 "assets": [],
                 "creationHeight": h,
                 "additionalRegisters": {},
@@ -393,7 +396,7 @@ def make_blocks(height: int):
 
     tx_e2 = {
         "id": "tx-e2",
-        "inputs": [{"boxId": "con2-box2"}],
+        "inputs": [{"boxId": "pub9-box2"}],
         "dataInputs": [],
         "outputs": [
             {
@@ -404,6 +407,25 @@ def make_blocks(height: int):
                 "creationHeight": h,
                 "additionalRegisters": {},
                 "transactionId": "tx-e2",
+                "index": 0,
+            },
+        ],
+        "size": 100,
+    }
+
+    tx_e3 = {
+        "id": "tx-e3",
+        "inputs": [{"boxId": "con1-box4"}],
+        "dataInputs": [],
+        "outputs": [
+            {
+                "boxId": "cex3-box3",
+                "value": 5,
+                "ergoTree": cex3.ergo_tree,
+                "assets": [],
+                "creationHeight": h,
+                "additionalRegisters": {},
+                "transactionId": "tx-e3",
                 "index": 0,
             },
         ],
@@ -511,7 +533,7 @@ def make_blocks(height: int):
         },
         "blockTransactions": {
             "headerId": "block-e",
-            "transactions": [tx_e1, tx_e2],
+            "transactions": [tx_e1, tx_e2, tx_e3],
             "blockVersion": 2,
             "size": 1155,
         },
