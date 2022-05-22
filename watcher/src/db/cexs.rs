@@ -154,7 +154,7 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
         "
         with conflicts as (
             select address
-                , array_agg(spot_height order by spot_height) as cex_ids
+                , array_agg(cex_id order by spot_height) as cex_ids
                 , array_agg(spot_height order by spot_height) as spot_heights
             from cex._bootstrapping_data
             group by 1 having count(*) > 1
@@ -167,10 +167,10 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
             conflict_spot_height
         )
         select con.address
-            , con.cex_ids[0]
+            , con.cex_ids[1]
             , coalesce(mas.type, 'deposit')
-            , con.spot_heights[0]
             , con.spot_heights[1]
+            , con.spot_heights[2]
         from conflicts con
         left join cex.addresses mas
             on mas.address = con.address and mas.type = 'main'

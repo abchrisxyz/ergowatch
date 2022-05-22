@@ -734,6 +734,7 @@ def _test_db_state(conn: pg.Connection, start_height: int, bootstrapped=False):
         assert_cex_ids(cur)
         assert_main_addresses(cur)
         assert_deposit_addresses(cur)
+        assert_addresses_conflicts(cur, start_height)
         assert_processing_log(cur, start_height, bootstrapped)
 
 
@@ -834,11 +835,11 @@ def assert_deposit_addresses(cur: pg.Cursor):
 
 
 def assert_addresses_conflicts(cur: pg.Cursor, start_height):
-    con2 = AC.get("con2")
+    pub9 = AC.get("pub9")
     cur.execute(
         """
         select address
-            , cex_id
+            , first_cex_id
             , type
             , spot_height
             , conflict_spot_height
@@ -847,10 +848,9 @@ def assert_addresses_conflicts(cur: pg.Cursor, start_height):
         """
     )
     rows = cur.fetchall()
-
     assert len(rows) == 1
     assert rows == [
-        (con2.address, 1, "deposit", start_height + 2, start_height + 5),
+        (pub9.address, 1, "deposit", start_height + 2, start_height + 5),
     ]
 
 
