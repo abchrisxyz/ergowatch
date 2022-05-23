@@ -1,6 +1,8 @@
 import re
 import pytest
 import psycopg as pg
+import os
+from pathlib import Path
 
 from fixtures.api import MockApi, ApiUtil, GENESIS_ID
 from fixtures.config import temp_cfg
@@ -9,6 +11,7 @@ from fixtures.db import SCHEMA_PATH
 from fixtures.db import fill_rev1_db
 from fixtures.addresses import AddressCatalogue as AC
 from utils import run_watcher
+
 
 # TODO: copied from test_core, but could be simplified a bit
 def make_blocks(height: int):
@@ -240,6 +243,14 @@ def make_blocks(height: int):
     return [block_a, block_b, block_c]
 
 
+def get_number_of_migrations() -> int:
+    """
+    Returns number of files in migrations directory
+    """
+    p = Path(__file__).parent / Path("../src/db/migrations")
+    return len(os.listdir(p.resolve()))
+
+
 @pytest.mark.order(5)
 class TestMigrations:
     start_height = 100_000
@@ -306,13 +317,19 @@ class TestMigrations:
             f.read()
             current_revision = int(current_revision)
 
+        # Check schema revision matches number of migrations.
+        # Migration 1 results in revision 2, and so on...
+        assert current_revision == get_number_of_migrations() + 1
+
         with db.cursor() as cur:
             # Check state before run
             cur.execute("select count(*) from core.headers;")
             assert cur.fetchone()[0] == 2
+            # Obtain current db revision
             cur.execute("select version from ew.revision;")
             db_revision = cur.fetchone()[0]
             assert db_revision < current_revision
+            assert db_revision == 1
 
         cp = run_watcher(temp_cfg)
 
@@ -328,7 +345,6 @@ class TestMigrations:
             cur.execute("select count(*) from core.headers;")
             assert cur.fetchone()[0] == 2
 
-    # @pytest.mark.skip("No migrations to test yet")
     def test_migrations_are_applied_if_allowed(self, db: pg.Connection, temp_cfg):
         """
         Check migrations are applied and watcher proceeds normally.
@@ -342,9 +358,11 @@ class TestMigrations:
 
         # Check logs
         assert cp.returncode == 0
-        assert "Applying migration 1 (revision 2)" in cp.stdout.decode()
+        n_migs = get_number_of_migrations()
+        rev = n_migs + 1
+        assert f"Applying migration {n_migs} (revision {rev})" in cp.stdout.decode()
 
         # Check migrations are applied
         with db.cursor() as cur:
             cur.execute("select version from ew.revision;")
-            assert cur.fetchone()[0] >= 2
+            assert cur.fetchone()[0] == rev
