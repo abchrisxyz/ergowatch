@@ -37,7 +37,7 @@ def make_blocks(height: int):
 
         -- false positive
         -- pub9 will be linked to more than 1 cex
-        pub9-box1  100 --> cex1-box2   10
+        pub9-box1  100 --> cex1-box1   10
                            pub9-box2   90
 
     block c:
@@ -50,7 +50,7 @@ def make_blocks(height: int):
                            con1-box4    5
 
         -- cex 1 claiming deposit (deposit was sold)
-        pub1-box1   10 --> cex1-box1   10
+        pub1-box1   10 --> cex1-box2   10
 
     ----------------------fork-of-d----------------------
     block x - fork of block d to be ignored/rolled back:
@@ -185,7 +185,7 @@ def make_blocks(height: int):
         "dataInputs": [],
         "outputs": [
             {
-                "boxId": "cex1-box2",
+                "boxId": "cex1-box1",
                 "value": 10,
                 "ergoTree": cex1.ergo_tree,
                 "assets": [],
@@ -273,7 +273,7 @@ def make_blocks(height: int):
         "dataInputs": [],
         "outputs": [
             {
-                "boxId": "cex1-box1",
+                "boxId": "cex1-box2",
                 "value": 10,
                 "ergoTree": cex1.ergo_tree,
                 "assets": [],
