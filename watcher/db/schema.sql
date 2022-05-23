@@ -154,11 +154,11 @@ create table cex.addresses (
 
 /* 
 	The PK of cex.addresses is the address. An address can therefore
-	be linked to a single CEX.
+	be linked to a single CEX only.
 	However, we can't exclude the possibility of running into addresses
 	linked to more than one CEX. When an known address is linked to
 	a second CEX, it will get removed from cex.addresses and stored
-	here for further review.
+	here for reference.
  */
 create table cex.addresses_conflicts (
 	-- Same columns as cex.address

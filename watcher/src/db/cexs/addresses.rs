@@ -5,7 +5,7 @@ use postgres::Transaction;
 
 /// Find new deposit addresses
 ///
-/// Returns collections of conflicting addresses
+/// Returns height of earliest tx involving newly found addresses.
 pub(super) fn include(tx: &mut Transaction, block: &BlockData) -> Option<i32> {
     spot_deposit_candidates(tx, block.height);
     insert_new_deposit_addresses(tx, block.height)
