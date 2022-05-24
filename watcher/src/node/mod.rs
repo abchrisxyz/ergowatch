@@ -76,11 +76,9 @@ impl Node {
                     Some(idx) => self.get_block(&header_ids[idx]).unwrap(),
                     None => {
                         // If not possible to tell blocks appart yet, then pick first one that is valid.
-                        // If it turns out no to be the main chain, it'll get rolled back eventually.
-                        // Process headers in alphabetical orders for consistency (nodes can return headers
-                        // in different order).
+                        // If it turns out not to be the main chain, it'll get rolled back eventually.
                         info!("Picking first valid block");
-                        match itertools::sorted(&header_ids).find_map(|hid| self.get_block(&hid)) {
+                        match header_ids.iter().find_map(|hid| self.get_block(&hid)) {
                             Some(block) => block,
                             None => panic!("No valid blocks available out of {}", header_ids.len()),
                         }

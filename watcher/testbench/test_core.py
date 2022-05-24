@@ -420,11 +420,11 @@ class TestSyncNoForkChild:
                 bootstrap_db(conn, first_blocks)
 
             # 1 st run
-            # No way to tell fork appart, should pick 1st block in alphabetical order (block-b)
+            # No way to tell fork appart, should pick 1st block in order of appearance (block-x)
             cp = run_watcher(temp_cfg)
             assert cp.returncode == 0
-            assert "Including block block-b" in cp.stdout.decode()
-            assert "Including block block-x" not in cp.stdout.decode()
+            assert "Including block block-x" in cp.stdout.decode()
+            assert "Including block block-b" not in cp.stdout.decode()
             assert "no child" not in cp.stdout.decode()
 
             # Now make all blocks visible

@@ -17,7 +17,6 @@ ergotree-ir = "0.15.0"
 base16 = "0.2.1"
 anyhow = "1.0.53"
 clap = {version="3.0.13", features=["derive", "cargo"]}
-itertools = "0.10.3"
 
 [dev-dependencies]
 pretty_assertions = "0.7.2"
