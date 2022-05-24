@@ -4,6 +4,7 @@ port = 5432
 name = "ergo"
 user = "ergo"
 pw = "ergo"
+bootstrapping_work_mem_kb = 32000
 
 [node]
 url = "http://node:9053"

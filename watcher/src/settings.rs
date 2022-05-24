@@ -10,6 +10,7 @@ pub struct Database {
     pub name: String,
     pub user: String,
     pub pw: String,
+    pub bootstrapping_work_mem_kb: u32,
 }
 
 #[derive(Debug, Deserialize)]

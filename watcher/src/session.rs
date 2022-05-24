@@ -70,6 +70,7 @@ impl Session {
             &cfg.database.name,
             &cfg.database.user,
             &cfg.database.pw,
+            cfg.database.bootstrapping_work_mem_kb,
         );
 
         // Retrieve DB state

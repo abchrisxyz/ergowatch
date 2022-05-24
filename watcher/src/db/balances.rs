@@ -34,8 +34,6 @@ pub(super) fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
     }
     info!("Bootstrapping balances");
 
-    tx.execute("set local work_mem = '32MB';", &[]).unwrap();
-
     let row = tx.query_one(
         "
         select min(height) as min_height

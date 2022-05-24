@@ -17,6 +17,7 @@ CONFIG = textwrap.dedent(
     name = "{TEST_DB_NAME}"
     user = "{DB_USER}"
     pw = "{DB_PASS}"
+    bootstrapping_work_mem_kb = 4000
 
     [node]
     url = "http://{MOCK_NODE_HOST}"

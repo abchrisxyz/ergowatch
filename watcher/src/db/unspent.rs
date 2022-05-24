@@ -44,7 +44,6 @@ pub(super) fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
     }
 
     info!("Bootstrapping unspent");
-    tx.execute("set local work_mem = '32MB';", &[]).unwrap();
     tx.execute("alter table usp.boxes set unlogged;", &[])
         .unwrap();
     // Find all unspent boxes: outputs not used as input

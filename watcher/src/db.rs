@@ -18,6 +18,7 @@ use crate::types::Head;
 #[derive(Debug)]
 pub struct DB {
     conn_str: String,
+    bootstrapping_work_mem_kb: u32,
     repair_event: Option<repair::RepairEvent>,
 }
 
@@ -80,8 +81,13 @@ impl DB {
     pub fn bootstrap_derived_schemas(&self) -> anyhow::Result<()> {
         let mut client = Client::connect(&self.conn_str, NoTls)?;
         let mut tx = client.transaction()?;
+        info!("Local work mem: {}", &self.bootstrapping_work_mem_kb);
 
-        tx.execute("set local work_mem = '32MB';", &[]).unwrap();
+        tx.execute(
+            &format!("set local work_mem = {};", self.bootstrapping_work_mem_kb),
+            &[],
+        )
+        .unwrap();
 
         unspent::bootstrap(&mut tx)?;
         balances::bootstrap(&mut tx)?;
@@ -95,7 +101,14 @@ impl DB {
 }
 
 impl DB {
-    pub fn new(host: &str, port: u16, name: &str, user: &str, pass: &str) -> Self {
+    pub fn new(
+        host: &str,
+        port: u16,
+        name: &str,
+        user: &str,
+        pass: &str,
+        bootstrapping_work_mem_kb: u32,
+    ) -> Self {
         debug!(
             "Creating DB instance with host: {}, port: {}, name: {}, user: {}, pass: *...*",
             host, port, name, user
@@ -105,6 +118,7 @@ impl DB {
                 "host={} port={} dbname={} user={} password={}",
                 host, port, name, user, pass
             ),
+            bootstrapping_work_mem_kb,
             repair_event: None,
         }
     }
