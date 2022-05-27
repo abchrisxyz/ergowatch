@@ -4,7 +4,7 @@ port = 5432
 name = "db"
 user = "user"
 pw = "hello"
-bootstrapping_work_mem_kb = 32000
+bootstrapping_work_mem_kb = 128000
 
 [node]
 url = "http://127.0.0.1:9053"
