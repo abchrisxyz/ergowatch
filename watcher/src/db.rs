@@ -6,8 +6,7 @@ mod migrations;
 pub mod repair;
 pub mod unspent;
 
-use crate::session::cache;
-use crate::session::cache::Cache;
+use crate::cache::Cache;
 use log::debug;
 use log::info;
 use postgres::{Client, NoTls, Transaction};
@@ -45,7 +44,7 @@ impl DB {
         core::include_block(&mut tx, block)?;
         unspent::include_block(&mut tx, block)?;
         balances::include_block(&mut tx, block)?;
-        cexs::include_block(&mut tx, block)?;
+        cexs::include_block(&mut tx, block, &mut cache.cexs)?;
         metrics::include_block(&mut tx, block, &mut cache.metrics)?;
 
         tx.commit()?;
@@ -59,7 +58,7 @@ impl DB {
         let mut tx = client.transaction()?;
 
         metrics::rollback_block(&mut tx, block, &mut cache.metrics)?;
-        cexs::rollback_block(&mut tx, block)?;
+        cexs::rollback_block(&mut tx, block, &mut cache.cexs)?;
         balances::rollback_block(&mut tx, block)?;
         unspent::rollback_block(&mut tx, block)?;
         core::rollback_block(&mut tx, block)?;
@@ -219,12 +218,13 @@ impl DB {
         exists
     }
 
-    /// Return initialized cache
-    pub fn load_cache(&self) -> cache::Cache {
+    /// Load initialized cache
+    pub fn load_cache(&self) -> Cache {
         info!("Preparing cache");
         let mut client = Client::connect(&self.conn_str, NoTls).unwrap();
-        cache::Cache {
-            metrics: metrics::load_cache(&mut client),
+        Cache {
+            cexs: cexs::Cache::load(&mut client),
+            metrics: metrics::Cache::load(&mut client),
         }
     }
 }

@@ -1,13 +1,38 @@
 /*
    Repair events.
+
+   Some blocks will invalidate previously derived data. When this happens,
+   impacted data must be derived again using the newly availble data.
+   This process is taken care of by repair events. Repair events are
+   performed periodically, say every 100 blocks for instance, in a dedicated
+   thread.
+
+   A repair event will start from the lowest impacted height and go over
+   all heuight until the current height minus a configurable threshold of
+   a few blocks. Stopping repairs a few blocks from the latest reduces
+   the chance of including blocks that will be rolled back eventually.
+
+   A repair event consists of two phases: a preparation phase and
+   an execution phase. The preparation phase creates work tables representing
+   the db state at the repair start height. The execution phase goes over the
+   height range to be repaired, fixing derived data and updating the state of
+   the work tables.
+
+   At this stage there is only one thing that invalidates previously derived
+   data: the discovery of new exchange deposit addresses. Deposit addresses
+   are only identified when sending funds to a main exchange address.
+   Obviously, the funding of the deposit address occcured prior to that and
+   needs to be reflected in data depending on it - cex supply and all metrics
+   accounting for supply on exchanges.
 */
 use super::DB;
+use crate::db::balances;
 use crate::db::cexs;
 use crate::db::metrics;
 use log::debug;
 use log::info;
 use log::warn;
-use postgres::{Client, NoTls};
+use postgres::{Client, NoTls, Transaction};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
@@ -106,7 +131,7 @@ impl DB {
     pub fn start_repair_event(&mut self, max_height: i32) {
         debug!("Starting repair event");
         let mut client = Client::connect(&self.conn_str, NoTls).unwrap();
-        match prepare(&mut client) {
+        match init(&mut client) {
             Ok(()) => (),
             Err(RepairInitError::OtherRunning) => {
                 warn!("Tried to start a repair event but previous one is still running. Consider using a larger repair interval.");
@@ -162,20 +187,27 @@ impl DB {
     }
 }
 
-/// Prepare a repair session
+/// Initialize a repair session on the db side by creating the 'repair' schema.
 ///
-/// Will fail if another repair session is running
-fn prepare(client: &mut Client) -> Result<(), RepairInitError> {
+/// Will fail if another repair session is running.
+fn init(client: &mut Client) -> Result<(), RepairInitError> {
     let mut tx = client.transaction().unwrap();
-    match tx.execute("create table ew._repair as select now() as created;", &[]) {
+    // Create repair schema or report existing one
+    match tx.execute("create schema repair;", &[]) {
         Ok(_) => (),
         Err(err) => {
-            if let Some(&postgres::error::SqlState::DUPLICATE_TABLE) = err.code() {
+            if let Some(&postgres::error::SqlState::DUPLICATE_SCHEMA) = err.code() {
                 return Err(RepairInitError::OtherRunning);
             }
             panic!("{:?}", err);
         }
     };
+    // Log creation timestamp - usefull for debugging
+    tx.execute(
+        "create table repair.created as select now() as created;",
+        &[],
+    )
+    .unwrap();
     tx.commit().unwrap();
     Ok(())
 }
@@ -185,6 +217,10 @@ fn start(conn_str: String, fr: i32, to: i32, rx: mpsc::Receiver<Message>) -> any
     info!("Repairing {} blocks ({} to {})", to - fr + 1, fr, to);
     let mut client = Client::connect(&conn_str, NoTls).unwrap();
 
+    // Load caches of state just prior to start height
+    let mut cex_cache = cexs::Cache::load_at(&mut client, fr - 1);
+
+    // Mark non-onvalidating blocks as processed
     let mut tx = client.transaction()?;
     cexs::repair::process_non_invalidating_blocks(&mut tx);
     tx.commit().unwrap();
@@ -196,6 +232,7 @@ fn start(conn_str: String, fr: i32, to: i32, rx: mpsc::Receiver<Message>) -> any
             break;
         }
 
+        cexs::repair(&mut tx, h, &mut cex_cache);
         metrics::repair(&mut tx, h);
         cexs::repair::set_height_pending_to_processed(&mut tx, h);
 

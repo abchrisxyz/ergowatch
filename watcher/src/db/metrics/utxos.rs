@@ -1,9 +1,9 @@
+use super::Cache;
 use crate::parsing::BlockData;
-use crate::session::cache;
 use log::info;
 use postgres::Transaction;
 
-pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &mut cache::Metrics) {
+pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &mut Cache) {
     // New value is cached value plus diff
     cache.utxos += extract_utxo_diff(block);
 
@@ -11,7 +11,7 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &mut cache
         .unwrap();
 }
 
-pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut cache::Metrics) {
+pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut Cache) {
     // Old value is cached value minus diff
     cache.utxos -= extract_utxo_diff(block);
     tx.execute(DELETE_SNAPSHOT, &[&block.height]).unwrap();

@@ -757,6 +757,10 @@ def assert_db_constraints(conn: pg.Connection):
     # cex.block_processing_log
     assert_pk(conn, "cex", "block_processing_log", ["header_id"])
     assert_index(conn, "cex", "block_processing_log", "block_processing_log_status_idx")
+    # cex.supply
+    assert_pk(conn, "cex", "supply", ["height", "cex_id"])
+    assert_fk(conn, "cex", "supply", "supply_cex_id_fkey")
+    assert_index(conn, "cex", "supply", "supply_height_idx")
 
 
 def assert_cex_ids(cur: pg.Cursor):
@@ -874,3 +878,30 @@ def assert_processing_log(cur: pg.Cursor, start_height: int, bootstrapped):
     assert rows[3] == ("block-c", start_height + 3, start_height + 2, expected_status)
     assert rows[4] == ("block-d", start_height + 4, start_height + 3, expected_status)
     assert rows[5] == ("block-e", start_height + 5, None, expected_status)
+
+
+def assert_supply(cur: pg.Cursor, start_height: int):
+    height_b = start_height + 2
+    height_c = start_height + 3
+    height_d = start_height + 4
+    height_e = start_height + 5
+    cur.execute(
+        """
+        select height
+            , cex_id
+            , main
+            , deposit
+        from cex.supply
+        order by 1, 2;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 1
+    assert rows == [
+        (height_b, 1, 0, 10),
+        (height_c, 2, 0, 15),
+        (height_c, 3, 0, 5),
+        (height_c, 1, 10, 0),
+        (height_d, 2, 5, 9),
+        (height_e, 2, 8, 6),
+    ]

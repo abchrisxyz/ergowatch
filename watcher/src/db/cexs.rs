@@ -1,49 +1,32 @@
 use crate::parsing::BlockData;
+use log::debug;
 use log::info;
+use postgres::Client;
+use std::collections::HashMap;
 
 mod addresses;
 mod processing_log;
+mod supply;
 
 use postgres::Transaction;
 
-/*
-    New Main Address
-    ================
-    H is current height.
-    1. Find first tx height of new main address (h)
-    2. Loop over h..H
-        - find new deposit addresses and keep them in a tmp table for (3)
-    3. Derive height (h') of earliest deposit tx from new deposit addresses
-    4. Move new deposit addresses from tmp table to cex.addresses.
-    5. Loop over h'..H
-        - update any dependents (e.g. metrics)
-    All this would be called from within a migration.
-
-    Normal block processing
-    =======================
-    H is height of block.
-    1. Find new deposit addresses for H
-    2. Save to cex.new_deposit_addresses
-
-    Periodically:
-    1. Derive height (h') of earliest deposit tx from new deposit addresses
-    2. Update any dependents (e.g. metrics) from h' or flag an update is needed from h'
-
-    The reason this is done periodically and not at each block is that
-    deposit address may have very old receiving txs (e.g. when accumulating payouts).
-    Boostrapping
-    ============
-    1. Find all deposit addresses to date.
-    2. Bootstrap dependents (e.g. metrics)
-*/
-
-pub fn include_block(tx: &mut Transaction, block: &BlockData) -> anyhow::Result<()> {
+pub fn include_block(
+    tx: &mut Transaction,
+    block: &BlockData,
+    cache: &mut Cache,
+) -> anyhow::Result<()> {
     let invalidation_height: Option<i32> = addresses::include(tx, block);
     processing_log::include(tx, block, invalidation_height);
+    supply::include(tx, block, cache);
     Ok(())
 }
 
-pub fn rollback_block(tx: &mut Transaction, block: &BlockData) -> anyhow::Result<()> {
+pub fn rollback_block(
+    tx: &mut Transaction,
+    block: &BlockData,
+    cache: &mut Cache,
+) -> anyhow::Result<()> {
+    supply::rollback(tx, block, cache);
     addresses::rollback(tx, block);
     processing_log::rollback(tx, block);
     Ok(())
@@ -227,7 +210,41 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
     tx.execute("drop procedure cex._find_new_deposit_addresses;", &[])?;
     tx.execute("drop table cex._bootstrapping_data;", &[])?;
 
+    // Set constraint here so that the supply query can use the indexes.
+    // TODO: consider setting supply constraints later.
     set_constraints(tx);
+
+    // Supply
+    tx.execute(
+        "
+        with cex_diffs as (
+            select d.height
+                , c.cex_id
+                , coalesce(sum(d.value) filter (where c.type = 'main'), 0) as main
+                , coalesce(sum(d.value) filter (where c.type = 'deposit'), 0) as deposit
+            from cex.addresses c
+            join bal.erg_diffs d on d.address = c.address
+            where height <= 500 * 1000
+            group by 1, 2 having (
+                sum(d.value) filter (where c.type = 'main') <> 0
+                or
+                sum(d.value) filter (where c.type = 'deposit') <> 0
+            )
+        )
+        insert into cex.supply (height, cex_id, main, deposit)
+            select height
+                , cex_id
+                , sum(main) over w as main
+                , sum(deposit) over w as deposit
+            from cex_diffs
+            window w as (
+                partition by cex_id
+                order by height asc
+                rows between unbounded preceding and current row
+            )
+            order by 1, 2;",
+        &[],
+    )?;
     Ok(())
 }
 
@@ -262,11 +279,91 @@ fn set_constraints(tx: &mut Transaction) {
         // cex.block_processing_log
         "alter table cex.block_processing_log add primary key (header_id);",
         "create index on cex.block_processing_log (status);",
+        // cex.supply
+        "alter table cex.supply add primary key (height, cex_id);",
+        "alter table cex.supply add foreign key (cex_id)
+            references cex.cexs (id);",
+        "create index on cex.supply (height);",
     ];
 
     for statement in statements {
         tx.execute(statement, &[]).unwrap();
     }
+}
+
+pub struct Cache {
+    /// Maps cex_id to latest supply on its main addresses
+    pub(super) main_supply: HashMap<i32, i64>,
+    /// Maps cex_id to latest supply on its deposit addresses
+    pub(super) deposit_supply: HashMap<i32, i64>,
+}
+
+impl Cache {
+    pub fn new() -> Self {
+        Self {
+            main_supply: HashMap::new(),
+            deposit_supply: HashMap::new(),
+        }
+    }
+
+    pub fn load(client: &mut Client) -> Self {
+        debug!("Loading cexs cache");
+        let rows = client
+            .query(
+                "
+                select cex_id
+                    , main
+                    , deposit
+                from cex.supply
+                where (cex_id, height) in (
+                    select cex_id
+                        , max(height)
+                    from cex.supply
+                    group by 1
+                );",
+                &[],
+            )
+            .unwrap();
+        let mut c = Cache::new();
+        for row in rows {
+            let cex_id: i32 = row.get(0);
+            c.main_supply.insert(cex_id, row.get(1));
+            c.deposit_supply.insert(cex_id, row.get(2));
+        }
+        c
+    }
+
+    pub fn load_at(client: &mut Client, height: i32) -> Self {
+        debug!("Loading cexs cache for height {}", height);
+        let rows = client
+            .query(
+                "
+                select cex_id
+                    , main
+                    , deposit
+                from cex.supply
+                where (cex_id, height) in (
+                    select cex_id
+                        , max(height)
+                    from cex.supply
+                    where height <= $1
+                    group by 1
+                );",
+                &[&height],
+            )
+            .unwrap();
+        let mut c = Cache::new();
+        for row in rows {
+            let cex_id: i32 = row.get(0);
+            c.main_supply.insert(cex_id, row.get(1));
+            c.deposit_supply.insert(cex_id, row.get(2));
+        }
+        c
+    }
+}
+
+pub(super) fn repair(tx: &mut Transaction, height: i32, cache: &mut Cache) {
+    supply::repair(tx, height, cache);
 }
 
 pub mod repair {

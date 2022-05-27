@@ -115,7 +115,7 @@ fn include_genesis_boxes(session: &mut Session) -> Result<(), &'static str> {
     // Resync cache now that db got modified
     // Not needed currently, but calling anyway in case we rely on the cache
     // for core tables at some point.
-    session.cache = session.db.load_cache();
+    session.db.load_cache();
 
     Ok(())
 }

@@ -3,6 +3,7 @@ use clap::Parser;
 use log::error;
 use log::info;
 
+use crate::cache::Cache;
 use crate::db;
 use crate::node;
 use crate::settings::Settings;
@@ -34,13 +35,12 @@ struct Cli {
 /// Session parameters
 pub struct Session {
     pub db: db::DB,
-    pub db_is_empty: bool,
     pub node: node::Node,
     pub poll_interval: u64,
     pub exit_when_synced: bool,
     pub head: crate::types::Head,
     pub allow_rollbacks: bool,
-    pub cache: cache::Cache,
+    pub cache: Cache,
     pub repair_interval: u32,
     pub repair_offset: u32,
 }
@@ -107,14 +107,13 @@ impl Session {
 
         // Fill cache from db
         let cache = if db_is_empty {
-            cache::Cache::new()
+            Cache::new()
         } else {
             db.load_cache()
         };
 
         Ok(Session {
             db,
-            db_is_empty,
             node: node,
             poll_interval: cfg.node.poll_interval,
             exit_when_synced: cli.exit,
@@ -124,30 +123,5 @@ impl Session {
             repair_interval: cfg.repairs.interval,
             repair_offset: cfg.repairs.offset,
         })
-    }
-}
-
-pub mod cache {
-    pub struct Cache {
-        pub metrics: Metrics,
-    }
-
-    pub struct Metrics {
-        pub utxos: i64,
-    }
-
-    impl Cache {
-        /// Initialize a cache with default values, representing an empty database.
-        pub fn new() -> Self {
-            Self {
-                metrics: Metrics::new(),
-            }
-        }
-    }
-
-    impl Metrics {
-        pub fn new() -> Self {
-            Self { utxos: 0 }
-        }
     }
 }
