@@ -21,8 +21,8 @@ from utils import assert_column_ge
 ORDER = 13
 
 
-def make_blocks(height: int):
-    """Returns test blocks starting at giving height."""
+def make_blocks(parent_height: int):
+    """Returns test blocks starting at next height."""
 
     desc = """
     // pub1 is a deposit address for cex1
@@ -61,7 +61,7 @@ def make_blocks(height: int):
         pub2-box1   15
         con1-box3   25
         --
-        // deposit 5 to CEX 3
+        // deposit 5 to CEX 3 (hidden)
         con1-box3   25
         >
         pub3-box1   20
@@ -103,8 +103,9 @@ def make_blocks(height: int):
         cex2-box2   3
         pub2-box3   6
         --
-        // false positive
+        // false positive for deposit addres
         // now linked to a second cex
+        // erg still ends up on main though
         pub9-box2   94
         >
         cex3-box2   94
@@ -116,7 +117,7 @@ def make_blocks(height: int):
         >
         cex3-box3    5
     """
-    return syntax.parse(desc, height + 1)
+    return syntax.parse(desc, parent_height + 1)
 
 
 @pytest.mark.order(ORDER)
@@ -297,8 +298,8 @@ class TestRepair:
             cp = run_watcher(temp_cfg)
             assert cp.returncode == 0
             assert "Including block block-e" in cp.stdout.decode()
-            assert "Repairing 3 blocks (600002 to 600004)" in cp.stdout.decode()
-            assert "Done repairing heights 600002 to 600004" in cp.stdout.decode()
+            assert "Repairing 4 blocks (600002 to 600005)" in cp.stdout.decode()
+            assert "Done repairing heights 600002 to 600005" in cp.stdout.decode()
 
             with pg.connect(temp_db_class_scoped) as conn:
                 yield conn

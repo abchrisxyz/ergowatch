@@ -205,6 +205,11 @@ alter table cex.supply add check (deposit >= 0);
 -------------------------------------------------------------------------------
 -- CEX's
 alter table mtr.cex_supply add primary key (height);
+alter table mtr.cex_supply alter column height set not null;
+alter table mtr.cex_supply alter column total set not null;
+alter table mtr.cex_supply alter column deposit set not null;
+alter table mtr.cex_supply add check (total >= 0);
+alter table mtr.cex_supply add check (deposit >= 0);
 
 -- UTxO's
 alter table mtr.utxos add primary key(height);

@@ -26,12 +26,13 @@
    accounting for supply on exchanges.
 */
 use super::DB;
+use crate::db::balances;
 use crate::db::cexs;
 use crate::db::metrics;
 use log::debug;
 use log::info;
 use log::warn;
-use postgres::{Client, NoTls};
+use postgres::{Client, NoTls, Transaction};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
@@ -230,12 +231,20 @@ fn start(conn_str: String, fr: i32, to: i32, rx: mpsc::Receiver<Message>) -> any
     cexs::repair::process_non_invalidating_blocks(&mut tx);
     tx.commit().unwrap();
 
+    // Prepare work tables
+    let mut tx = client.transaction()?;
+    prepare(&mut tx, fr - 1);
+    tx.commit().unwrap();
+
     for h in fr..to + 1 {
         let mut tx = client.transaction()?;
 
         if let Ok(Message::Abort) = rx.try_recv() {
             break;
         }
+
+        // Advance state of work tables to current height
+        step(&mut tx, h);
 
         cexs::repair(&mut tx, h, &mut cex_cache);
         metrics::repair(&mut tx, h);
@@ -249,6 +258,16 @@ fn start(conn_str: String, fr: i32, to: i32, rx: mpsc::Receiver<Message>) -> any
 
     info!("Done repairing heights {} to {}", fr, to);
     Ok(())
+}
+
+/// Create work tables for repair session.
+fn prepare(tx: &mut Transaction, at_height: i32) {
+    balances::replay::prepare(tx, at_height);
+}
+
+/// Create work tables for repair session.
+fn step(tx: &mut Transaction, next_height: i32) {
+    balances::replay::step(tx, next_height);
 }
 
 /// Cleanup

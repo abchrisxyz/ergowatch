@@ -4,101 +4,124 @@ use log::info;
 use postgres::Transaction;
 
 pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
-    // Supply details
-    tx.execute(
-        "
-        with cex_addresses as (
-            select cex_id, address, type from cex.addresses
-            union
-            select cex_id, address, 'deposit' as type from cex.new_deposit_addresses
-        ), new_balances as (
-            select cex_id
-                , sum(bal.value) filter (where cas.type = 'main') as main
-                , sum(bal.value) filter (where cas.type = 'deposit') as deposit
-            from bal.erg bal
-            join cex_addresses cas on cas.address = bal.address
-            group by 1
-        ), current_balances as (
-            select cex_id
-                , main
-                , deposit
-            from mtr.cex_supply
-            where (cex_id, height) in (
-                select cex_id
-                    , max(height)
-                from mtr.cex_supply
-                group by 1
-            )
-        )
-        insert into mtr.cex_supply_details (height, cex_id, main, deposit)
-        select $1
-            , new.cex_id
-            , new.main
-            , coalesce(new.deposit, 0)
-        from new_balances new
-        left join current_balances cur on cur.cex_id = new.cex_id
-        where (new.main <> cur.main or cur.main is null)
-            or (new.deposit is not null and new.deposit <> cur.deposit)
-            or (new.deposit is not null and cur.deposit is null);
-        ",
-        &[&block.height],
-    )
-    .unwrap();
+    insert_supply(tx, block.height);
+}
 
-    // Total supply
+pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
+    rollback_supply(tx, block.height);
+}
+
+pub(super) fn repair(tx: &mut Transaction, height: i32) {
+    update_supply(tx, height);
+}
+
+/// Add new snapshot of supply on all exchanges at `height`.
+fn insert_supply(tx: &mut Transaction, height: i32) {
     tx.execute(
         "
         insert into mtr.cex_supply (height, total, deposit)
-        select $1
-            , sum(main + deposit) as total
-            , sum(deposit) as deposit
-        from mtr.cex_supply_details
+        select $1 as height
+            , coalesce(sum(main + deposit), 0)
+            , coalesce(sum(deposit), 0)
+        from cex.supply
         where (cex_id, height) in (
             select cex_id
                 , max(height)
-            from mtr.cex_supply_details
+            from cex.supply
             group by 1
-        )
-        group by 1;
-        ",
-        &[&block.height],
+        );",
+        &[&height],
     )
     .unwrap();
 }
 
-pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
-    // Total supply
+/// Rremove snapshot of supply on all exchanges at `height`.
+fn rollback_supply(tx: &mut Transaction, height: i32) {
     tx.execute(
-        "delete from mtr.cex_supply where height = $1;",
-        &[&block.height],
+        "
+        delete from mtr.cex_supply
+        where height = $1;",
+        &[&height],
     )
     .unwrap();
+}
 
-    // Supply details
+/// Update snapshot of supply on all exchanges at `height`.
+fn update_supply(tx: &mut Transaction, height: i32) {
     tx.execute(
-        "delete from mtr.cex_supply_details where height = $1;",
-        &[&block.height],
+        "
+        with new_values as (
+            select coalesce(sum(main + deposit), 0) as total
+                , coalesce(sum(deposit), 0) as deposit
+            from cex.supply
+            where (cex_id, height) in (
+                select cex_id
+                    , max(height)
+                from cex.supply
+                where height <= $1
+                group by 1
+            )
+        )
+        update mtr.cex_supply s
+        set total = n.total
+            , deposit = n.deposit
+        from new_values n
+        where s.height = $1;",
+        &[&height],
     )
     .unwrap();
 }
 
 pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
-    // // Bootstrap supply
-    // let sql = "
-    //     with diffs as (
-    //         select cas.cex_id
-    //             , dif.height
-    //             , sum(dif.value) filter (where cas.type = 'main') as main
-    //             , sum(dif.value) filter (where cas.type = 'deposit') as deposit
-    //         from cex.addresses cas
-    //         join bal.erg_diffs dif on dif.address = cas.address
-    //         group by 1, 2
-    //         having sum(dif.value) filter (where cas.type = 'main') <> 0
-    //             or sum(dif.value) filter (where cas.type = 'deposit') <> 0
-    //     )
-    //     insert into cex.supply(height, cex_id, main, deposit)
-    //     select
-    // ";
+    if is_bootstrapped(tx) {
+        return Ok(());
+    }
+    info!("Bootstrapping metrics - exchanges");
+
+    // Temporarily add zero balances at height zero for all cex's.
+    // This will allow to compute balance diffs for each cex.
+    tx.execute(
+        "
+        insert into cex.supply(height, cex_id, main, deposit)
+        select distinct 0, cex_id, 0, 0
+        from cex.supply;
+        ",
+        &[],
+    )?;
+
+    // Bootstrap supply
+    tx.execute(
+        "
+        with diffs as (
+            -- diffs by height and cex
+            select height
+                , cex_id
+                , main - lag(main) over(partition by cex_id order by height) as d_main
+                , deposit - lag(deposit) over(partition by cex_id order by height) as d_deposit
+            from cex.supply
+        ), total_diffs as (
+            -- diffs by height
+            select height
+                , sum(d_main) as d_main
+                , sum(d_deposit) as d_deposit
+            from diffs
+            group by 1
+        )
+        insert into mtr.cex_supply(height, total, deposit)
+        select h.height
+            , coalesce(sum(d_main + d_deposit) over(order by h.height rows between unbounded preceding and current row), 0)
+            , coalesce(sum(d_deposit) over(order by h.height rows between unbounded preceding and current row), 0)
+        from core.headers h
+        left join total_diffs d on d.height = h.height
+        order by 1;",
+        &[],
+    )?;
+
+    // Remove zero balances inserted earlier.
+    tx.execute("delete from cex.supply where height = 0;", &[])?;
+
+    set_constraints(tx);
+    Ok(())
 }
 
 fn is_bootstrapped(tx: &mut Transaction) -> bool {
@@ -110,12 +133,13 @@ fn is_bootstrapped(tx: &mut Transaction) -> bool {
 
 fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
-        // Supply details
-        "alter table mtr.cex_supply_details add primary key (height, cex_id);",
-        "alter table mtr.cex_supply_details add foreign key (cex_id)
-            references cex.cexs (id) on delete cascade;",
-        // Total supply
+        // Supply
         "alter table mtr.cex_supply add primary key (height);",
+        "alter table mtr.cex_supply alter column height set not null;",
+        "alter table mtr.cex_supply alter column total set not null;",
+        "alter table mtr.cex_supply alter column deposit set not null;",
+        "alter table mtr.cex_supply add check (total >= 0);",
+        "alter table mtr.cex_supply add check (deposit >= 0);",
     ];
 
     for statement in statements {

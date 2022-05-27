@@ -10,9 +10,10 @@ mod mig_005;
 mod mig_006;
 mod mig_007;
 mod mig_008;
+mod mig_009;
 
 // Version 1 was originial schema
-const CURRENT_VERSION: i32 = 9;
+const CURRENT_VERSION: i32 = 10;
 
 /// Check db version and apply migrations if needed.
 pub fn check(client: &mut Client, allow_migrations: bool) -> anyhow::Result<()> {
@@ -62,6 +63,7 @@ fn apply_migration(client: &mut Client, migration_id: i32) -> anyhow::Result<()>
         6 => mig_006::apply(&mut tx)?,
         7 => mig_007::apply(&mut tx)?,
         8 => mig_008::apply(&mut tx)?,
+        9 => mig_009::apply(&mut tx)?,
         _ => return Err(anyhow!("Attempted to apply migration with unknown ID")),
     };
     // Increment revision

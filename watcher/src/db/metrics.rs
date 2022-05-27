@@ -1,6 +1,7 @@
 //! # metrics
 //!
 //! Process blocks into metrics over time.
+mod cexs;
 pub mod utxos;
 use crate::parsing::BlockData;
 use log::debug;
@@ -13,6 +14,7 @@ pub(super) fn include_block(
     cache: &mut Cache,
 ) -> anyhow::Result<()> {
     utxos::include(tx, block, cache);
+    cexs::include(tx, block);
     Ok(())
 }
 
@@ -22,11 +24,13 @@ pub(super) fn rollback_block(
     cache: &mut Cache,
 ) -> anyhow::Result<()> {
     utxos::rollback(tx, block, cache);
+    cexs::rollback(tx, block);
     Ok(())
 }
 
 pub(super) fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
     utxos::bootstrap(tx)?;
+    cexs::bootstrap(tx)?;
     Ok(())
 }
 
@@ -56,6 +60,6 @@ impl Cache {
     }
 }
 
-pub(super) fn repair(_tx: &mut Transaction, _height: i32) {
-    // todo!()
+pub(super) fn repair(tx: &mut Transaction, height: i32) {
+    cexs::repair(tx, height);
 }

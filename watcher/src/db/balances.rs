@@ -118,3 +118,21 @@ fn set_tables_unlogged(tx: &mut Transaction) {
     tx.execute("alter table bal.tokens_diffs set unlogged;", &[])
         .unwrap();
 }
+
+pub(super) mod replay {
+    use super::erg;
+    // use super::tokens;
+    use postgres::Transaction;
+
+    /// Create an instance of the balance tables as they were was at `height`.
+    pub fn prepare(tx: &mut Transaction, height: i32) {
+        erg::replay::prepare(tx, height);
+    }
+
+    /// Advance state to next `height`.
+    ///
+    /// Assumes current state is at `height` - 1.
+    pub fn step(tx: &mut Transaction, height: i32) {
+        erg::replay::step(tx, height);
+    }
+}

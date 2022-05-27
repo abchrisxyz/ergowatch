@@ -25,7 +25,7 @@ CONFIG = textwrap.dedent(
 
     [repairs]
     interval = 5 # blocks
-    offset = 1 # blocks
+    offset = 0 # blocks - will repair up to last height
     """
 )
 
