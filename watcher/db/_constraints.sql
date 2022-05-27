@@ -2,11 +2,10 @@
  *
  * DO NOT LOAD THIS - YOU ONLY NEED SCHEMA.SQL
  *
- * Watcher will add constraints and indexes when needed, during and after the
- * the bootstrapping process.
+ * Constraints and indexes are set automatically by the watcher.
  *
- * If for some reason you want to skip bootstrapping, go ahead, load this file
- * and pass the --no-bootstrap flag when starting watcher.
+ * This file is only used to set up test db's for integration tests
+ * and provides an overview of all constraints and indexes.
  *
  *****************************************************************************/
 
