@@ -95,23 +95,6 @@ fn include_genesis_boxes(session: &mut Session) -> Result<(), &'static str> {
     };
     session.db.include_genesis_boxes(boxes).unwrap();
 
-    // TODO: cleanup comment blocks
-    // info!("Including genesis boxes (core only)");
-    // let boxes = match session.node.get_genesis_blocks() {
-    //     Ok(boxes) => boxes,
-    //     Err(e) => {
-    //         error!("{}", e);
-    //         return Err("Failed to retrieve genesis boxes from node");
-    //     }
-    // };
-    // let mut sql_statements = vec![];
-    // sql_statements.append(&mut db::core::genesis::prep(boxes));
-    // // TODO: replace prep_bootstrap(0) with prep_genesis
-    // sql_statements.append(&mut db::unspent::prep_bootstrap(0));
-    // sql_statements.append(&mut db::balances::prep_bootstrap(0));
-    // sql_statements.append(&mut db::metrics::prep_genesis());
-    // session.db.execute_in_transaction(sql_statements).unwrap();
-
     // Resync cache now that db got modified
     // Not needed currently, but calling anyway in case we rely on the cache
     // for core tables at some point.

@@ -33,18 +33,6 @@ pub(super) fn rollback_block(tx: &mut Transaction, block: &BlockData) -> anyhow:
     Ok(())
 }
 
-// pub fn prep(block: &BlockData) -> Vec<SQLStatement> {
-//     let mut statements: Vec<SQLStatement> = vec![];
-//     // statements.push(extract_header(&block));
-//     // statements.append(&mut extract_transactions(&block));
-//     // statements.append(&mut extract_inputs(&block));
-//     // statements.append(&mut extract_data_inputs(&block));
-//     // statements.append(&mut extract_additional_registers(&block));
-//     // statements.append(&mut extract_new_tokens(&block));
-//     // statements.append(&mut extract_assets(&block));
-//     statements
-// }
-
 pub(super) fn set_constraints(tx: &mut Transaction) {
     headers::set_constraints(tx);
     transactions::set_constraints(tx);

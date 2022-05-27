@@ -100,13 +100,6 @@ fn extract_inputs<'a>(block: &'a BlockData) -> Vec<&'a str> {
         .collect()
 }
 
-// pub fn prep_bootstrap(height: i32) -> Vec<SQLStatement> {
-//     vec![
-//         bootstrapping::insert_new_boxes_statement(height),
-//         bootstrapping::delete_spent_boxes_statement(height),
-//     ]
-// }
-
 #[cfg(test)]
 mod tests {
     use crate::parsing::testing::block_600k;
