@@ -10,7 +10,7 @@ def run_watcher(
     cfg_path: Path,
     target="release",
     backtrace=False,
-    timeout=15,
+    timeout=30,
     log_file: str = None,
     allow_migrations: bool = False,
 ) -> subprocess.CompletedProcess:
