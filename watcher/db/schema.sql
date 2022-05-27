@@ -7,7 +7,7 @@ create table ew.revision (
 	version integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (version) values (5);
+insert into ew.revision (version) values (6);
 
 
 -------------------------------------------------------------------------------
@@ -213,6 +213,16 @@ create table cex.block_processing_log (
 	status cex.t_block_status not null
 );
 
+-- Supply in main and deposit addresses by cex.
+-- Records new values only (i.e. when main or deposit supply has changed)
+create table cex.supply (
+	height int,
+	cex_id integer,
+	main bigint,
+	deposit bigint
+);
+
+
 -- Known main addresses
 insert into cex.addresses (cex_id, type, address) values
 	-- Coinex
@@ -246,15 +256,6 @@ insert into cex.addresses (cex_id, type, address) values
 -- Metrics
 ------------------------------------------------------------------------------- 
 create schema mtr;
-
--- Supply on main and deposit addresses by cex.
--- Records new values only (i.e. when main or deposit supply has changed)
-create table mtr.cex_supply_details (
-	height int,
-	cex_id integer,
-	main bigint,
-	deposit bigint
-);
 
 -- Supply across all cex's, at each height.
 create table mtr.cex_supply (

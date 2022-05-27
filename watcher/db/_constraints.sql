@@ -139,15 +139,15 @@ alter table cex.addresses_conflicts add foreign key (first_cex_id)
 alter table cex.block_processing_log add primary key (header_id);
 create index on cex.block_processing_log (status);
 
+alter table cex.supply add primary key (height, cex_id);
+alter table cex.supply add foreign key (cex_id)
+	references cex.cexs (id);
+create index on cex.supply (height);
+
 -------------------------------------------------------------------------------
 -- Metrics
 -------------------------------------------------------------------------------
 -- CEX's
-alter table mtr.cex_supply_details add primary key (height, cex_id);
-alter table mtr.cex_supply_details add foreign key (cex_id)
-	references cex.cexs (id)
-	on delete cascade;
-
 alter table mtr.cex_supply add primary key (height);
 
 -- UTxO's
