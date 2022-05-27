@@ -26,13 +26,12 @@
    accounting for supply on exchanges.
 */
 use super::DB;
-use crate::db::balances;
 use crate::db::cexs;
 use crate::db::metrics;
 use log::debug;
 use log::info;
 use log::warn;
-use postgres::{Client, NoTls, Transaction};
+use postgres::{Client, NoTls};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
