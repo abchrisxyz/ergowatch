@@ -37,7 +37,7 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
     if is_bootstrapped(tx) {
         return Ok(());
     }
-    info!("Bootstrapping CEX addresses");
+    info!("Bootstrapping CEX data (addresses)");
 
     // Create work table
     tx.execute(
@@ -213,6 +213,8 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
     // Set constraint here so that the supply query can use the indexes.
     // TODO: consider setting supply constraints later.
     set_constraints(tx);
+
+    info!("Bootstrapping CEX data (supply)");
 
     // Supply
     tx.execute(
