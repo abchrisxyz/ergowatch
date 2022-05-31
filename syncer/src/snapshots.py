@@ -69,6 +69,7 @@ async def prepare_address_balances_snapshot(conn: pg.Connection):
                 , sum(nos.value) as value
             from mtr.unspent_boxes_snapshot ubs
             join node_outputs nos on nos.box_id = ubs.box_id
+            where nos.main_chain
             group by 1, 2;
         """
     )
