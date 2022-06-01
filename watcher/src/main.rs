@@ -14,6 +14,9 @@ fn main() -> Result<(), &'static str> {
     // Bootstrap if needed
     sync::bootstrap::run(&mut session).unwrap();
 
+    // TODO: move cache under db
+    session.cache = session.db.load_cache();
+
     // Main loop
     sync::sync_and_track(&mut session).unwrap();
     Ok(())

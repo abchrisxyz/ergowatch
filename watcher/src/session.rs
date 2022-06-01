@@ -105,13 +105,6 @@ impl Session {
         // Check db version and migrations if allowed
         db.check_migrations(cli.allow_migrations).unwrap();
 
-        // Fill cache from db
-        let cache = if db_is_empty {
-            Cache::new()
-        } else {
-            db.load_cache()
-        };
-
         Ok(Session {
             db,
             node: node,
@@ -119,7 +112,7 @@ impl Session {
             exit_when_synced: cli.exit,
             head: db_core_head,
             allow_rollbacks: db_has_constraints,
-            cache: cache,
+            cache: Cache::new(),
             repair_interval: cfg.repairs.interval,
             repair_offset: cfg.repairs.offset,
         })
