@@ -226,7 +226,6 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
                 , coalesce(sum(d.value) filter (where c.type = 'deposit'), 0) as deposit
             from cex.addresses c
             join bal.erg_diffs d on d.address = c.address
-            where height <= 500 * 1000
             group by 1, 2 having (
                 sum(d.value) filter (where c.type = 'main') <> 0
                 or
