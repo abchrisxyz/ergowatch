@@ -15,6 +15,7 @@ from utils import assert_fk
 from utils import assert_unique
 from utils import assert_column_not_null
 from utils import assert_index
+from utils import assert_column_ge
 
 ORDER = 13
 
@@ -761,6 +762,8 @@ def assert_db_constraints(conn: pg.Connection):
     assert_pk(conn, "cex", "supply", ["height", "cex_id"])
     assert_fk(conn, "cex", "supply", "supply_cex_id_fkey")
     assert_index(conn, "cex", "supply", "supply_height_idx")
+    assert_column_ge(conn, "cex", "supply", "main", 0)
+    assert_column_ge(conn, "cex", "supply", "deposit", 0)
 
 
 def assert_cex_ids(cur: pg.Cursor):

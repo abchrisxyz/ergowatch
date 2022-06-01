@@ -285,6 +285,8 @@ fn set_constraints(tx: &mut Transaction) {
         "alter table cex.supply add foreign key (cex_id)
             references cex.cexs (id);",
         "create index on cex.supply (height);",
+        "alter table cex.supply add check (main >= 0);",
+        "alter table cex.supply add check (deposit >= 0);",
     ];
 
     for statement in statements {

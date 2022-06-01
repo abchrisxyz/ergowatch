@@ -3,9 +3,54 @@ use crate::parsing::BlockData;
 use postgres::types::Type;
 use postgres::Transaction;
 
+/*
+    At current height (h) we have a set of known deposit addresses,
+    discovered in blocks prior to h, and a set of new deposit
+    addresses, discovered at h.
+    Supply on deposit addresses at current height (h) is calculated as:
+        S(h) = S_k(h-1) + D_k(h) + S_n(h)
+
+    with:
+        S(h)     supply in exchange deposit addresses at current height
+        S_k(h-1) supply in known deposit addresses at h-1
+        D_k(h)   supply diffs from known addresses at h
+        S_n(h)   supply in new addresses at h
+
+    S_k(h-1) is known from the previous block and cached.
+    D_k is the sum of balance diffs linked to known deposit addresses
+    at height h (table bal.erg_diffs).
+    S_n(h) is the sum of balances linked to new deposit addresses (table
+    erg.bal).
+
+    Advantages of this method are:
+        - bal.erg_diffs table only needs to be read for current h
+        - bal.erg table only needs to be read for new addresses (if any)
+        - doesn't require a join on all deposit addresses
+        - latest value based on all available data (known deposit addresses)
+
+    The drawback is that it creates a discontinuity between current and
+    previous supply values if there were any new deposit addresses in
+    the current block. However, the discontinuity is only temporary and
+    will be fixed in the next repair event.
+
+    Supply on main addresses is much simpler since new main addresses
+    only get added through migrations. It is the cached value from last
+    height plus any balance diffs linked to main addresses at current
+    height:
+
+        S(h) = S(h-1) + D(h)
+*/
+
+/// Main and deposit supply differences, in nano ERG.
+struct SupplyDiff {
+    cex_id: i32,
+    main: i64,
+    deposit: i64,
+}
+
 /// Record cex supply changes
 pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &mut Cache) {
-    let diffs = get_supply_diffs(tx, block.height);
+    let supply_diffs = get_supply_diffs(tx, block.height);
     let statement = tx
         .prepare_typed(
             "
@@ -14,18 +59,19 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &mut Cache
             &[Type::INT4, Type::INT4, Type::INT8, Type::INT8],
         )
         .unwrap();
-    for (cex_id, main_diff, deposit_diff) in diffs {
+
+    for sd in supply_diffs {
         // Update cache
-        *cache.main_supply.entry(cex_id).or_insert(0) += main_diff;
-        *cache.deposit_supply.entry(cex_id).or_insert(0) += deposit_diff;
+        *cache.main_supply.entry(sd.cex_id).or_insert(0) += sd.main;
+        *cache.deposit_supply.entry(sd.cex_id).or_insert(0) += sd.deposit;
         // Update db
         tx.execute(
             &statement,
             &[
                 &block.height,
-                &cex_id,
-                &cache.main_supply[&cex_id],
-                &cache.deposit_supply[&cex_id],
+                &sd.cex_id,
+                &cache.main_supply[&sd.cex_id],
+                &cache.deposit_supply[&sd.cex_id],
             ],
         )
         .unwrap();
@@ -41,10 +87,10 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut Cach
     .unwrap();
 
     // Update cache
-    let diffs = get_supply_diffs(tx, block.height);
-    for (cex_id, main_diff, deposit_diff) in diffs {
-        *cache.main_supply.get_mut(&cex_id).unwrap() -= main_diff;
-        *cache.deposit_supply.get_mut(&cex_id).unwrap() -= deposit_diff;
+    let supply_diffs = get_supply_diffs(tx, block.height);
+    for sd in supply_diffs {
+        *cache.main_supply.get_mut(&sd.cex_id).unwrap() -= sd.main;
+        *cache.deposit_supply.get_mut(&sd.cex_id).unwrap() -= sd.deposit;
     }
 }
 
@@ -54,7 +100,7 @@ pub(super) fn repair(tx: &mut Transaction, height: i32, cache: &mut Cache) {
         .unwrap();
 
     // Add new ones
-    let diffs = get_supply_diffs(tx, height);
+    let supply_diffs = repair::get_supply_diffs(tx, height);
     let statement = tx
         .prepare_typed(
             "
@@ -63,45 +109,103 @@ pub(super) fn repair(tx: &mut Transaction, height: i32, cache: &mut Cache) {
             &[Type::INT4, Type::INT4, Type::INT8, Type::INT8],
         )
         .unwrap();
-    for (cex_id, main_diff, deposit_diff) in diffs {
+    for sd in supply_diffs {
         // Update cache
-        *cache.main_supply.entry(cex_id).or_insert(0) += main_diff;
-        *cache.deposit_supply.entry(cex_id).or_insert(0) += deposit_diff;
+        *cache.main_supply.entry(sd.cex_id).or_insert(0) += sd.main;
+        *cache.deposit_supply.entry(sd.cex_id).or_insert(0) += sd.deposit;
         // Update db
         tx.execute(
             &statement,
             &[
                 &height,
-                &cex_id,
-                &cache.main_supply[&cex_id],
-                &cache.deposit_supply[&cex_id],
+                &sd.cex_id,
+                &cache.main_supply[&sd.cex_id],
+                &cache.deposit_supply[&sd.cex_id],
             ],
         )
         .unwrap();
     }
 }
 
-/// Return supply diffs for cex's with supply changes at given height.
-///
-/// Returns tuples of (cex_id, main_diff, supply_diff).
-fn get_supply_diffs(tx: &mut Transaction, height: i32) -> Vec<(i32, i64, i64)> {
+/// Non-zero supply diffs, by cex, relative to supply at previous height.
+fn get_supply_diffs(tx: &mut Transaction, height: i32) -> Vec<SupplyDiff> {
     let rows = tx
         .query(
             "
-            select cas.cex_id
-                , coalesce(sum(dif.value) filter (where cas.type = 'main'), 0)::bigint as main
-                , coalesce(sum(dif.value) filter (where cas.type = 'deposit'), 0)::bigint as deposit
-            from cex.addresses cas
-            join bal.erg_diffs dif
-                on dif.address = cas.address
-            where dif.height = $1
-            group by 1;
+            with known_addresses_diffs as (
+                select a.cex_id
+                    , coalesce(sum(d.value) filter (where a.type = 'main'), 0)::bigint as main
+                    , coalesce(sum(d.value) filter (where a.type = 'deposit'), 0)::bigint as deposit
+                from cex.addresses a
+                join bal.erg_diffs d
+                    on d.address = a.address
+                where d.height = $1
+                    -- exclude addresses discoverd in current block
+                    -- and include main addresses explicitly since they 
+                    -- have no spot_height
+                    and (a.type = 'main' or a.spot_height <= $1 - 1)
+                group by 1
+            ), new_deposit_addresses_balances as (
+                select a.cex_id
+                    , sum(b.value) as deposit
+                from cex.addresses a
+                join bal.erg b on b.address = a.address
+                where a.type = 'deposit'
+                    and a.spot_height = $1
+                group by 1
+            )
+            select d.cex_id
+                , d.main::bigint
+                , d.deposit + coalesce(b.deposit, 0)::bigint
+            from known_addresses_diffs d
+            left join new_deposit_addresses_balances b
+                on b.cex_id = d.cex_id;
             ",
             &[&height],
         )
         .unwrap();
 
     rows.iter()
-        .map(|r| (r.get(0), r.get(1), r.get(2)))
+        .map(|r| SupplyDiff {
+            cex_id: r.get(0),
+            main: r.get(1),
+            deposit: r.get(2),
+        })
+        .filter(|sd| sd.main != 0 || sd.deposit != 0)
         .collect()
+}
+
+mod repair {
+    use super::SupplyDiff;
+    use postgres::Transaction;
+
+    /// Non-zero supply diffs, by cex, relative to supply at previous height.
+    ///
+    /// Repair variant not distinguishing between known/new addresses.
+    pub(super) fn get_supply_diffs(tx: &mut Transaction, height: i32) -> Vec<SupplyDiff> {
+        let rows = tx
+            .query(
+                "
+                select a.cex_id
+                    , coalesce(sum(d.value) filter (where a.type = 'main'), 0)::bigint as main
+                    , coalesce(sum(d.value) filter (where a.type = 'deposit'), 0)::bigint as deposit
+                from cex.addresses a
+                join bal.erg_diffs d
+                    on d.address = a.address
+                where d.height = $1
+                group by 1
+            ",
+                &[&height],
+            )
+            .unwrap();
+
+        rows.iter()
+            .map(|r| SupplyDiff {
+                cex_id: r.get(0),
+                main: r.get(1),
+                deposit: r.get(2),
+            })
+            .filter(|sd| sd.main != 0 || sd.deposit != 0)
+            .collect()
+    }
 }
