@@ -7,7 +7,7 @@ create table ew.revision (
 	version integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (version) values (6);
+insert into ew.revision (version) values (7);
 
 
 -------------------------------------------------------------------------------
@@ -35,10 +35,8 @@ create table core.outputs (
 	header_id text,
 	creation_height int,
 	address text,
-	-- settlement_height int,
 	index int,
 	value bigint
--- 	additional_registers json
 );
 
 create table core.inputs (
@@ -208,7 +206,7 @@ create table cex.block_processing_log (
 	header_id text,
 	height integer,
 	invalidation_height integer,
-	status cex.t_block_status not null
+	status cex.t_block_status
 );
 
 -- Supply in main and deposit addresses by cex.

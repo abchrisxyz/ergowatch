@@ -35,6 +35,10 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
 pub(super) fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
         "alter table core.transactions add primary key (id);",
+        "alter table core.transactions alter column id set not null;",
+        "alter table core.transactions alter column header_id set not null;",
+        "alter table core.transactions alter column height set not null;",
+        "alter table core.transactions alter column index set not null;",
         "alter table core.transactions add foreign key (header_id)
             references core.headers (id) on delete cascade;",
         "create index on core.transactions(height);",

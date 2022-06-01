@@ -83,9 +83,13 @@ pub(super) fn include_genesis_boxes(
 pub(super) fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
         "alter table core.outputs add primary key (box_id);",
+        "alter table core.outputs alter column box_id set not null;",
         "alter table core.outputs alter column tx_id set not null;",
         "alter table core.outputs alter column header_id set not null;",
+        "alter table core.outputs alter column creation_height set not null;",
         "alter table core.outputs alter column address set not null;",
+        "alter table core.outputs alter column index set not null;",
+        "alter table core.outputs alter column value set not null;",
         "alter table core.outputs add foreign key (tx_id)
             references core.transactions (id) on delete cascade;",
         "alter table core.outputs add foreign key (header_id)

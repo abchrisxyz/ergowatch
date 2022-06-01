@@ -42,6 +42,7 @@ pub(super) fn set_constraints(tx: &mut Transaction) {
         "alter table core.box_assets add primary key (box_id, token_id);",
         "alter table core.box_assets alter column box_id set not null;",
         "alter table core.box_assets alter column token_id set not null;",
+        "alter table core.box_assets alter column amount set not null;",
         "alter table core.box_assets add foreign key (box_id)
             references core.outputs (box_id) on delete cascade;",
         "alter table core.box_assets add check (amount > 0);",

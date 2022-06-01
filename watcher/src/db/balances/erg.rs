@@ -79,8 +79,16 @@ const ROLLBACK_DELETE_ZERO_BALANCES: &str = "
         , 0 -- actual value will be set by update rollback
     from deleted_addresses;";
 
-pub mod constraints {
-    pub const ADD_PK: &str = "alter table bal.erg add primary key(address);";
-    pub const CHECK_VALUE_GE0: &str = "alter table bal.erg add check (value >= 0);";
-    pub const IDX_VALUE: &str = "create index on bal.erg(value);";
+pub fn set_constraints(tx: &mut Transaction) {
+    let statements = vec![
+        "alter table bal.erg add primary key(address);",
+        "alter table bal.erg alter column address set not null;",
+        "alter table bal.erg alter column value set not null;",
+        "alter table bal.erg add check (value >= 0);",
+        "create index on bal.erg(value);",
+    ];
+
+    for statement in statements {
+        tx.execute(statement, &[]).unwrap();
+    }
 }

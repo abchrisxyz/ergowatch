@@ -56,7 +56,9 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
 pub(super) fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
         "alter table core.tokens add primary key (id, box_id);",
+        "alter table core.tokens alter column id set not null;",
         "alter table core.tokens alter column box_id set not null;",
+        "alter table core.tokens alter column emission_amount set not null;",
         "alter table core.tokens	add foreign key (box_id)
             references core.outputs (box_id) on delete cascade;",
         "alter table core.tokens add check (emission_amount > 0);",

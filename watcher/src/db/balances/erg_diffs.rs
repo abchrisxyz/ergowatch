@@ -90,7 +90,17 @@ pub const INSERT_DIFFS_FOR_HEIGHT: &str = "
         and o.tx_id = i.tx_id
     group by 1, 2, 3 having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) <> 0;";
 
-pub mod constraints {
-    pub const ADD_PK: &str = "alter table bal.erg_diffs add primary key(address, height, tx_id);";
-    pub const IDX_HEIGHT: &str = "create index on bal.erg_diffs(height);";
+pub fn set_constraints(tx: &mut Transaction) {
+    let statements = vec![
+        "alter table bal.erg_diffs add primary key(address, height, tx_id);",
+        "alter table bal.erg_diffs alter column address set not null;",
+        "alter table bal.erg_diffs alter column height set not null;",
+        "alter table bal.erg_diffs alter column tx_id set not null;",
+        "alter table bal.erg_diffs alter column value set not null;",
+        "create index on bal.erg_diffs(height);",
+    ];
+
+    for statement in statements {
+        tx.execute(statement, &[]).unwrap();
+    }
 }

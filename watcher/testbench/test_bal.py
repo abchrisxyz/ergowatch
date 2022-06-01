@@ -11,6 +11,7 @@ from utils import run_watcher
 from utils import assert_pk
 from utils import assert_index
 from utils import assert_column_ge
+from utils import assert_column_not_null
 
 
 ORDER = 12
@@ -524,20 +525,34 @@ def _test_db_state(conn: pg.Connection, start_height: int):
 def assert_db_constraints(conn: pg.Connection):
     # Erg bal
     assert_pk(conn, "bal", "erg", ["address"])
+    assert_column_not_null(conn, "bal", "erg", "address")
+    assert_column_not_null(conn, "bal", "erg", "value")
     assert_column_ge(conn, "bal", "erg", "value", 0)
     assert_index(conn, "bal", "erg", "erg_value_idx")
 
     # Erg diffs
     assert_pk(conn, "bal", "erg_diffs", ["address", "height", "tx_id"])
+    assert_column_not_null(conn, "bal", "erg_diffs", "address")
+    assert_column_not_null(conn, "bal", "erg_diffs", "height")
+    assert_column_not_null(conn, "bal", "erg_diffs", "tx_id")
+    assert_column_not_null(conn, "bal", "erg_diffs", "value")
     assert_index(conn, "bal", "erg_diffs", "erg_diffs_height_idx")
 
     # Tokens bal
     assert_pk(conn, "bal", "tokens", ["address", "token_id"])
+    assert_column_not_null(conn, "bal", "tokens", "address")
+    assert_column_not_null(conn, "bal", "tokens", "token_id")
+    assert_column_not_null(conn, "bal", "tokens", "value")
     assert_column_ge(conn, "bal", "tokens", "value", 0)
     assert_index(conn, "bal", "tokens", "tokens_value_idx")
 
     # Tokens diffs
     assert_pk(conn, "bal", "tokens_diffs", ["address", "token_id", "height", "tx_id"])
+    assert_column_not_null(conn, "bal", "tokens_diffs", "address")
+    assert_column_not_null(conn, "bal", "tokens_diffs", "token_id")
+    assert_column_not_null(conn, "bal", "tokens_diffs", "height")
+    assert_column_not_null(conn, "bal", "tokens_diffs", "tx_id")
+    assert_column_not_null(conn, "bal", "tokens_diffs", "value")
     assert_index(conn, "bal", "tokens_diffs", "tokens_diffs_height_idx")
 
 

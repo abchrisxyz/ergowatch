@@ -742,24 +742,38 @@ def _test_db_state(conn: pg.Connection, start_height: int, bootstrapped=False):
 def assert_db_constraints(conn: pg.Connection):
     # cex.cexs
     assert_pk(conn, "cex", "cexs", ["id"])
+    assert_column_not_null(conn, "cex", "cexs", "id")
+    assert_column_not_null(conn, "cex", "cexs", "name")
     assert_unique(conn, "cex", "cexs", ["name"])
     # cex.addresses
     assert_pk(conn, "cex", "addresses", ["address"])
     assert_fk(conn, "cex", "addresses", "addresses_cex_id_fkey")
+    assert_column_not_null(conn, "cex", "addresses", "address")
+    assert_column_not_null(conn, "cex", "addresses", "cex_id")
     assert_column_not_null(conn, "cex", "addresses", "type")
     assert_index(conn, "cex", "addresses", "addresses_cex_id_idx")
     assert_index(conn, "cex", "addresses", "addresses_type_idx")
     assert_index(conn, "cex", "addresses", "addresses_spot_height_idx")
     # cex.addresses_conflicts
     assert_pk(conn, "cex", "addresses_conflicts", ["address"])
+    assert_column_not_null(conn, "cex", "addresses_conflicts", "address")
+    assert_column_not_null(conn, "cex", "addresses_conflicts", "first_cex_id")
+    assert_column_not_null(conn, "cex", "addresses_conflicts", "type")
     assert_fk(
         conn, "cex", "addresses_conflicts", "addresses_conflicts_first_cex_id_fkey"
     )
     # cex.block_processing_log
     assert_pk(conn, "cex", "block_processing_log", ["header_id"])
+    assert_column_not_null(conn, "cex", "block_processing_log", "header_id")
+    assert_column_not_null(conn, "cex", "block_processing_log", "height")
+    assert_column_not_null(conn, "cex", "block_processing_log", "status")
     assert_index(conn, "cex", "block_processing_log", "block_processing_log_status_idx")
     # cex.supply
     assert_pk(conn, "cex", "supply", ["height", "cex_id"])
+    assert_column_not_null(conn, "cex", "supply", "height")
+    assert_column_not_null(conn, "cex", "supply", "cex_id")
+    assert_column_not_null(conn, "cex", "supply", "main")
+    assert_column_not_null(conn, "cex", "supply", "deposit")
     assert_fk(conn, "cex", "supply", "supply_cex_id_fkey")
     assert_index(conn, "cex", "supply", "supply_height_idx")
     assert_column_ge(conn, "cex", "supply", "main", 0)

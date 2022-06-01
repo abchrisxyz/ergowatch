@@ -9,12 +9,7 @@ from fixtures.db import unconstrained_db_class_scoped
 from fixtures.addresses import AddressCatalogue as AC
 from utils import run_watcher
 from utils import assert_pk
-from utils import assert_fk
-from utils import assert_unique
 from utils import assert_column_not_null
-from utils import assert_index
-from utils import assert_column_ge
-from utils import assert_column_le
 
 ORDER = 11
 
@@ -513,6 +508,7 @@ def _test_db_state(conn: pg.Connection, start_height: int):
 def assert_db_constraints(conn: pg.Connection):
     # Boxes
     assert_pk(conn, "usp", "boxes", ["box_id"])
+    assert_column_not_null(conn, "usp", "boxes", "box_id")
 
 
 def assert_unspent_boxes(cur: pg.Cursor):

@@ -92,18 +92,10 @@ fn is_bootstrapped(tx: &mut Transaction) -> bool {
 }
 
 fn set_constraints(tx: &mut Transaction) {
-    tx.execute(erg::constraints::ADD_PK, &[]).unwrap();
-    tx.execute(erg::constraints::CHECK_VALUE_GE0, &[]).unwrap();
-    tx.execute(erg::constraints::IDX_VALUE, &[]).unwrap();
-    tx.execute(erg_diffs::constraints::ADD_PK, &[]).unwrap();
-    tx.execute(erg_diffs::constraints::IDX_HEIGHT, &[]).unwrap();
-    tx.execute(tokens::constraints::ADD_PK, &[]).unwrap();
-    tx.execute(tokens::constraints::CHECK_VALUE_GE0, &[])
-        .unwrap();
-    tx.execute(tokens::constraints::IDX_VALUE, &[]).unwrap();
-    tx.execute(tokens_diffs::constraints::ADD_PK, &[]).unwrap();
-    tx.execute(tokens_diffs::constraints::IDX_HEIGHT, &[])
-        .unwrap();
+    erg::set_constraints(tx);
+    erg_diffs::set_constraints(tx);
+    tokens::set_constraints(tx);
+    tokens_diffs::set_constraints(tx);
 }
 
 fn set_tables_logged(tx: &mut Transaction) {

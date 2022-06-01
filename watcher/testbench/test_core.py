@@ -523,6 +523,7 @@ def _test_db_state(conn: pg.Connection, start_height: int):
 def assert_db_constraints(conn: pg.Connection):
     # Headers
     assert_pk(conn, "core", "headers", ["height"])
+    assert_column_not_null(conn, "core", "headers", "height")
     assert_column_not_null(conn, "core", "headers", "id")
     assert_column_not_null(conn, "core", "headers", "parent_id")
     assert_column_not_null(conn, "core", "headers", "timestamp")
@@ -531,14 +532,22 @@ def assert_db_constraints(conn: pg.Connection):
 
     # Transactions
     assert_pk(conn, "core", "transactions", ["id"])
+    assert_column_not_null(conn, "core", "transactions", "id")
+    assert_column_not_null(conn, "core", "transactions", "header_id")
+    assert_column_not_null(conn, "core", "transactions", "height")
+    assert_column_not_null(conn, "core", "transactions", "index")
     assert_fk(conn, "core", "transactions", "transactions_header_id_fkey")
     assert_index(conn, "core", "transactions", "transactions_height_idx")
 
     # Outputs
     assert_pk(conn, "core", "outputs", ["box_id"])
+    assert_column_not_null(conn, "core", "outputs", "box_id")
     assert_column_not_null(conn, "core", "outputs", "tx_id")
     assert_column_not_null(conn, "core", "outputs", "header_id")
+    assert_column_not_null(conn, "core", "outputs", "creation_height")
     assert_column_not_null(conn, "core", "outputs", "address")
+    assert_column_not_null(conn, "core", "outputs", "index")
+    assert_column_not_null(conn, "core", "outputs", "value")
     assert_fk(conn, "core", "outputs", "outputs_tx_id_fkey")
     assert_fk(conn, "core", "outputs", "outputs_header_id_fkey")
     assert_index(conn, "core", "outputs", "outputs_tx_id_idx")
@@ -548,8 +557,10 @@ def assert_db_constraints(conn: pg.Connection):
 
     # Inputs
     assert_pk(conn, "core", "inputs", ["box_id"])
+    assert_column_not_null(conn, "core", "inputs", "box_id")
     assert_column_not_null(conn, "core", "inputs", "tx_id")
     assert_column_not_null(conn, "core", "inputs", "header_id")
+    assert_column_not_null(conn, "core", "inputs", "index")
     assert_fk(conn, "core", "inputs", "inputs_tx_id_fkey")
     assert_fk(conn, "core", "inputs", "inputs_header_id_fkey")
     assert_index(conn, "core", "inputs", "inputs_tx_id_idx")
@@ -558,7 +569,10 @@ def assert_db_constraints(conn: pg.Connection):
 
     # Data-inputs
     assert_pk(conn, "core", "data_inputs", ["box_id", "tx_id"])
+    assert_column_not_null(conn, "core", "data_inputs", "box_id")
+    assert_column_not_null(conn, "core", "data_inputs", "tx_id")
     assert_column_not_null(conn, "core", "data_inputs", "header_id")
+    assert_column_not_null(conn, "core", "data_inputs", "index")
     assert_fk(conn, "core", "data_inputs", "data_inputs_tx_id_fkey")
     assert_fk(conn, "core", "data_inputs", "data_inputs_header_id_fkey")
     assert_fk(conn, "core", "data_inputs", "data_inputs_box_id_fkey")
@@ -567,13 +581,20 @@ def assert_db_constraints(conn: pg.Connection):
 
     # Box registers
     assert_pk(conn, "core", "box_registers", ["id", "box_id"])
+    assert_column_not_null(conn, "core", "box_registers", "id")
+    assert_column_not_null(conn, "core", "box_registers", "box_id")
+    assert_column_not_null(conn, "core", "box_registers", "value_type")
+    assert_column_not_null(conn, "core", "box_registers", "serialized_value")
+    assert_column_not_null(conn, "core", "box_registers", "rendered_value")
     assert_fk(conn, "core", "box_registers", "box_registers_box_id_fkey")
     assert_column_ge(conn, "core", "box_registers", "id", 4)
     assert_column_le(conn, "core", "box_registers", "id", 9)
 
     # Tokens
     assert_pk(conn, "core", "tokens", ["id", "box_id"])
+    assert_column_not_null(conn, "core", "tokens", "id")
     assert_column_not_null(conn, "core", "tokens", "box_id")
+    assert_column_not_null(conn, "core", "tokens", "emission_amount")
     assert_fk(conn, "core", "tokens", "tokens_box_id_fkey")
     assert_column_ge(conn, "core", "tokens", "emission_amount", 0)
 
@@ -581,6 +602,7 @@ def assert_db_constraints(conn: pg.Connection):
     assert_pk(conn, "core", "box_assets", ["box_id", "token_id"])
     assert_column_not_null(conn, "core", "box_assets", "box_id")
     assert_column_not_null(conn, "core", "box_assets", "token_id")
+    assert_column_not_null(conn, "core", "box_assets", "amount")
     assert_fk(conn, "core", "box_assets", "box_assets_box_id_fkey")
     assert_column_ge(conn, "core", "box_assets", "amount", 0)
 

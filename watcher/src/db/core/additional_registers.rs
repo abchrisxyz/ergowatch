@@ -71,6 +71,11 @@ pub(super) fn include_genesis_boxes(tx: &mut Transaction, boxes: &Vec<crate::par
 pub(super) fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
         "alter table core.box_registers add primary key (id, box_id);",
+        "alter table core.box_registers alter column id set not null;",
+        "alter table core.box_registers alter column box_id set not null;",
+        "alter table core.box_registers alter column value_type set not null;",
+        "alter table core.box_registers alter column serialized_value set not null;",
+        "alter table core.box_registers alter column rendered_value set not null;",
         "alter table core.box_registers add foreign key (box_id)
             references core.outputs (box_id) on delete cascade;",
         "alter table core.box_registers add check (id >= 4 and id <= 9);",
