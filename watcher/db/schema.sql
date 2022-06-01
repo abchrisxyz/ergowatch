@@ -171,16 +171,16 @@ create table cex.addresses_conflicts (
 );
 
 /*
-	Track CEX deposit addresses processing.
-
-	When a new address is found in a block, it is added to
-	cex.new_deposit_address and included in this table together with
-	it's invalidation height (the earliest height of deposit txs),
-	and marked as 'pending' processing.
+	Track CEX deposit addresses processing by block.
+	
+	Logs the processing status of each block as well as their invalidation
+	height (the earliest height of deposit txs).
+	
+	New blocks are added with status 'pending', indicating they haven't
+	been processed in a repait event yet.
 
 	When an unprocessed block is rolled back, its deposit addresses
-	are removed from cex.new_deposit_addresses and it is itself removed
-	from this table.
+	are removed from cex.addresses and it is itself removed from this table.
 
 	When an already processed block is rolled back, its deposit
 	addresses are removed from the main cex.addresses and its status is
@@ -192,8 +192,6 @@ create table cex.addresses_conflicts (
 	previous repair event that included blocks not part of the main
 	chain anymore.
 	
-	During a repair event, 'pending' and 'pending_rollback' blocks
-	are set to 'processing' and 'processing_rollback' respectively.
 	When a repair event is completed, the status of affected blocks
 	is changed to 'processed' or 'processed_rollback'.
 
