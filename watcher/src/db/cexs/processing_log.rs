@@ -57,8 +57,13 @@ fn set_block_status(tx: &mut Transaction, header_id: &str, status: Status) {
     };
     tx.execute(
         "
+        -- Little detour to avoid having to implement the ToSql trait for Status
+        with new as (
+            select $2::text as status
+        )
         update cex.block_processing_log
-        set status = $2
+        set status = new.status::cex.t_block_status
+        from new
         where header_id = $1;",
         &[&header_id, &status_text],
     )
