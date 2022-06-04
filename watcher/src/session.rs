@@ -102,6 +102,9 @@ impl Session {
             info!("Found option `--exit`, watcher will exit once synced with node")
         }
 
+        // Cleanup remnants of possible interrupted repair session
+        db.cleanup_interrupted_repair();
+
         // Check db version and migrations if allowed
         db.check_migrations(cli.allow_migrations).unwrap();
 

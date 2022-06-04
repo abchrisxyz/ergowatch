@@ -184,6 +184,12 @@ impl DB {
             cleanup(&mut client);
         }
     }
+
+    /// Abort any running repairs
+    pub fn cleanup_interrupted_repair(&self) {
+        let mut client = Client::connect(&self.conn_str, NoTls).unwrap();
+        cleanup(&mut client);
+    }
 }
 
 /// Initialize a repair session on the db side by creating the 'repair' schema.
@@ -248,5 +254,6 @@ fn start(conn_str: String, fr: i32, to: i32, rx: mpsc::Receiver<Message>) -> any
 /// Cleanup
 fn cleanup(tx: &mut Client) {
     debug!("Cleaning up repair session");
-    tx.execute("drop table if exists ew._repair;", &[]).unwrap();
+    tx.execute("drop schema if exists repair cascade;", &[])
+        .unwrap();
 }

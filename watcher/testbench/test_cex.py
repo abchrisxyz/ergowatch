@@ -712,11 +712,18 @@ class TestRepair:
             # Bootstrap db
             with pg.connect(temp_db_class_scoped) as conn:
                 bootstrap_db(conn, blocks)
+                # Simulate an interupted repair,
+                # Should be cleaned up at startup.
+                with conn.cursor() as cur:
+                    cur.execute("create schema repair;")
+                conn.commit()
 
             # Run
             cp = run_watcher(temp_cfg)
             assert cp.returncode == 0
-            assert "Including block block-c" in cp.stdout.decode()
+            assert "Including block block-e" in cp.stdout.decode()
+            assert "Repairing 3 blocks (600002 to 600004)" in cp.stdout.decode()
+            assert "Done repairing heights 600002 to 600004" in cp.stdout.decode()
 
             with pg.connect(temp_db_class_scoped) as conn:
                 yield conn
@@ -737,6 +744,7 @@ def _test_db_state(conn: pg.Connection, start_height: int, bootstrapped=False):
         assert_deposit_addresses(cur)
         assert_addresses_conflicts(cur, start_height)
         assert_processing_log(cur, start_height, bootstrapped)
+        assert_repair_cleaned_up(cur)
 
 
 def assert_db_constraints(conn: pg.Connection):
@@ -754,6 +762,9 @@ def assert_db_constraints(conn: pg.Connection):
     assert_index(conn, "cex", "addresses", "addresses_cex_id_idx")
     assert_index(conn, "cex", "addresses", "addresses_type_idx")
     assert_index(conn, "cex", "addresses", "addresses_spot_height_idx")
+    # cex.addresses_ignored
+    assert_pk(conn, "cex", "addresses_ignored", ["address"])
+    assert_column_not_null(conn, "cex", "addresses_ignored", "address")
     # cex.addresses_conflicts
     assert_pk(conn, "cex", "addresses_conflicts", ["address"])
     assert_column_not_null(conn, "cex", "addresses_conflicts", "address")
@@ -810,20 +821,14 @@ def assert_main_addresses(cur: pg.Cursor):
         """
     )
     rows = cur.fetchall()
-    assert len(rows) == 16
+    assert len(rows) == 10
     assert rows == [
         # Coinex
         (1, "9fowPvQ2GXdmhD2bN54EL9dRnio3kBQGyrD3fkbHwuTXD6z1wBU"),
         (1, "9fPiW45mZwoTxSwTLLXaZcdekqi72emebENmScyTGsjryzrntUe"),
         # Gate
         (2, "9enQZco9hPuqaHvR7EpPRWvYbkDYoWu3NK7pQk8VFwgVnv5taQE"),
-        (2, "9exS2B892HTiDkqhcWnj1nzsbYmVn7ameVb1d2jagUWTqaLxfTX"),
-        (2, "9fJzuyVaRLM9Q3RZVzkau1GJVP9TDiW8GRL5p25VZ8VNXurDpaw"),
-        (2, "9gck4LwHJK3XV2wXdYdN5S9Fe4RcFrkaqs4WU5aeiKuodJyW7qq"),
-        (2, "9gmb745thQTyoGGWxSr9hNmvipivgVbQGA6EJnBucs3nwi9yqoc"),
-        (2, "9gv4qw7RtQyt3khtnQNxp7r7yuUazWWyTGfo7duqGj9hMtZxKP1"),
-        (2, "9i1ETULiCnGMtppDAvrcYujhxX18km3ge9ZEDMnZPN6LFQbttRF"),
-        (2, "9i7134eY3zUotQyS8nBeZDJ3SWbTPn117nCJYi977FBn9AaxhZY"),
+        (2, "9gQYrh6yubA4z55u4TtsacKnaEteBEdnY4W2r5BLcFZXcQoQDcq"),
         (2, "9iKFBBrryPhBYVGDKHuZQW7SuLfuTdUJtTPzecbQ5pQQzD4VykC"),
         #  KuCoin
         (3, "9guZaxPoe4jecHi6ZxtMotKUL4AzpomFf3xqXsFSuTyZoLbmUBr"),
@@ -922,3 +927,8 @@ def assert_supply(cur: pg.Cursor, start_height: int):
         (height_d, 2, 5, 9),
         (height_e, 2, 8, 6),
     ]
+
+
+def assert_repair_cleaned_up(cur: pg.Cursor):
+    # Cleanup should have removed remair schema
+    cur.execute("create schema repair;")
