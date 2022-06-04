@@ -16,11 +16,17 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
 
 pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
     let statement = tx
-        .prepare_typed(DELETE_DIFFS_FOR_TX, &[Type::TEXT])
+        .prepare_typed(
+            "
+            delete from bal.tokens_diffs
+            where height = $1
+                and tx_id = $2;",
+            &[Type::INT4, Type::TEXT],
+        )
         .unwrap();
     let tx_ids: Vec<&str> = block.transactions.iter().map(|tx| tx.id).collect();
     for tx_id in tx_ids {
-        tx.execute(&statement, &[&tx_id]).unwrap();
+        tx.execute(&statement, &[&block.height, &tx_id]).unwrap();
     }
 }
 
@@ -60,8 +66,6 @@ const INSERT_DIFFS_FOR_TX: &str = "
         on o.address = i.address
         and o.token_id = i.token_id
     group by 1, 2, 3, 4 having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) <> 0;";
-
-const DELETE_DIFFS_FOR_TX: &str = "delete from bal.tokens_diffs where tx_id = $1;";
 
 pub(super) const INSERT_DIFFS_FOR_HEIGHT: &str = "
 with inputs as (
