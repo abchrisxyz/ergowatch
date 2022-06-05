@@ -83,6 +83,10 @@ fn render_register_val(val: &Value) -> RenderedRegister {
             value_type: String::from("SBigInt"),
             value: format!("CBigInt({})", bi256),
         },
+        Value::Unit => RenderedRegister {
+            value_type: String::from("SUnit"),
+            value: String::from("()"),
+        },
         Value::GroupElement(e) => RenderedRegister {
             value_type: String::from("SGroupElement"),
             value: base16::encode_lower(&e.sigma_serialize_bytes().unwrap()),
@@ -490,9 +494,18 @@ mod tests {
     }
 
     #[test]
-    fn render_register_error_handling() {
+    fn render_register_unit() {
         // Invalid ByteCode
         let base16_str = "62";
+        let rr = render_register_value(base16_str);
+        assert_eq!(rr.value_type, "SUnit");
+        assert_eq!(rr.value, "()");
+    }
+
+    #[test]
+    fn render_register_error_handling() {
+        // Invalid ByteCode
+        let base16_str = "63";
         let rr = render_register_value(base16_str);
         assert_eq!(rr.value_type, "_SigmaParsingError");
         assert_eq!(rr.value, "_SigmaParsingError");

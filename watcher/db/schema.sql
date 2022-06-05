@@ -7,7 +7,7 @@ create table ew.revision (
 	version integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (version) values (8);
+insert into ew.revision (version) values (9);
 
 
 -------------------------------------------------------------------------------
