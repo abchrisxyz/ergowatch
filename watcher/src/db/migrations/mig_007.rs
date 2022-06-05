@@ -1,4 +1,4 @@
-/// Migration 6
+/// Migration 7
 ///
 /// Reboot cex schema with modified Gate addresses and ignore list.
 use postgres::Transaction;
