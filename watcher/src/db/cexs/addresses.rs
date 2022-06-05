@@ -44,6 +44,9 @@ fn spot_deposit_candidates(tx: &mut Transaction, height: i32) {
                 and cas.cex_id = txs.cex_id
             left join cex.addresses_conflicts con
                 on con.address = dif.address
+            -- ignored addresses
+            left join cex.addresses_ignored ign 
+                on ign.address = dif.address
             where dif.value < 0
                 and dif.height = $1
                 -- exclude txs from known cex addresses
@@ -52,6 +55,8 @@ fn spot_deposit_candidates(tx: &mut Transaction, height: i32) {
                 -- exclude contract addresses
                 and starts_with(dif.address, '9')
                 and length(dif.address) = 51
+                -- exclude ignored addresses
+                and ign.address is null
             -- dissolve duplicates from multiple txs in same block
             group by 1, 2;
         ",

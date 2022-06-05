@@ -83,6 +83,9 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
                 left join cex._bootstrapping_data bsd
                     on bsd.address = dif.address
                     and bsd.cex_id = txs.cex_id
+                -- ignored addresses
+                left join cex.addresses_ignored ign
+                    on ign.address = dif.address
                 where dif.value < 0
                     and dif.height = _height
                     -- exclude txs from known addresses
@@ -91,6 +94,8 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
                     -- exclude contract addresses
                     and starts_with(dif.address, '9')
                     and length(dif.address) = 51
+                    -- exclude ignored addresses
+                    and ign.address is null
                 -- dissolve duplicates from multiple txs in same block
                 group by 1, 2
             )
@@ -277,6 +282,9 @@ fn set_constraints(tx: &mut Transaction) {
         "create index on cex.addresses(cex_id);",
         "create index on cex.addresses(type);",
         "create index on cex.addresses(spot_height);",
+        // cexs addresses ignored
+        "alter table cex.addresses_ignored add primary key (address);",
+        "alter table cex.addresses_ignored alter column address set not null;",
         // cexs addresses conflicts
         "alter table cex.addresses_conflicts add primary key (address);",
         "alter table cex.addresses_conflicts alter column address set not null;",

@@ -7,7 +7,7 @@ create table ew.revision (
 	version integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (version) values (7);
+insert into ew.revision (version) values (8);
 
 
 -------------------------------------------------------------------------------
@@ -150,6 +150,20 @@ create table cex.addresses (
 	spot_height int
 );
 
+/*
+	List of addresses to be ignored.
+	Mostly addresses sending to CEX main address but active
+	before the listing date.
+
+	An alternative would be to add a listing_height column to
+	cex.cexs and exclude deposit candidates active before that
+	height. Keeping it simple and manual for now as number of
+	addresses to ignore is small.
+ */
+create table cex.addresses_ignored (
+	address text
+);
+
 /* 
 	The PK of cex.addresses is the address. An address can therefore
 	be linked to a single CEX only.
@@ -228,15 +242,31 @@ insert into cex.addresses (cex_id, type, address) values
 	-- Gate - confirmed
 	(2, 'main', '9iKFBBrryPhBYVGDKHuZQW7SuLfuTdUJtTPzecbQ5pQQzD4VykC'),
 	-- Gate - unconfirmed
+	--
+	-- Has had up to 900k, sends only to 9iKFBB, received from 2800+
+	-- addresses all created in/after 10/2020.
+	(2, 'main', '9gQYrh6yubA4z55u4TtsacKnaEteBEdnY4W2r5BLcFZXcQoQDcq'),
+	--
+	-- Sends only to 9iKFBB, received from 219 addresses all created
+	-- in/after 01/2021.
+	-- Receives from 9i7134 (see below).
 	(2, 'main', '9enQZco9hPuqaHvR7EpPRWvYbkDYoWu3NK7pQk8VFwgVnv5taQE'),
-	(2, 'main', '9i7134eY3zUotQyS8nBeZDJ3SWbTPn117nCJYi977FBn9AaxhZY'),
-	(2, 'main', '9gmb745thQTyoGGWxSr9hNmvipivgVbQGA6EJnBucs3nwi9yqoc'),
-	(2, 'main', '9fJzuyVaRLM9Q3RZVzkau1GJVP9TDiW8GRL5p25VZ8VNXurDpaw'),
-	(2, 'main', '9i1ETULiCnGMtppDAvrcYujhxX18km3ge9ZEDMnZPN6LFQbttRF'),
-	(2, 'main', '9gck4LwHJK3XV2wXdYdN5S9Fe4RcFrkaqs4WU5aeiKuodJyW7qq'),
-	(2, 'main', '9gv4qw7RtQyt3khtnQNxp7r7yuUazWWyTGfo7duqGj9hMtZxKP1'),
+	--
+	-- Addresses below used to be thought of as Gate addresses because
+	-- of the large volume passing through them and reaching 9enQZc.
+	-- 1.5M+ ERG tracing back to OG mining addresses ending up in 9exS2B,
+	-- then moving to 9gv4qw7 through to 9i7134 and finally to 9enQZc.
+	-- 9i7134 sends to 200+ addresses, nothing to 9iKFBB, receives from
+	-- 1880 addresses - some created in 10/2019, so 9i7134 likely not a
+	-- Gate address and therefore excluding upstream ones as well.
+	-- (2, 'main', '9i7134eY3zUotQyS8nBeZDJ3SWbTPn117nCJYi977FBn9AaxhZY'),
+	-- (2, 'main', '9gmb745thQTyoGGWxSr9hNmvipivgVbQGA6EJnBucs3nwi9yqoc'),
+	-- (2, 'main', '9fJzuyVaRLM9Q3RZVzkau1GJVP9TDiW8GRL5p25VZ8VNXurDpaw'),
+	-- (2, 'main', '9i1ETULiCnGMtppDAvrcYujhxX18km3ge9ZEDMnZPN6LFQbttRF'),
+	-- (2, 'main', '9gck4LwHJK3XV2wXdYdN5S9Fe4RcFrkaqs4WU5aeiKuodJyW7qq'),
+	-- (2, 'main', '9gv4qw7RtQyt3khtnQNxp7r7yuUazWWyTGfo7duqGj9hMtZxKP1'),
 	-- created 10/2019, but listing in 10/2020
-	(2, 'main', '9exS2B892HTiDkqhcWnj1nzsbYmVn7ameVb1d2jagUWTqaLxfTX'),
+	-- (2, 'main', '9exS2B892HTiDkqhcWnj1nzsbYmVn7ameVb1d2jagUWTqaLxfTX'),
 
 	-- KuCoin
 	(3, 'main', '9hU5VUSUAmhEsTehBKDGFaFQSJx574UPoCquKBq59Ushv5XYgAu'),
@@ -247,6 +277,41 @@ insert into cex.addresses (cex_id, type, address) values
 	-- ProBit https://discord.com/channels/668903786361651200/896711052736233482/964541753162096680
 	(4, 'main', '9eg2Rz3tGogzLaVZhG1ycPj1dJtN4Jn8ySa2mnVLJyVJryb13QB');
 
+insert into cex.addresses_ignored (address) values
+	-- Flagged as Gate deposit address.
+	-- Active since July 2019.
+	-- Received 2.6M+ direct from treasury.
+	-- Most of it goes to:
+	--    - 9gNYeyfRFUipiWZ3JR1ayDMoeh28E6J7aDQosb7yrzsuGSDqzCC
+	--    - 9fdVtQVggW7a2EBE6CPKXjvtBzN8WCHcMuJd2zgzx8KRqRuwJVr
+	-- Only 1 tx to 9iKFBB, 50k on 1 Oct 2020
+	-- https://explorer.ergoplatform.com/en/transactions/afe34ee3128ce9c4838bc64c0530322db1b3aa3c48400ac50ede3b68ad08ddd2
+	('9hxFS2RkmL5Fv5DRZGwZCbsbjTU1R75Luc2t5hkUcR1x3jWzre4'),
+
+	-- Flagged as Gate deposit address.
+	-- Active since March 2020.
+	-- Received 1.5M+ from 9hxFS2 (see above)
+	-- Only 1 tx to 9iKFBB: 50k on 5 Oct 2020
+	-- https://explorer.ergoplatform.com/en/transactions/5e202e5e37631701db2cb0ddc839601b2da74ce7f6e826bc9244f1ada5dba92c
+	('9gNYeyfRFUipiWZ3JR1ayDMoeh28E6J7aDQosb7yrzsuGSDqzCC'),
+
+	-- Flagged as Gate deposit address.
+	-- First active May 2020.
+	-- Involved in 50k tx to 9iKFBB on 5 Oct 2020 (see above).
+	-- Received 2 tx from 9iKFBB:
+	-- 898 ERG on 30 March 2021 - https://explorer.ergoplatform.com/en/transactions/c2d592cc688ec8d8ffa7ea22e054aca31b39578ed004fcd4cbcc11783e4739db
+	-- 698 ERG on 12 April 2021 - https://explorer.ergoplatform.com/en/transactions/3dd8e7015568228336a5d16c5b690e3a5653d2d827711a9b1580e0b7db13e563
+	('9i2oKu3bbHDksfiZjbhAgSAWW7iZecUS78SDaB46Fpt2DpUNe6M'),
+
+	-- Flagged as Gate deposit address.
+	-- First active June 2020.
+	-- Received 100 ERG from 9fPiW4 (Coinex withdrawal) in 2 txs in June 2020:
+	--    - https://explorer.ergoplatform.com/en/transactions/6e73b4e7e1e0e339ba6185fd142ac2df8409e9bebcffed7b490107633695fe88
+	--    - https://explorer.ergoplatform.com/en/transactions/34193dbdde8921b74ece7cae1adf495830a52fb72477c2a610b31cb4750b45f2
+	-- Received 550 ERG from 9gNYey and others in June 2020 - https://explorer.ergoplatform.com/en/transactions/811b17a00d821763aa096dc3e6225122451b068454eb1cfb16bf5c7b47fea9f5
+	-- Sent 20 ERG to 9iKFBB on 27 September 2020 - https://explorer.ergoplatform.com/en/transactions/8bc2caf976e5e5f0786ee54bb886f3344e6dac1c034491766e977c4b3a828305
+	-- First ever tx to 9iKFBB (!)
+	('9iHCMtd2gAPoYGhWadjruygKwNKRoeQGq1xjS2Fkm5bT197YFdR');
 
 -------------------------------------------------------------------------------
 -- Metrics

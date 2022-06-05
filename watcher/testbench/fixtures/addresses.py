@@ -66,8 +66,8 @@ CEX_BOXES = [
     ),
     # Gate (CEX ID 2)
     Box(
-        "9i7134eY3zUotQyS8nBeZDJ3SWbTPn117nCJYi977FBn9AaxhZY",
-        "0008cd03d8273c1ed49f83f8182baa9aba6948241cbf9a73163f5a66066ef9c7607a9b92",
+        "9iKFBBrryPhBYVGDKHuZQW7SuLfuTdUJtTPzecbQ5pQQzD4VykC",
+        "0008cd03f3f44c9e80e2cedc1a2909631a3adea8866ee32187f74d0912387359b0ff36a2",
     ),
     # KuCoin (CEX ID 3)
     Box(
