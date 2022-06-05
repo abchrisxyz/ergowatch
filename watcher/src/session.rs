@@ -92,7 +92,7 @@ impl Session {
         // Check cli args and db state
         if db_is_empty && db_has_constraints {
             return Err(
-                "Database should be initialized without constraints or indexes. Pass --no-bootstrap flag to override.",
+                "Database should be initialized without constraints or indexes. Reinitialize the database using `schema.sql` only.",
             );
         }
         if cli.allow_migrations {

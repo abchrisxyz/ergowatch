@@ -93,7 +93,7 @@ The `docker-compose.yml` might also be a good place to look at to see how things
 
 #### Initial Sync
 
-When running for the first time (i.e. with an empty database), the watcher will first sync core tables only, then load database constraints and populate other tables. To skip this bootstrapping process, you can pass the `no-bootstrap` option. If interrupted during the bootstrap process, it is safe to restart the watcher, it'll pick up where it left off.
+When running for the first time (i.e. with an empty database), the watcher will first sync core tables only, then load database constraints and populate other tables. If interrupted during the bootstrap process, it is safe to restart the watcher, it'll pick up where it left off.
 
 The boostrapping process takes around 24h on common hardware (old desktop) to reach height 700k.
 

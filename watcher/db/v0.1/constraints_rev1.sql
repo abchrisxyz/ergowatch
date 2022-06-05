@@ -9,9 +9,6 @@
  * Watcher will add constraints and indexes when needed, during and after the
  * the bootstrapping process.
  *
- * If for some reason you want to skip bootstrapping, go ahead, load this file
- * and pass the --no-bootstrap flag when starting watcher.
- *
  *****************************************************************************/
 
 
