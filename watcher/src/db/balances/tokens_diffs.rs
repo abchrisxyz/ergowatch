@@ -15,19 +15,11 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
 }
 
 pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
-    let statement = tx
-        .prepare_typed(
-            "
-            delete from bal.tokens_diffs
-            where height = $1
-                and tx_id = $2;",
-            &[Type::INT4, Type::TEXT],
-        )
-        .unwrap();
-    let tx_ids: Vec<&str> = block.transactions.iter().map(|tx| tx.id).collect();
-    for tx_id in tx_ids {
-        tx.execute(&statement, &[&block.height, &tx_id]).unwrap();
-    }
+    tx.execute(
+        "delete from bal.tokens_diffs where height = $1;",
+        &[&block.height],
+    )
+    .unwrap();
 }
 
 const INSERT_DIFFS_FOR_TX: &str = "
