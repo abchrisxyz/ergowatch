@@ -734,8 +734,13 @@ class TestRepair:
 
 def _test_db_state(conn: pg.Connection, start_height: int, bootstrapped=False):
     """
-    Test outcomes can be different for cases that trigger bootstrapping code.
-    This is indicated through the *bootstrapped* flag.
+    Test outcomes can be different for cases that trigger bootstrapping code or
+    a repair event. This is indicated through the *bootstrapped* flag.
+
+    TestSync and SyncRollback trigger no bootstrap and no repair.
+    TestGenesis and TestMigrations will bootstrap their cex schema.
+    TestRepair does no bootstrap but ends with a repair and so produces
+    the same state as TestGeneis and TestMigrations.
     """
     assert_db_constraints(conn)
     with conn.cursor() as cur:
@@ -744,6 +749,7 @@ def _test_db_state(conn: pg.Connection, start_height: int, bootstrapped=False):
         assert_deposit_addresses(cur)
         assert_addresses_conflicts(cur, start_height)
         assert_processing_log(cur, start_height, bootstrapped)
+        assert_supply(cur, start_height, bootstrapped)
         assert_repair_cleaned_up(cur)
 
 
@@ -880,7 +886,7 @@ def assert_addresses_conflicts(cur: pg.Cursor, start_height):
     ]
 
 
-def assert_processing_log(cur: pg.Cursor, start_height: int, bootstrapped):
+def assert_processing_log(cur: pg.Cursor, start_height: int, bootstrapped: bool):
     cur.execute(
         """
         select header_id
@@ -902,7 +908,7 @@ def assert_processing_log(cur: pg.Cursor, start_height: int, bootstrapped):
     assert rows[5] == ("block-e", start_height + 5, None, expected_status)
 
 
-def assert_supply(cur: pg.Cursor, start_height: int):
+def assert_supply(cur: pg.Cursor, start_height: int, bootstrapped: bool):
     height_b = start_height + 2
     height_c = start_height + 3
     height_d = start_height + 4
@@ -918,15 +924,25 @@ def assert_supply(cur: pg.Cursor, start_height: int):
         """
     )
     rows = cur.fetchall()
-    assert len(rows) == 1
-    assert rows == [
-        (height_b, 1, 0, 10),
-        (height_c, 2, 0, 15),
-        (height_c, 3, 0, 5),
-        (height_c, 1, 10, 0),
-        (height_d, 2, 5, 9),
-        (height_e, 2, 8, 6),
-    ]
+    if bootstrapped:
+        assert len(rows) == 6
+        assert rows == [
+            (height_b, 1, 6, 20),
+            (height_c, 1, 16, 10),
+            (height_c, 2, 0, 15),
+            (height_d, 2, 5, 9),
+            (height_e, 2, 8, 6),
+            (height_e, 3, 99, 0),
+        ]
+    else:
+        assert len(rows) == 5
+        assert rows == [
+            (height_b, 1, 6, 94),
+            (height_c, 1, 16, 104),
+            (height_d, 2, 5, 9),
+            (height_e, 2, 8, 6),
+            (height_e, 3, 99, 0),
+        ]
 
 
 def assert_repair_cleaned_up(cur: pg.Cursor):
