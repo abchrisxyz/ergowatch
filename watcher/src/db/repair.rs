@@ -252,8 +252,9 @@ fn start(conn_str: String, fr: i32, to: i32, rx: mpsc::Receiver<Message>) -> any
 }
 
 /// Cleanup
-fn cleanup(tx: &mut Client) {
+fn cleanup(client: &mut Client) {
     debug!("Cleaning up repair session");
-    tx.execute("drop schema if exists repair cascade;", &[])
+    client
+        .execute("drop schema if exists repair cascade;", &[])
         .unwrap();
 }
