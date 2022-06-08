@@ -173,5 +173,21 @@ class _AddressCatalogue:
         key = box_id.split("-")[0]
         return self._key2box[key].address
 
+    def boxid2box(self, box_id: str) -> Box:
+        """
+        Return the Box corresponding to a mock box_id pattern.
+
+        The pattern is <key>-box<box-number>.
+        Anything after first hyphen is ignored.
+        Keys are mapped to boxes like so:
+            base --> coinbase address
+            fees --> fees collection address
+            pub<i> --> P2PK address at index i-1
+            con<i> --> contract address at index i-1
+            cex<i> --> cex address at index i-1
+        """
+        key = box_id.split("-")[0]
+        return self._key2box[key]
+
 
 AddressCatalogue = _AddressCatalogue()

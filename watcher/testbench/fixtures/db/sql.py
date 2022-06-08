@@ -344,6 +344,8 @@ def generate_bootstrap_sql_cex(header: Header, outputs: List[Output]) -> str:
     for op in outputs:
         assert op.address not in cex_addresses
 
+    # Since no cex addresses are involved, no need fill cex.supply.
+
     # Mark existing block as processed
     qry_block_processing_log = dedent(
         f"""
@@ -369,9 +371,24 @@ def generate_bootstrap_sql_mtr(header: Header, outputs: List[Output]) -> str:
         values ({header.height}, {len(outputs)});\n
     """
     )
+
+    # Zero supply on cex's (because no cex addresses involved so far
+    # see generate_bootstrap_sql_cex)
+    qry_cex_supply = dedent(
+        f"""
+        insert into mtr.cex_supply(height, total, deposit)
+        select height
+            , 0 as total
+            , 0 as deposit
+        from core.headers
+        order by 1;\n
+    """
+    )
+
     return "".join(
         [
             qry_utxos,
+            qry_cex_supply,
         ]
     )
 
