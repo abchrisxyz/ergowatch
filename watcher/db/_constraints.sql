@@ -26,9 +26,7 @@ alter table core.transactions alter column id set not null;
 alter table core.transactions alter column header_id set not null;
 alter table core.transactions alter column height set not null;
 alter table core.transactions alter column index set not null;
-alter table core.transactions add foreign key (header_id)
-	references core.headers (id)
-	on delete cascade;
+alter table core.transactions add foreign key (header_id) references core.headers (id);
 create index on core.transactions(height);
 
 alter table core.outputs add primary key (box_id);
@@ -39,12 +37,8 @@ alter table core.outputs alter column creation_height set not null;
 alter table core.outputs alter column address set not null;
 alter table core.outputs alter column index set not null;
 alter table core.outputs alter column value set not null;
-alter table core.outputs add foreign key (tx_id)
-	references core.transactions (id)
-	on delete cascade;
-alter table core.outputs add foreign key (header_id)
-	references core.headers (id)
-	on delete cascade;
+alter table core.outputs add foreign key (tx_id) references core.transactions (id);
+alter table core.outputs add foreign key (header_id) references core.headers (id);
 create index on core.outputs(tx_id);
 create index on core.outputs(header_id);
 create index on core.outputs(address);
@@ -55,16 +49,10 @@ alter table core.inputs alter column box_id set not null;
 alter table core.inputs alter column tx_id set not null;
 alter table core.inputs alter column header_id set not null;
 alter table core.inputs alter column index set not null;
-alter table core.inputs add foreign key (tx_id)
-	references core.transactions (id)
-	on delete cascade;
-alter table core.inputs add foreign key (header_id)
-	references core.headers (id)
-	on delete cascade;
+alter table core.inputs add foreign key (tx_id) references core.transactions (id);
+alter table core.inputs add foreign key (header_id) references core.headers (id);
 -- Not applicable to genesis block
--- alter table core.inputs foreign key (box_id)
--- 	references core.outputs (box_id)
--- 	on delete cascade;
+-- alter table core.inputs foreign key (box_id) references core.outputs (box_id);
 create index on core.inputs(tx_id);
 create index on core.inputs(header_id);
 create index on core.inputs(index);
@@ -74,15 +62,9 @@ alter table core.data_inputs alter column box_id set not null;
 alter table core.data_inputs alter column tx_id set not null;
 alter table core.data_inputs alter column header_id set not null;
 alter table core.data_inputs alter column index set not null;
-alter table core.data_inputs add foreign key (tx_id)
-	references core.transactions (id)
-	on delete cascade;
-alter table core.data_inputs add foreign key (header_id)
-	references core.headers (id)
-	on delete cascade;
-alter table core.data_inputs add foreign key (box_id)
-	references core.outputs (box_id)
-	on delete cascade;
+alter table core.data_inputs add foreign key (tx_id) references core.transactions (id);
+alter table core.data_inputs add foreign key (header_id) references core.headers (id);
+alter table core.data_inputs add foreign key (box_id) references core.outputs (box_id);
 create index on core.data_inputs(tx_id);
 create index on core.data_inputs(header_id);
 
@@ -92,27 +74,21 @@ alter table core.box_registers alter column box_id set not null;
 alter table core.box_registers alter column value_type set not null;
 alter table core.box_registers alter column serialized_value set not null;
 alter table core.box_registers alter column rendered_value set not null;
-alter table core.box_registers add foreign key (box_id)
-	references core.outputs (box_id)
-	on delete cascade;
+alter table core.box_registers add foreign key (box_id) references core.outputs (box_id);
 alter table core.box_registers add check (id >= 4 and id <= 9);
 
 alter table core.tokens add primary key (id, box_id);
 alter table core.tokens alter column id set not null;
 alter table core.tokens alter column box_id set not null;
 alter table core.tokens alter column emission_amount set not null;
-alter table core.tokens	add foreign key (box_id)
-	references core.outputs (box_id)
-	on delete cascade;
+alter table core.tokens	add foreign key (box_id) references core.outputs (box_id);
 alter table core.tokens add check (emission_amount > 0);
 
 alter table core.box_assets add primary key (box_id, token_id);
 alter table core.box_assets alter column box_id set not null;
 alter table core.box_assets alter column token_id set not null;
 alter table core.box_assets alter column amount set not null;
-alter table core.box_assets	add foreign key (box_id)
-	references core.outputs (box_id)
-	on delete cascade;
+alter table core.box_assets	add foreign key (box_id) references core.outputs (box_id);
 alter table core.box_assets add check (amount > 0);
 
 

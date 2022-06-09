@@ -29,7 +29,15 @@ pub(super) fn include_block(tx: &mut Transaction, block: &BlockData) -> anyhow::
 }
 
 pub(super) fn rollback_block(tx: &mut Transaction, block: &BlockData) -> anyhow::Result<()> {
+    assets::rollback(tx, block);
+    tokens::rollback(tx, block);
+    additional_registers::rollback(tx, block);
+    data_inputs::rollback(tx, block);
+    inputs::rollback(tx, block);
+    outputs::rollback(tx, block);
+    transactions::rollback(tx, block);
     headers::rollback(tx, block);
+
     Ok(())
 }
 

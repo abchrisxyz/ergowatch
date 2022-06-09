@@ -32,6 +32,14 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
     }
 }
 
+pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
+    tx.execute(
+        "delete from core.transactions where height = $1",
+        &[&block.height],
+    )
+    .unwrap();
+}
+
 pub(super) fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
         "alter table core.transactions add primary key (id);",

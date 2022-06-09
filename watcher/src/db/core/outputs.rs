@@ -80,6 +80,17 @@ pub(super) fn include_genesis_boxes(
     }
 }
 
+pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
+    tx.execute(
+        "
+        delete from core.outputs o
+        using core.headers h
+        where h.height = $1 and o.header_id = h.id;",
+        &[&block.height],
+    )
+    .unwrap();
+}
+
 pub(super) fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
         "alter table core.outputs add primary key (box_id);",

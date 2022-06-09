@@ -53,6 +53,18 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
     }
 }
 
+pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
+    tx.execute(
+        "
+        delete from core.tokens t
+        using core.outputs o
+        join core.headers h on h.id = o.header_id
+        where h.height = $1 and t.box_id = o.box_id;",
+        &[&block.height],
+    )
+    .unwrap();
+}
+
 pub(super) fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
         "alter table core.tokens add primary key (id, box_id);",

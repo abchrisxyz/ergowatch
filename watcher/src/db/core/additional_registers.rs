@@ -50,6 +50,18 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
     }
 }
 
+pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
+    tx.execute(
+        "
+        delete from core.box_registers r
+        using core.outputs o
+        join core.headers h on h.id = o.header_id
+        where h.height = $1 and r.box_id = o.box_id;",
+        &[&block.height],
+    )
+    .unwrap();
+}
+
 pub(super) fn include_genesis_boxes(tx: &mut Transaction, boxes: &Vec<crate::parsing::Output>) {
     for output in boxes {
         for reg in extract_from_output(&output) {

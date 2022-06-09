@@ -35,6 +35,17 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
     }
 }
 
+pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
+    tx.execute(
+        "
+        delete from core.data_inputs i
+        using core.headers h
+        where h.height = $1 and i.header_id = h.id;",
+        &[&block.height],
+    )
+    .unwrap();
+}
+
 pub(super) fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
         "alter table core.data_inputs add primary key (box_id, tx_id);",
