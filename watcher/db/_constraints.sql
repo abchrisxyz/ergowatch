@@ -136,7 +136,9 @@ create index on bal.tokens_diffs(height);
 -------------------------------------------------------------------------------
 alter table cex.cexs add primary key (id);
 alter table cex.cexs alter column id set not null;
+alter table cex.cexs alter column text_id set not null;
 alter table cex.cexs alter column name set not null;
+alter table cex.cexs add constraint cexs_unique_text_id unique (text_id);
 alter table cex.cexs add constraint cexs_unique_name unique (name);
 
 alter table cex.addresses add primary key (address);

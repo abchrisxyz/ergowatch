@@ -378,6 +378,7 @@ def assert_cex_ids(cur: pg.Cursor):
         """
         select id
             , name
+            , text_id
         from cex.cexs
         order by 1;
         """
@@ -385,10 +386,10 @@ def assert_cex_ids(cur: pg.Cursor):
     rows = cur.fetchall()
     assert len(rows) == 4
     assert rows == [
-        (1, "Coinex"),
-        (2, "Gate.io"),
-        (3, "KuCoin"),
-        (4, "ProBit"),
+        (1, "Coinex", "coinex"),
+        (2, "Gate.io", "gate"),
+        (3, "KuCoin", "kucoin"),
+        (4, "ProBit", "probit"),
     ]
 
 

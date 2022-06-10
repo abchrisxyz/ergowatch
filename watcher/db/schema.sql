@@ -7,7 +7,7 @@ create table ew.revision (
 	version integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (version) values (11);
+insert into ew.revision (version) values (12);
 
 
 -------------------------------------------------------------------------------
@@ -131,14 +131,15 @@ create schema cex;
 
 create table cex.cexs (
 	id integer,
+	text_id text, -- used for easier api access
 	name text
 );
 
-insert into cex.cexs (id, name) values
-	(1, 'Coinex'),
-	(2, 'Gate.io'),
-	(3, 'KuCoin'),
-	(4, 'ProBit')
+insert into cex.cexs (id, name, text_id) values
+	(1, 'Coinex', 'coinex'),
+	(2, 'Gate.io', 'gate'),
+	(3, 'KuCoin', 'kucoin'),
+	(4, 'ProBit', 'probit')
 ;
 
 create type cex.t_address_type as enum ('main', 'deposit');
