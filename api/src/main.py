@@ -12,6 +12,7 @@ try:
     from api.routes.tokens import tokens_router
     from api.routes.status import status_router
     from api.routes.metrics import metrics_router
+    from api.routes.lists import lists_router
 except ImportError:
     # When running pytest
     from .api.routes.addresses import addresses_router
@@ -21,6 +22,7 @@ except ImportError:
     from .api.routes.tokens import tokens_router
     from .api.routes.status import status_router
     from .api.routes.metrics import metrics_router
+    from .api.routes.lists import lists_router
 
 root_path = "/api/v0"
 description = f"""
@@ -99,6 +101,7 @@ async def startup_event():
 app.include_router(status_router, tags=["status"])
 app.include_router(addresses_router, prefix="/addresses", tags=["addresses"])
 app.include_router(metrics_router, prefix="/metrics", tags=["metrics"])
+app.include_router(lists_router, prefix="/lists", tags=["lists"])
 app.include_router(p2pk_router, prefix="/p2pk", tags=["p2pk"])
 app.include_router(contracts_router, prefix="/contracts", tags=["contracts"])
 app.include_router(tokens_router, prefix="/tokens", tags=["tokens"])
