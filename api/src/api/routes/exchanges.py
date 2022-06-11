@@ -6,7 +6,7 @@ from fastapi import Query
 from fastapi import Request
 from pydantic import BaseModel
 
-from . import HISTORY_LIMIT
+from ..constants import HISTORY_LIMIT
 
 exchanges_router = r = APIRouter()
 

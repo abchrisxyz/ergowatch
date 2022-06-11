@@ -2,8 +2,8 @@ from enum import Enum
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Dict
+from ...constants import GENESIS_TIMESTAMP
 
-GENESIS_TIMESTAMP = 1561978800000
 BLOCK_TIME_MS = 120_000
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
