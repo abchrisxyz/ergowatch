@@ -3,7 +3,6 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Dict
 
-# HISTORY_LIMIT = 1000
 GENESIS_TIMESTAMP = 1561978800000
 BLOCK_TIME_MS = 120_000
 HOUR_MS = 3_600_000
