@@ -21,12 +21,8 @@ class ExchangeMetricsRecord(BaseModel):
     d: int
 
 
-@r.get(
-    "/supply",
-    response_model=List[ExchangeMetricsRecord],
-    description=f"Supply on all tracked exchanges",
-)
-async def supply(
+@r.get("/supply", response_model=List[ExchangeMetricsRecord])
+async def supply_across_all_tracked_exchanges(
     request: Request,
     fr: int = Query(
         default=None,
@@ -45,6 +41,7 @@ async def supply(
 ):
     """
     Returns total supply (s) and supply on deposit addresses (d).
+    Supply on main addresses is s - d.
     """
     if fr is not None and to is not None:
         return await _count_fr_to(request, fr, to, r)

@@ -18,8 +18,9 @@ from . import DAY_MS
     "",
     response_model=List[MetricsRecord],
     description=f"UTxO counts",
+    summary="Number of UTxO's",
 )
-async def count_history(
+async def counts(
     request: Request,
     fr: int = Query(
         default=None,

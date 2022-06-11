@@ -19,7 +19,7 @@ class AddressBalance(BaseModel):
 
 
 @r.get("/addresses/by/balance", response_model=List[AddressBalance])
-async def exchanges(
+async def rich_list(
     request: Request,
     token_id: TokenID = Query(
         None,

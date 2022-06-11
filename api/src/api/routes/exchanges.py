@@ -34,7 +34,7 @@ class ExchangeSupply(BaseModel):
 
 
 @r.get("", response_model=List[str])
-async def exchanges(request: Request):
+async def list_tracked_exchanges(request: Request):
     """
     List id's of tracked exchanges.
     """
@@ -49,7 +49,7 @@ async def exchanges(request: Request):
 
 
 @r.get("/{exchange}/supply", response_model=ExchangeSupply)
-async def exchange_supply(
+async def exchange_supply_history(
     request: Request,
     exchange: Exchange,
     since: int = Query(
