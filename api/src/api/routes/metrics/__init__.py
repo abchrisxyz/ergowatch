@@ -30,8 +30,10 @@ def generate_time_window_limits(limit: int) -> Dict[TimeResolution, int]:
 
 TimeWindowLimits = generate_time_window_limits(1000)
 
+from .exchanges import exchanges_router
 from .utxos import utxos_router
 
 metrics_router = r = APIRouter()
 
+r.include_router(exchanges_router, prefix="/exchanges")
 r.include_router(utxos_router, prefix="/utxos")
