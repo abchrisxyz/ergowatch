@@ -61,12 +61,24 @@ tags_metadata = [
         "description": "P2S & P2SH address stats",
     },
     {
+        "name": "exchanges",
+        "description": "Individual exchange data",
+    },
+    {
+        "name": "lists",
+        "description": "Rich lists etc.",
+    },
+    {
         "name": "metrics",
         "description": "Metrics over time",
         "externalDocs": {
             "description": "Additional docs",
             "url": "https://github.com/abchrisxyz/ergowatch/blob/master/api/src/api/routes/metrics/",
         },
+    },
+    {
+        "name": "tokens",
+        "description": "Token specific data",
     },
 ]
 
@@ -102,10 +114,10 @@ async def startup_event():
 
 app.include_router(status_router, tags=["status"])
 app.include_router(addresses_router, prefix="/addresses", tags=["addresses"])
-app.include_router(metrics_router, prefix="/metrics", tags=["metrics"])
+app.include_router(contracts_router, prefix="/contracts", tags=["contracts"])
 app.include_router(exchanges_router, prefix="/exchanges", tags=["exchanges"])
 app.include_router(lists_router, prefix="/lists", tags=["lists"])
+app.include_router(metrics_router, prefix="/metrics", tags=["metrics"])
 app.include_router(p2pk_router, prefix="/p2pk", tags=["p2pk"])
-app.include_router(contracts_router, prefix="/contracts", tags=["contracts"])
 app.include_router(tokens_router, prefix="/tokens", tags=["tokens"])
 app.include_router(ranking_router, prefix="/ranking", tags=["misc"])
