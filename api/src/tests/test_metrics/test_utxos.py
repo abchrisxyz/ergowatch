@@ -27,7 +27,7 @@ def client():
         (5, 'header5', 'header4', 1561979300000), -- + 100k (1 block)
         
         -- round hours +/- a delta
-        -- need some blocks on round hours, other in between.
+        -- need some blocks on round hours, others in between.
         -- Should span several hours and more than hourly time window limit
         ( 6, 'header06', 'header05', 1561982400000         ), -- h1 spot
         ( 7, 'header07', 'header06', 1561986000000 - 100000), -- h1
@@ -43,7 +43,7 @@ def client():
         (17, 'header17', 'header16', 1562000400000 + 100000), -- h6
 
         -- round days +/- a delta
-        -- need some blocks on round days, other in between.
+        -- need some blocks on round days, others in between.
         -- Should span several days and more than daily time window limit
         (18, 'header18', 'header17', 1562025600000),          -- d1 spot
         (19, 'header19', 'header18', 1562112000000 - 100000), -- d1
