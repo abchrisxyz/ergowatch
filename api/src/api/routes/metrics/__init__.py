@@ -15,7 +15,7 @@ class TimeResolution(str, Enum):
     daily = "24h"
 
 
-class HistoryRecord(BaseModel):
+class MetricsRecord(BaseModel):
     t: int
     v: int
 

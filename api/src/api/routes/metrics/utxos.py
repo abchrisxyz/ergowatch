@@ -9,14 +9,14 @@ utxos_router = r = APIRouter()
 from . import GENESIS_TIMESTAMP
 from . import TimeResolution
 from . import TimeWindowLimits
-from . import HistoryRecord
+from . import MetricsRecord
 from . import HOUR_MS
 from . import DAY_MS
 
 
 @r.get(
     "",
-    response_model=List[HistoryRecord],
+    response_model=List[MetricsRecord],
     description=f"UTxO counts",
 )
 async def count_history(
