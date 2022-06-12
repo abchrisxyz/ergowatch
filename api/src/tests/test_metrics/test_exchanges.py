@@ -107,29 +107,32 @@ class TestCountBlock:
         response = client.get(url)
         assert response.status_code == 200
         # Return last block record
-        assert response.json() == [{"t": 1562457600000 + 100000, "s": 290, "d": 29}]
+        assert response.json() == {
+            "timestamps": [1562457600000 + 100000],
+            "total": [290],
+            "deposit": [29],
+        }
 
     def test_from_to_block(self, client):
         url = self.base_url + f"&fr={1561979000000}&to={1561979200000}"
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == [
-            {"t": 1561979000000, "s": 5, "d": 4},
-            {"t": 1561979100000, "s": 6, "d": 5},
-            {"t": 1561979200000, "s": 7, "d": 6},
-        ]
+        assert response.json() == {
+            "timestamps": [1561979000000, 1561979100000, 1561979200000],
+            "total": [5, 6, 7],
+            "deposit": [4, 5, 6],
+        }
 
     def test_from_only(self, client):
         # from height 1
         url = self.base_url + f"&fr={1561978900000}"
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == [
-            {"t": 1561978900000, "s": 4, "d": 3},
-            {"t": 1561979000000, "s": 5, "d": 4},
-            {"t": 1561979100000, "s": 6, "d": 5},
-            {"t": 1561979200000, "s": 7, "d": 6},
-        ]
+        assert response.json() == {
+            "timestamps": [1561978900000, 1561979000000, 1561979100000, 1561979200000],
+            "total": [4, 5, 6, 7],
+            "deposit": [3, 4, 5, 6],
+        }
 
     def test_to_only(self, client):
         # to right after block 4
@@ -137,12 +140,11 @@ class TestCountBlock:
         url = self.base_url + f"&to={1561979200000 + 10}"
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == [
-            {"t": 1561978900000, "s": 4, "d": 3},
-            {"t": 1561979000000, "s": 5, "d": 4},
-            {"t": 1561979100000, "s": 6, "d": 5},
-            {"t": 1561979200000, "s": 7, "d": 6},
-        ]
+        assert response.json() == {
+            "timestamps": [1561978900000, 1561979000000, 1561979100000, 1561979200000],
+            "total": [4, 5, 6, 7],
+            "deposit": [3, 4, 5, 6],
+        }
 
     def test_from_prior_to_genesis(self, client):
         url = self.base_url + f"&fr={GENESIS_TIMESTAMP - 1}"
@@ -167,7 +169,11 @@ class TestCountHourly:
         response = client.get(url)
         assert response.status_code == 200
         # Return last hourly record
-        assert response.json() == [{"t": 1562457600000, "s": 280, "d": 28}]
+        assert response.json() == {
+            "timestamps": [1562457600000],
+            "total": [280],
+            "deposit": [28],
+        }
 
     def test_from_to(self, client):
         url = (
@@ -175,11 +181,11 @@ class TestCountHourly:
         )
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == [
-            {"t": 1561986000000, "s": 70, "d": 7},
-            {"t": 1561989600000, "s": 100, "d": 10},
-            {"t": 1561993200000, "s": 130, "d": 13},
-        ]
+        assert response.json() == {
+            "timestamps": [1561986000000, 1561989600000, 1561993200000],
+            "total": [70, 100, 130],
+            "deposit": [7, 10, 13],
+        }
 
     def test_from_to_window_limit(self, client):
         url = self.base_url + f"&fr={1561982400000}&to={1562000400000 + 200000}"
@@ -196,11 +202,11 @@ class TestCountHourly:
         url = self.base_url + f"&fr={1561986000000 - 100}"
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == [
-            {"t": 1561986000000, "s": 70, "d": 7},
-            {"t": 1561989600000, "s": 100, "d": 10},
-            {"t": 1561993200000, "s": 130, "d": 13},
-        ]
+        assert response.json() == {
+            "timestamps": [1561986000000, 1561989600000, 1561993200000],
+            "total": [70, 100, 130],
+            "deposit": [7, 10, 13],
+        }
 
     def test_from_spot(self, client):
         # from timestamp at h4
@@ -208,11 +214,11 @@ class TestCountHourly:
         url = self.base_url + f"&fr={1561993200000}"
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == [
-            {"t": 1561993200000, "s": 130, "d": 13},
-            {"t": 1561996800000, "s": 140, "d": 14},
-            {"t": 1562000400000, "s": 160, "d": 16},
-        ]
+        assert response.json() == {
+            "timestamps": [1561993200000, 1561996800000, 1562000400000],
+            "total": [130, 140, 160],
+            "deposit": [13, 14, 16],
+        }
 
     def test_from_just_after_spot(self, client):
         # from timestamp just after h4
@@ -220,16 +226,21 @@ class TestCountHourly:
         url = self.base_url + f"&fr={1561993200000 + 1}"
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == [
-            {"t": 1561996800000, "s": 140, "d": 14},
-            {"t": 1562000400000, "s": 160, "d": 16},
-        ]
+        assert response.json() == {
+            "timestamps": [1561996800000, 1562000400000],
+            "total": [140, 160],
+            "deposit": [14, 16],
+        }
 
     def test_out_of_range(self, client):
         url = self.base_url + f"&fr={1561986000000 * 10}"
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == []
+        assert response.json() == {
+            "timestamps": [],
+            "total": [],
+            "deposit": [],
+        }
 
     def test_to_only(self, client):
         # to timestamp of block 14
@@ -237,11 +248,11 @@ class TestCountHourly:
         url = self.base_url + f"&to={1561993200000 + 100000}"
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == [
-            {"t": 1561986000000, "s": 70, "d": 7},
-            {"t": 1561989600000, "s": 100, "d": 10},
-            {"t": 1561993200000, "s": 130, "d": 13},
-        ]
+        assert response.json() == {
+            "timestamps": [1561986000000, 1561989600000, 1561993200000],
+            "total": [70, 100, 130],
+            "deposit": [7, 10, 13],
+        }
 
     def test_from_prior_to_genesis(self, client):
         url = self.base_url + f"&fr={GENESIS_TIMESTAMP - 1}"
@@ -260,10 +271,11 @@ class TestCountHourly:
         url = self.base_url + f"&to={1562000400000 + 3_600_000 * 2}"
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == [
-            {"t": 1561996800000, "s": 140, "d": 14},
-            {"t": 1562000400000, "s": 160, "d": 16},
-        ]
+        assert response.json() == {
+            "timestamps": [1561996800000, 1562000400000],
+            "total": [140, 160],
+            "deposit": [14, 16],
+        }
 
 
 class TestCountDaily:
@@ -274,7 +286,11 @@ class TestCountDaily:
         response = client.get(url)
         assert response.status_code == 200
         # Return last daily record
-        assert response.json() == [{"t": 1562457600000, "s": 280, "d": 28}]
+        assert response.json() == {
+            "timestamps": [1562457600000],
+            "total": [280],
+            "deposit": [28],
+        }
 
     def test_from_to(self, client):
         url = (
@@ -282,11 +298,11 @@ class TestCountDaily:
         )
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == [
-            {"t": 1562112000000, "s": 190, "d": 19},
-            {"t": 1562198400000, "s": 220, "d": 22},
-            {"t": 1562284800000, "s": 250, "d": 25},
-        ]
+        assert response.json() == {
+            "timestamps": [1562112000000, 1562198400000, 1562284800000],
+            "total": [190, 220, 250],
+            "deposit": [19, 22, 25],
+        }
 
     def test_from_to_window_limit(self, client):
         url = self.base_url + f"&fr={1561982400000}&to={1562457600000}"
@@ -303,11 +319,11 @@ class TestCountDaily:
         url = self.base_url + f"&fr={1562112000000 - 100}"
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == [
-            {"t": 1562112000000, "s": 190, "d": 19},
-            {"t": 1562198400000, "s": 220, "d": 22},
-            {"t": 1562284800000, "s": 250, "d": 25},
-        ]
+        assert response.json() == {
+            "timestamps": [1562112000000, 1562198400000, 1562284800000],
+            "total": [190, 220, 250],
+            "deposit": [19, 22, 25],
+        }
 
     def test_from_spot(self, client):
         # from timestamp at d4
@@ -315,11 +331,11 @@ class TestCountDaily:
         url = self.base_url + f"&fr={1562284800000}"
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == [
-            {"t": 1562284800000, "s": 250, "d": 25},
-            {"t": 1562371200000, "s": 260, "d": 26},
-            {"t": 1562457600000, "s": 280, "d": 28},
-        ]
+        assert response.json() == {
+            "timestamps": [1562284800000, 1562371200000, 1562457600000],
+            "total": [250, 260, 280],
+            "deposit": [25, 26, 28],
+        }
 
     def test_from_just_after_spot(self, client):
         # from timestamp just after d4
@@ -327,16 +343,21 @@ class TestCountDaily:
         url = self.base_url + f"&fr={1562284800000 + 1}"
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == [
-            {"t": 1562371200000, "s": 260, "d": 26},
-            {"t": 1562457600000, "s": 280, "d": 28},
-        ]
+        assert response.json() == {
+            "timestamps": [1562371200000, 1562457600000],
+            "total": [260, 280],
+            "deposit": [26, 28],
+        }
 
     def test_out_of_range(self, client):
         url = self.base_url + f"&fr={1561986000000 * 10}"
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == []
+        assert response.json() == {
+            "timestamps": [],
+            "total": [],
+            "deposit": [],
+        }
 
     def test_to_only(self, client):
         # to timestamp of block 26
@@ -344,11 +365,11 @@ class TestCountDaily:
         url = self.base_url + f"&to={1562284800000 + 100000}"
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == [
-            {"t": 1562112000000, "s": 190, "d": 19},
-            {"t": 1562198400000, "s": 220, "d": 22},
-            {"t": 1562284800000, "s": 250, "d": 25},
-        ]
+        assert response.json() == {
+            "timestamps": [1562112000000, 1562198400000, 1562284800000],
+            "total": [190, 220, 250],
+            "deposit": [19, 22, 25],
+        }
 
     def test_from_prior_to_genesis(self, client):
         url = self.base_url + f"&fr={GENESIS_TIMESTAMP - 1}"
@@ -367,14 +388,19 @@ class TestCountDaily:
         url = self.base_url + f"&to={1562457600000 + 86_400_000 * 2}"
         response = client.get(url)
         assert response.status_code == 200
-        assert response.json() == [
-            {"t": 1562371200000, "s": 260, "d": 26},
-            {"t": 1562457600000, "s": 280, "d": 28},
-        ]
+        assert response.json() == {
+            "timestamps": [1562371200000, 1562457600000],
+            "total": [260, 280],
+            "deposit": [26, 28],
+        }
 
 
 def test_default_r_is_block(client):
     url = "/metrics/exchanges/supply"
     response = client.get(url)
     assert response.status_code == 200
-    assert response.json() == [{"t": 1562457600000 + 100000, "s": 290, "d": 29}]
+    assert response.json() == {
+        "timestamps": [1562457600000 + 100000],
+        "total": [290],
+        "deposit": [29],
+    }

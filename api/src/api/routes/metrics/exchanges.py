@@ -15,13 +15,13 @@ from . import HOUR_MS
 from . import DAY_MS
 
 
-class ExchangeMetricsRecord(BaseModel):
-    t: int
-    s: int
-    d: int
+class ExchangeSupplyMetrics(BaseModel):
+    timestamps: List[int]
+    total: List[int]
+    deposit: List[int]
 
 
-@r.get("/supply", response_model=List[ExchangeMetricsRecord])
+@r.get("/supply", response_model=ExchangeSupplyMetrics)
 async def supply_across_all_tracked_exchanges(
     request: Request,
     fr: int = Query(
@@ -40,8 +40,8 @@ async def supply_across_all_tracked_exchanges(
     ),
 ):
     """
-    Returns total supply (s) and supply on deposit addresses (d).
-    Supply on main addresses is s - d.
+    Returns total supply and supply on deposit addresses.
+    Supply on main addresses is total - deposit.
     """
     if fr is not None and to is not None:
         return await _count_fr_to(request, fr, to, r)
@@ -88,7 +88,11 @@ async def _count_last(request: Request, r: TimeResolution):
         """
     async with request.app.state.db.acquire() as conn:
         row = await conn.fetchrow(query)
-    return [{"t": row["timestamp"], "s": row["total"], "d": row["deposit"]}]
+    return {
+        "timestamps": [row["timestamp"]],
+        "total": [row["total"]],
+        "deposit": [row["deposit"]],
+    }
 
 
 async def _count_fr_to(request: Request, fr: int, to: int, r: TimeResolution):
@@ -105,9 +109,9 @@ async def _count_fr_to(request: Request, fr: int, to: int, r: TimeResolution):
         )
     if r == TimeResolution.block:
         query = """
-            select h.timestamp as t
-                , m.total as s
-                , m.deposit as d
+            select h.timestamp
+                , m.total
+                , m.deposit
             from mtr.cex_supply m
             join core.headers h on h.height = m.height
             where h.timestamp >= $1 and h.timestamp <= $2
@@ -138,15 +142,15 @@ async def _count_fr_to(request: Request, fr: int, to: int, r: TimeResolution):
                     and h.timestamp <= $2
                 window w as (order by h.height)
             )
-            select timestamp / {round_ms} * {round_ms} as t
+            select timestamp / {round_ms} * {round_ms} as timestamp
                 , case
                     when timestamp % {round_ms} = 0 then total
                     else previous_total
-                end as s
+                end as total
                 , case
                     when timestamp % {round_ms} = 0 then deposit
                     else previous_deposit
-                end as d
+                end as deposit
             from tagged
             where (first_of_day or timestamp % {round_ms} = 0)
                 -- In case the height-1 record we included turns out to have a round timestamp
@@ -155,4 +159,8 @@ async def _count_fr_to(request: Request, fr: int, to: int, r: TimeResolution):
         """
     async with request.app.state.db.acquire() as conn:
         rows = await conn.fetch(query, fr, to)
-    return rows
+    return {
+        "timestamps": [r["timestamp"] for r in rows],
+        "total": [r["total"] for r in rows],
+        "deposit": [r["deposit"] for r in rows],
+    }
