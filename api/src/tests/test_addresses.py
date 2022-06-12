@@ -505,3 +505,30 @@ class TestBalanceHistory:
         response = client.get(url)
         assert response.status_code == 404
         assert response.json()["detail"] == "No balance found"
+
+
+class TestTags:
+    def test_predefined_tags(self, client):
+        treasury = "4L1ktFSzm3SH1UioDuUf5hyaraHird4D2dEACwQ1qHGjSKtA6KaNvSzRCZXZGf9jkfNAEC1SrYaZmCuvb2BKiXk5zW9xuvrXFT7FdNe2KqbymiZvo5UQLAm5jQY8ZBRhTZ4AFtZa1UF5nd4aofwPiL7YkJuyiL5hDHMZL1ZnyL746tHmRYMjAhCgE7d698dRhkdSeVy"
+        url = f"/addresses/{treasury}/tags"
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.json() == ["ef-treasury"]
+
+    def test_exchange_tags(self, client):
+        coinex_main = "9fowPvQ2GXdmhD2bN54EL9dRnio3kBQGyrD3fkbHwuTXD6z1wBU"
+        url = f"/addresses/{coinex_main}/tags"
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.json() == ["exchange", "exchange-main", "exchange-coinex"]
+
+    def test_unknown_address(self, client):
+        url = f"/addresses/unknown/tags"
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_nonvallid_address(self, client):
+        url = f"/addresses/not_good/tags"
+        response = client.get(url)
+        assert response.status_code == 422
