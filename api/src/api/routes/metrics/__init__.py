@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import List
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Dict
@@ -15,9 +16,9 @@ class TimeResolution(str, Enum):
     daily = "24h"
 
 
-class MetricsRecord(BaseModel):
-    t: int
-    v: int
+class MetricsSeries(BaseModel):
+    timestamps: List[int]
+    values: List[int]
 
 
 def generate_time_window_limits(limit: int) -> Dict[TimeResolution, int]:

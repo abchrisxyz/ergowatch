@@ -1,4 +1,3 @@
-from typing import List
 from fastapi import APIRouter
 from fastapi import HTTPException
 from fastapi import Query
@@ -9,14 +8,14 @@ utxos_router = r = APIRouter()
 from . import GENESIS_TIMESTAMP
 from . import TimeResolution
 from . import TimeWindowLimits
-from . import MetricsRecord
 from . import HOUR_MS
 from . import DAY_MS
+from . import MetricsSeries
 
 
 @r.get(
     "",
-    response_model=List[MetricsRecord],
+    response_model=MetricsSeries,
     description=f"UTxO counts",
     summary="Number of UTxO's",
 )
@@ -80,7 +79,7 @@ async def _count_last(request: Request, r: TimeResolution):
         """
     async with request.app.state.db.acquire() as conn:
         row = await conn.fetchrow(query)
-    return [{"t": row["timestamp"], "v": row["value"]}]
+    return {"timestamps": [row["timestamp"]], "values": [row["value"]]}
 
 
 async def _count_fr_to(request: Request, fr: int, to: int, r: TimeResolution):
@@ -140,4 +139,7 @@ async def _count_fr_to(request: Request, fr: int, to: int, r: TimeResolution):
         """
     async with request.app.state.db.acquire() as conn:
         rows = await conn.fetch(query, fr, to)
-    return [{"t": r["timestamp"], "v": r["value"]} for r in rows]
+    return {
+        "timestamps": [r["timestamp"] for r in rows],
+        "values": [r["value"] for r in rows],
+    }
