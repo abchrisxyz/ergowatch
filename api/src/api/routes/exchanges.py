@@ -139,7 +139,6 @@ async def exchange_supply_history(
         args = [cex_id, since, limit]
     async with request.app.state.db.acquire() as conn:
         rows = await conn.fetch(query, *args)
-    # return rows
     return {
         "timestamps": [r["timestamp"] for r in rows],
         "main": [r["main"] for r in rows],
