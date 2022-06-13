@@ -1,7 +1,7 @@
 # Changelog
 
 
-## v0.3.0 - UNRELEASED
+## v0.3.0 - 2022-06-13
 
 ### New features
 [Issue 15](https://github.com/abchrisxyz/ergowatch/issues/15) - Added rich lists endpoint.
@@ -24,13 +24,13 @@
 ## v0.2.2 - 2022-05-04
 
 ### Fixed
-[Issue 27](https://github.com/abchrisxyz/ergowatch/issues/27) - Handle non-consecutive duplicated assets
+[Issue 27](https://github.com/abchrisxyz/ergowatch/issues/27) - Handle non-consecutive duplicated assets.
 
 
 ## v0.2.1 - 2022-04-25
 
 ### Fixed
-[Issue 24](https://github.com/abchrisxyz/ergowatch/issues/24) - Prevent panics from register parsing
+[Issue 24](https://github.com/abchrisxyz/ergowatch/issues/24) - Prevent panics from register parsing.
 
 
 ## v0.2.0 - 2022-04-05
