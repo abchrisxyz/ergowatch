@@ -86,7 +86,7 @@ app = FastAPI(
     title="ErgoWatch",
     version="0.3.0-dev",
     description=description,
-    # terms_of_service="http://ergo.watch/api/",
+    terms_of_service="http://ergo.watch/apis/",
     openapi_tags=tags_metadata,
     root_path=root_path,
 )
