@@ -73,7 +73,7 @@ tags_metadata = [
         "description": "Metrics over time",
         "externalDocs": {
             "description": "Additional docs",
-            "url": "https://github.com/abchrisxyz/ergowatch/blob/master/api/src/api/routes/metrics/",
+            "url": "https://github.com/abchrisxyz/ergowatch/blob/master/api/src/api/routes/metrics/time_windows.md",
         },
     },
     {
