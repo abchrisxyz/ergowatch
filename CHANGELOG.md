@@ -5,7 +5,9 @@
 
 ### New features
 [Issue 15](https://github.com/abchrisxyz/ergowatch/issues/15) - Added rich lists endpoint.
+
 [Issue 28](https://github.com/abchrisxyz/ergowatch/issues/28) - Added exchange supply API's.
+
 [Issue 41](https://github.com/abchrisxyz/ergowatch/issues/41) - Added address labels endpoint.
 
 ### Changed
@@ -13,11 +15,14 @@
 
 ### Fixed
 [Issue 25](https://github.com/abchrisxyz/ergowatch/issues/25) - Fixed unhandled `SUnit` register values.
+
 [Issue 33](https://github.com/abchrisxyz/ergowatch/issues/33) - Fixed processing order of blocks with multiple candidates.
+
 [Issue 35](https://github.com/abchrisxyz/ergowatch/issues/35) - Fixed slow rollbacks.
 
 ### Housekeeping
 [Issue 34](https://github.com/abchrisxyz/ergowatch/issues/34) - Bootstrapping `work_mem` is now configurable.
+
 [Issue 26](https://github.com/abchrisxyz/ergowatch/issues/26) - Added terms of service.
 
 
