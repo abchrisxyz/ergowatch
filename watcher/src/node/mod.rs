@@ -38,6 +38,7 @@ impl Node {
         Ok(json.to_owned())
     }
 
+    /// Get full block from `header_id`
     pub fn get_block(&self, header_id: &HeaderID) -> Option<Block> {
         let url = format!("{}/blocks/{}", self.url, header_id);
         let res = match reqwest::blocking::get(url) {
