@@ -1,4 +1,7 @@
-mod sigma;
+// mod sigma;
+mod ergo_tree;
+mod register;
+
 use ergotree_ir::chain::ergo_box::ErgoBox;
 use ergotree_ir::chain::ergo_box::NonMandatoryRegisters;
 use ergotree_ir::chain::ergo_box::NonMandatoryRegisterId;
@@ -84,7 +87,7 @@ impl Output {
         Output {
             box_id: String::from(eb.box_id()),
             creation_height: eb.creation_height as i32,
-            address: sigma::address_from_ergo_tree(&eb.ergo_tree),
+            address: ergo_tree::address_from_ergo_tree(&eb.ergo_tree),
             index: eb.index as i32,
             value: eb.value.as_i64(),
             additional_registers: parse_additional_registers(&eb.additional_registers),
@@ -165,7 +168,7 @@ fn parse_additional_registers(regs: &NonMandatoryRegisters) -> [Option<Register>
 }
 
 fn parse_register(cst: &Constant, id: i16) -> Option<Register> {
-    let rendered_register = sigma::render_register_value(&cst);
+    let rendered_register = register::render_register_value(&cst);
     Some(Register {
         id: id,
         stype: rendered_register.value_type,

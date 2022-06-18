@@ -1,7 +1,3 @@
-use ergotree_ir::chain::address::Address;
-use ergotree_ir::chain::address::AddressEncoder;
-use ergotree_ir::chain::address::NetworkPrefix;
-use ergotree_ir::ergo_tree::ErgoTree;
 use ergotree_ir::mir::constant::Constant;
 use ergotree_ir::mir::value::CollKind;
 use ergotree_ir::mir::value::NativeColl;
@@ -10,14 +6,6 @@ use ergotree_ir::serialization::SigmaSerializable;
 use ergotree_ir::sigma_protocol::sigma_boolean::SigmaBoolean;
 use ergotree_ir::sigma_protocol::sigma_boolean::SigmaProofOfKnowledgeTree;
 use ergotree_ir::types::stype::SType;
-
-pub(super) fn address_from_ergo_tree(tree: &ErgoTree) -> String {
-    // let tree_bytes = base16::decode(base16_str.as_bytes()).unwrap();
-    // let tree = ErgoTree::sigma_parse_bytes(&tree_bytes).unwrap();
-    let address = Address::recreate_from_ergo_tree(tree).unwrap();
-    let encoder = AddressEncoder::new(NetworkPrefix::Mainnet);
-    encoder.address_to_str(&address)
-}
 
 #[derive(Debug)]
 pub struct RenderedRegister {
@@ -200,9 +188,7 @@ fn render_register_val(val: &Value) -> RenderedRegister {
 
 #[cfg(test)]
 mod tests {
-    use super::address_from_ergo_tree;
     use super::render_register_value;
-    use ergotree_ir::ergo_tree::ErgoTree;
     use ergotree_ir::mir::constant::Constant;
     use ergotree_ir::serialization::SigmaSerializable;
     use pretty_assertions::assert_eq;
@@ -210,17 +196,6 @@ mod tests {
     fn constant_from_base16(base16_str: &str) -> Constant {
         let bytes = base16::decode(base16_str.as_bytes()).unwrap();
         Constant::sigma_parse_bytes(&bytes).unwrap()
-    }
-
-    #[test]
-    fn check_address_from_ergo_tree() {
-        let base16_str = "0008cd03553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8";
-        let tree_bytes = base16::decode(base16_str.as_bytes()).unwrap();
-        let tree = ErgoTree::sigma_parse_bytes(&tree_bytes).unwrap();
-        assert_eq!(
-            address_from_ergo_tree(&tree),
-            "9h7L7sUHZk43VQC3PHtSp5ujAWcZtYmWATBH746wi75C5XHi68b"
-        );
     }
 
     #[test]
@@ -496,15 +471,5 @@ mod tests {
         let rr = render_register_value(&cst);
         assert_eq!(rr.value_type, "SUnit");
         assert_eq!(rr.value, "()");
-    }
-
-    #[test]
-    #[ignore = "Not testable as is"]
-    fn render_register_error_handling() {
-        // Invalid ByteCode
-        let cst = constant_from_base16("63");
-        let rr = render_register_value(&cst);
-        assert_eq!(rr.value_type, "_SigmaParsingError");
-        assert_eq!(rr.value, "_SigmaParsingError");
     }
 }
