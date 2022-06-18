@@ -10,10 +10,7 @@ const GENESIS_TX_ID: &str = ZERO_HEADER;
 /// Helper function to include genesis boxes in db.
 ///
 /// Includes dummy header and tx to satisfy FK's.
-pub fn include_genesis_boxes(
-    tx: &mut postgres::Transaction,
-    boxes: &Vec<crate::node::models::Output>,
-) {
+pub fn include_genesis_boxes(tx: &mut postgres::Transaction, boxes: &Vec<Output>) {
     // Genesis header
     tx.execute(
         "
@@ -38,7 +35,6 @@ pub fn include_genesis_boxes(
     .unwrap();
 
     // Outputs and registers
-    let outputs = boxes.iter().map(|b| Output::from_node_output(b)).collect();
-    super::outputs::include_genesis_boxes(tx, &outputs, GENESIS_HEADER_ID, GENESIS_TX_ID);
-    super::additional_registers::include_genesis_boxes(tx, &outputs);
+    super::outputs::include_genesis_boxes(tx, &boxes, GENESIS_HEADER_ID, GENESIS_TX_ID);
+    super::additional_registers::include_genesis_boxes(tx, &boxes);
 }

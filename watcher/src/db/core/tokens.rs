@@ -5,7 +5,7 @@ use log::warn;
 use postgres::Transaction;
 
 struct Token<'a> {
-    pub token_id: &'a str,
+    pub token_id: String,
     pub box_id: &'a str,
     pub emission_amount: i64,
     pub eip4_data: Option<EIP4Data>,
@@ -96,12 +96,12 @@ fn extract_new_tokens<'a>(block: &'a BlockData) -> Vec<Token<'a>> {
                     .iter()
                     .filter(|a| a.token_id == tx.input_box_ids[0])
                     .map(|a| Asset {
-                        token_id: a.token_id,
+                        token_id: String::from(&a.token_id),
                         amount: a.amount,
                     })
                     .reduce(|a, b| a + b)
                     .map(|a| Token {
-                        token_id: &a.token_id,
+                        token_id: a.token_id,
                         box_id: &op.box_id,
                         emission_amount: a.amount,
                         eip4_data: EIP4Data::from_output(op),

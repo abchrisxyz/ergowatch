@@ -84,11 +84,11 @@ fn set_constraints(tx: &mut Transaction) {
     }
 }
 
-fn extract_outputs<'a>(block: &'a BlockData) -> Vec<&'a str> {
+fn extract_outputs<'a>(block: &'a BlockData) -> Vec<&'a String> {
     block
         .transactions
         .iter()
-        .flat_map(|tx| tx.outputs.iter().map(|op| op.box_id))
+        .flat_map(|tx| tx.outputs.iter().map(|op| &op.box_id))
         .collect()
 }
 

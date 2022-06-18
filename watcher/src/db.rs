@@ -7,6 +7,7 @@ pub mod repair;
 pub mod unspent;
 
 use crate::cache::Cache;
+use crate::parsing::Output;
 use log::debug;
 use log::info;
 use postgres::{Client, NoTls, Transaction};
@@ -23,10 +24,7 @@ pub struct DB {
 
 impl DB {
     /// Add genesis boxes to database
-    pub fn include_genesis_boxes(
-        &self,
-        boxes: Vec<crate::node::models::Output>,
-    ) -> anyhow::Result<()> {
+    pub fn include_genesis_boxes(&self, boxes: Vec<Output>) -> anyhow::Result<()> {
         let mut client = Client::connect(&self.conn_str, NoTls)?;
         let mut tx = client.transaction()?;
         core::genesis::include_genesis_boxes(&mut tx, &boxes);

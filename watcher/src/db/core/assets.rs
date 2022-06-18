@@ -75,7 +75,7 @@ fn extract_assets<'a>(block: &'a BlockData) -> Vec<BoxAsset<'a>> {
                     .iter()
                     // Sum tokens by id
                     .fold(HashMap::new(), |mut acc, a| {
-                        *acc.entry(a.token_id).or_insert(0) += a.amount;
+                        *acc.entry(&a.token_id).or_insert(0) += a.amount;
                         acc
                     })
                     .iter()

@@ -1,5 +1,6 @@
 pub mod models;
 
+use ergotree_ir::chain::ergo_box::ErgoBox;
 use log::debug;
 use log::info;
 use log::warn;
@@ -9,7 +10,6 @@ use models::Block;
 use models::HeaderID;
 use models::Height;
 use models::NodeInfo;
-use models::Output;
 
 pub struct Node {
     url: String,
@@ -26,9 +26,9 @@ impl Node {
         Ok(node_info.full_height)
     }
 
-    pub fn get_genesis_blocks(&self) -> Result<Vec<Output>, reqwest::Error> {
+    pub fn get_genesis_blocks(&self) -> Result<Vec<ErgoBox>, reqwest::Error> {
         let url = format!("{}/utxo/genesis", self.url);
-        let boxes: Vec<Output> = reqwest::blocking::get(url)?.json()?;
+        let boxes: Vec<ErgoBox> = reqwest::blocking::get(url)?.json()?;
         Ok(boxes)
     }
 
