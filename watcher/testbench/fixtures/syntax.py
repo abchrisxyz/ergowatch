@@ -6,9 +6,10 @@ Blocks start with `block-<id>`.
 Default parent of a block if previous block.
 Block parent can be set explicitly: block-<id>-<parent_id>
 Tx id derived from index and block id.
-Txs separated by blank line.
-Tx inputs ans ouputs separated by `-->`.
+Txs separated by `--`.
+Tx inputs and ouputs separated by `>`.
 One input or output per line.
+Data-inputs enclosed in {curly brackets}.
 
 Example:
     // comments
@@ -21,6 +22,7 @@ Example:
     pub1-box2  190 (token: 20)
 
     pub1-box2 190
+    {cex1-box1} // data-input
     -->
     pub2-box1 189
     fees-box1   1
@@ -36,7 +38,6 @@ Example:
 """
 import re
 from typing import List, Dict, Tuple
-import functools
 from collections import namedtuple
 
 from fixtures.addresses import AddressCatalogue as AC
@@ -137,13 +138,16 @@ def parse_tx(s: str, block_attrs: BlockAttributes, index: int) -> Dict:
 
     # Parse boxes
     input_boxes = re.findall(r"(\w{4}-\w{4}) (\d+) (\(.*?\))?", inputs)
+    data_input_boxes = re.findall(r"[{] *(\w{4}-\w{4}) *[}]", inputs)
     output_boxes = re.findall(r"(\w{4}-\w{4}) (\d+) (\(.*?\))?", outputs)
 
     tx_id = f"tx-{block_attrs.id}{index+1}"
     return {
         "id": tx_id,
-        "inputs": [{"boxId": bx[0] for bx in input_boxes}],
-        "dataInputs": [],
+        "inputs": [{"boxId": bx[0] for bx in input_boxes}] if input_boxes else [],
+        "dataInputs": [{"boxId": bx for bx in data_input_boxes}]
+        if data_input_boxes
+        else [],
         "outputs": [
             {
                 "boxId": bx[0],
@@ -197,6 +201,7 @@ if __name__ == "__main__":
 
         block-c
         pub4-box1 189
+        {pub3-box1}
         >
         pub5-box1 189
     """

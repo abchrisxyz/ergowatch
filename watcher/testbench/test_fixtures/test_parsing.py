@@ -41,6 +41,7 @@ class TestParsing:
 
             block-c
             pub4-box1 189
+            {pub3-box1} // data input
             >
             pub5-box1 189
         """
@@ -90,7 +91,7 @@ class TestParsing:
         d = parse(desc, start_height)
         assert len(d) == 4
 
-        d[0]["blockTransactions"] = {
+        assert d[0]["blockTransactions"] == {
             "blockVersion": 2,
             "headerId": "block-a",
             "size": 234,
@@ -104,7 +105,7 @@ class TestParsing:
                             "additionalRegisters": {},
                             "assets": [],
                             "boxId": "cex1-box1",
-                            "creationHeight": 10,
+                            "creationHeight": 100,
                             "ergoTree": AC.boxid2box("cex1-box1").ergo_tree,
                             "index": 0,
                             "transactionId": "tx-a1",
@@ -117,7 +118,7 @@ class TestParsing:
                                 {"amount": 1, "tokenId": "tokeny"},
                             ],
                             "boxId": "pub1-box2",
-                            "creationHeight": 10,
+                            "creationHeight": 100,
                             "ergoTree": AC.boxid2box("pub1-box2").ergo_tree,
                             "index": 1,
                             "transactionId": "tx-a1",
@@ -135,7 +136,7 @@ class TestParsing:
                             "additionalRegisters": {},
                             "assets": [],
                             "boxId": "pub2-box1",
-                            "creationHeight": 10,
+                            "creationHeight": 100,
                             "ergoTree": AC.boxid2box("pub2-box1").ergo_tree,
                             "index": 0,
                             "transactionId": "tx-a2",
@@ -145,7 +146,7 @@ class TestParsing:
                             "additionalRegisters": {},
                             "assets": [],
                             "boxId": "fees-box1",
-                            "creationHeight": 10,
+                            "creationHeight": 100,
                             "ergoTree": AC.boxid2box("fees-box1").ergo_tree,
                             "index": 1,
                             "transactionId": "tx-a2",
@@ -157,7 +158,7 @@ class TestParsing:
             ],
         }
 
-        d[1]["blockTransactions"] = {
+        assert d[1]["blockTransactions"] == {
             "blockVersion": 2,
             "headerId": "block-x",
             "size": 234,
@@ -171,7 +172,7 @@ class TestParsing:
                             "additionalRegisters": {},
                             "assets": [],
                             "boxId": "pub3-box1",
-                            "creationHeight": 11,
+                            "creationHeight": 101,
                             "ergoTree": AC.boxid2box("pub3-box1").ergo_tree,
                             "index": 0,
                             "transactionId": "tx-x1",
@@ -183,7 +184,7 @@ class TestParsing:
             ],
         }
 
-        d[2]["blockTransactions"] = {
+        assert d[2]["blockTransactions"] == {
             "blockVersion": 2,
             "headerId": "block-b",
             "size": 234,
@@ -191,13 +192,13 @@ class TestParsing:
                 {
                     "dataInputs": [],
                     "id": "tx-b1",
-                    "inputs": [{"boxId": "pub3-box1"}],
+                    "inputs": [{"boxId": "pub2-box1"}],
                     "outputs": [
                         {
                             "additionalRegisters": {},
                             "assets": [],
                             "boxId": "pub4-box1",
-                            "creationHeight": 11,
+                            "creationHeight": 101,
                             "ergoTree": AC.boxid2box("pub4-box1").ergo_tree,
                             "index": 0,
                             "transactionId": "tx-b1",
@@ -209,13 +210,13 @@ class TestParsing:
             ],
         }
 
-        d[3]["blockTransactions"] = {
+        assert d[3]["blockTransactions"] == {
             "blockVersion": 2,
             "headerId": "block-c",
             "size": 234,
             "transactions": [
                 {
-                    "dataInputs": [],
+                    "dataInputs": [{"boxId": "pub3-box1"}],
                     "id": "tx-c1",
                     "inputs": [{"boxId": "pub4-box1"}],
                     "outputs": [
@@ -223,7 +224,7 @@ class TestParsing:
                             "additionalRegisters": {},
                             "assets": [],
                             "boxId": "pub5-box1",
-                            "creationHeight": 11,
+                            "creationHeight": 102,
                             "ergoTree": AC.boxid2box("pub5-box1").ergo_tree,
                             "index": 0,
                             "transactionId": "tx-c1",
