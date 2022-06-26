@@ -1,6 +1,6 @@
 import pytest
 
-from fixtures.addresses import AddressCatalogue as AC
+from fixtures.scenario.addresses import AddressCatalogue as AC
 
 
 @pytest.mark.order(1)

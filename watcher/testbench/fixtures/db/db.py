@@ -9,6 +9,7 @@ import pytest
 from local import DB_HOST, DB_PORT, DB_USER, DB_PASS
 from .sql import generate_bootstrap_sql
 from .sql import generate_rev1_sql
+from fixtures.scenario import Scenario
 
 # Latest schema
 SCHEMA_PATH = (
@@ -133,15 +134,15 @@ def load_sql(conn: pg.Connection, sql: str):
     conn.commit()
 
 
-def bootstrap_db(conn: pg.Connection, blocks: List[Dict]):
+def bootstrap_db(conn: pg.Connection, scenario: Scenario):
     """
     Initialize db data to satisfy any constraints for incoming blocks.
     """
-    load_sql(conn, generate_bootstrap_sql(blocks))
+    load_sql(conn, generate_bootstrap_sql(scenario))
 
 
-def fill_rev1_db(conn: pg.Connection, blocks: List[Dict]):
+def fill_rev1_db(conn: pg.Connection, scenario: Scenario):
     """
     Initialize db data to satisfy any constraints for incoming blocks.
     """
-    load_sql(conn, generate_rev1_sql(blocks))
+    load_sql(conn, generate_rev1_sql(scenario))

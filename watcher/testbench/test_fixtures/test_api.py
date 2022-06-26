@@ -2,9 +2,10 @@ import pytest
 import requests
 import copy
 
-from fixtures.api import GENESIS_ID, mock_api
+from fixtures.api import mock_api
 from fixtures.blocks import block_600k
 from fixtures.db.sql import DEFAULT_BOX_VALUE
+from fixtures.scenario.genesis import GENESIS_BOX
 
 
 @pytest.mark.order(1)
@@ -37,9 +38,9 @@ class TestGenesisApi:
         assert r.status_code == 200
         boxes = r.json()
         assert len(boxes) == 1
-        assert boxes[0]["boxId"] == "base-box1"
+        assert boxes[0]["boxId"] == GENESIS_BOX["boxId"]
         assert boxes[0]["value"] == DEFAULT_BOX_VALUE
-        assert boxes[0]["transactionId"] == GENESIS_ID
+        assert boxes[0]["transactionId"] == "0" * 64
         assert boxes[0]["creationHeight"] == 0
 
     def test_add_next_block(self, api):
@@ -91,9 +92,9 @@ class TestPopulatedApi:
         boxes = r.json()
         assert len(boxes) == 1
         assert len(boxes) == 1
-        assert boxes[0]["boxId"] == "base-box1"
+        assert boxes[0]["boxId"] == GENESIS_BOX["boxId"]
         assert boxes[0]["value"] == DEFAULT_BOX_VALUE
-        assert boxes[0]["transactionId"] == GENESIS_ID
+        assert boxes[0]["transactionId"] == "0" * 64
         assert boxes[0]["creationHeight"] == 0
 
     def test_add_next_block(self, api):

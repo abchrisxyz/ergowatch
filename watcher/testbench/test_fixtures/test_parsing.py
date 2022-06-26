@@ -1,7 +1,7 @@
 import pytest
-from fixtures.syntax import parse
-from fixtures.api import GENESIS_ID
-from fixtures.addresses import AddressCatalogue as AC
+from fixtures.scenario.syntax import parse
+from fixtures.scenario.genesis import GENESIS_ID
+from fixtures.scenario.addresses import AddressCatalogue as AC
 
 
 @pytest.mark.order(1)
@@ -15,44 +15,46 @@ class TestParsing:
         return """
             // comments
             block-a
-            pub1-box1  100 (tokenx: 20, tokeny: 3)
-            con1-box1  100 // inline comment
-            >
-            cex1-box1   10
-            pub1-box2  190 (tokenx: 20, tokeny: 1)
+                pub1-box1  100 (tokenx: 20, tokeny: 3)
+                con1-box1  100 // inline comment
+                >
+                cex1-box1   10 [0400]
+                // tokens should come before registers
+                pub1-box2  190 (tokenx: 20, tokeny: 1) [0401, 0402]
 
-            -- // Multiple txs are separated by 2 dashes
-            pub1-box2 190
-            >
-            pub2-box1 189
-            fees-box1   1
+                -- // Multiple txs are separated by 2 dashes
+                pub1-box2 190
+                >
+                pub2-box1 189 (tokenz: 5)
+                fees-box1   1
 
             // This block is not part of main chain
             block-x
-            pub2-box1 189
-            >
-            pub3-box1 189
+                pub2-box1 189
+                >
+                pub3-box1 189
 
             // Child of block-a
             block-b-a
-            pub2-box1 189
-            >
-            pub4-box1 189
+                pub2-box1 189
+                >
+                pub4-box1 189
 
             block-c
-            pub4-box1 189
-            {pub3-box1} // data input
-            >
-            pub5-box1 189
+                pub4-box1 189
+                {pub3-box1} // data input
+                >
+                pub5-box1 189
         """
 
     def test_block_headers(self, desc):
         start_height = 100
-        d = parse(desc, start_height)
+        start_ts = 1234560000000 + 100_000
+        d, m = parse(desc, start_height, start_ts)
         assert len(d) == 4
         assert d[0]["header"] == {
             "votes": "000000",
-            "timestamp": 1234560000000,
+            "timestamp": start_ts,
             "size": 123,
             "height": start_height,
             "id": "block-a",
@@ -61,7 +63,7 @@ class TestParsing:
 
         assert d[1]["header"] == {
             "votes": "000000",
-            "timestamp": 1234560000000 + 100000,
+            "timestamp": start_ts + 100000,
             "size": 123,
             "height": start_height + 1,
             "id": "block-x",
@@ -70,7 +72,7 @@ class TestParsing:
 
         assert d[2]["header"] == {
             "votes": "000000",
-            "timestamp": 1234560000000 + 100000,
+            "timestamp": start_ts + 100000,
             "size": 123,
             "height": start_height + 1,
             "id": "block-b",
@@ -79,7 +81,7 @@ class TestParsing:
 
         assert d[3]["header"] == {
             "votes": "000000",
-            "timestamp": 1234560000000 + 100000 * 2,
+            "timestamp": start_ts + 200000,
             "size": 123,
             "height": start_height + 2,
             "id": "block-c",
@@ -88,7 +90,8 @@ class TestParsing:
 
     def test_block_transactions(self, desc):
         start_height = 100
-        d = parse(desc, start_height)
+        start_ts = 1234560000000
+        d, m = parse(desc, start_height, start_ts)
         assert len(d) == 4
 
         assert d[0]["blockTransactions"] == {
@@ -98,30 +101,33 @@ class TestParsing:
             "transactions": [
                 {
                     "dataInputs": [],
-                    "id": "tx-a1",
-                    "inputs": [{"boxId": "con1-box1"}],
+                    "id": m["tx-a1"],
+                    "inputs": [{"boxId": m["pub1-box1"]}, {"boxId": m["con1-box1"]}],
                     "outputs": [
                         {
-                            "additionalRegisters": {},
+                            "additionalRegisters": {"R4": "0400"},
                             "assets": [],
-                            "boxId": "cex1-box1",
+                            "boxId": m["cex1-box1"],
                             "creationHeight": 100,
                             "ergoTree": AC.boxid2box("cex1-box1").ergo_tree,
                             "index": 0,
-                            "transactionId": "tx-a1",
+                            "transactionId": m["tx-a1"],
                             "value": 10,
                         },
                         {
-                            "additionalRegisters": {},
+                            "additionalRegisters": {
+                                "R4": "0401",
+                                "R5": "0402",
+                            },
                             "assets": [
-                                {"amount": 20, "tokenId": "tokenx"},
-                                {"amount": 1, "tokenId": "tokeny"},
+                                {"amount": 20, "tokenId": m["tokenx"]},
+                                {"amount": 1, "tokenId": m["tokeny"]},
                             ],
-                            "boxId": "pub1-box2",
+                            "boxId": m["pub1-box2"],
                             "creationHeight": 100,
                             "ergoTree": AC.boxid2box("pub1-box2").ergo_tree,
                             "index": 1,
-                            "transactionId": "tx-a1",
+                            "transactionId": m["tx-a1"],
                             "value": 190,
                         },
                     ],
@@ -129,27 +135,29 @@ class TestParsing:
                 },
                 {
                     "dataInputs": [],
-                    "id": "tx-a2",
-                    "inputs": [{"boxId": "pub1-box2"}],
+                    "id": m["tx-a2"],
+                    "inputs": [{"boxId": m["pub1-box2"]}],
                     "outputs": [
                         {
                             "additionalRegisters": {},
-                            "assets": [],
-                            "boxId": "pub2-box1",
+                            "assets": [
+                                {"amount": 5, "tokenId": m["tokenz"]},
+                            ],
+                            "boxId": m["pub2-box1"],
                             "creationHeight": 100,
                             "ergoTree": AC.boxid2box("pub2-box1").ergo_tree,
                             "index": 0,
-                            "transactionId": "tx-a2",
+                            "transactionId": m["tx-a2"],
                             "value": 189,
                         },
                         {
                             "additionalRegisters": {},
                             "assets": [],
-                            "boxId": "fees-box1",
+                            "boxId": m["fees-box1"],
                             "creationHeight": 100,
                             "ergoTree": AC.boxid2box("fees-box1").ergo_tree,
                             "index": 1,
-                            "transactionId": "tx-a2",
+                            "transactionId": m["tx-a2"],
                             "value": 1,
                         },
                     ],
@@ -165,17 +173,17 @@ class TestParsing:
             "transactions": [
                 {
                     "dataInputs": [],
-                    "id": "tx-x1",
-                    "inputs": [{"boxId": "pub2-box1"}],
+                    "id": m["tx-x1"],
+                    "inputs": [{"boxId": m["pub2-box1"]}],
                     "outputs": [
                         {
                             "additionalRegisters": {},
                             "assets": [],
-                            "boxId": "pub3-box1",
+                            "boxId": m["pub3-box1"],
                             "creationHeight": 101,
                             "ergoTree": AC.boxid2box("pub3-box1").ergo_tree,
                             "index": 0,
-                            "transactionId": "tx-x1",
+                            "transactionId": m["tx-x1"],
                             "value": 189,
                         }
                     ],
@@ -191,17 +199,17 @@ class TestParsing:
             "transactions": [
                 {
                     "dataInputs": [],
-                    "id": "tx-b1",
-                    "inputs": [{"boxId": "pub2-box1"}],
+                    "id": m["tx-b1"],
+                    "inputs": [{"boxId": m["pub2-box1"]}],
                     "outputs": [
                         {
                             "additionalRegisters": {},
                             "assets": [],
-                            "boxId": "pub4-box1",
+                            "boxId": m["pub4-box1"],
                             "creationHeight": 101,
                             "ergoTree": AC.boxid2box("pub4-box1").ergo_tree,
                             "index": 0,
-                            "transactionId": "tx-b1",
+                            "transactionId": m["tx-b1"],
                             "value": 189,
                         }
                     ],
@@ -216,18 +224,18 @@ class TestParsing:
             "size": 234,
             "transactions": [
                 {
-                    "dataInputs": [{"boxId": "pub3-box1"}],
-                    "id": "tx-c1",
-                    "inputs": [{"boxId": "pub4-box1"}],
+                    "dataInputs": [{"boxId": m["pub3-box1"]}],
+                    "id": m["tx-c1"],
+                    "inputs": [{"boxId": m["pub4-box1"]}],
                     "outputs": [
                         {
                             "additionalRegisters": {},
                             "assets": [],
-                            "boxId": "pub5-box1",
+                            "boxId": m["pub5-box1"],
                             "creationHeight": 102,
                             "ergoTree": AC.boxid2box("pub5-box1").ergo_tree,
                             "index": 0,
-                            "transactionId": "tx-c1",
+                            "transactionId": m["tx-c1"],
                             "value": 189,
                         }
                     ],

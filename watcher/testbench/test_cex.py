@@ -1,15 +1,17 @@
 import pytest
 import psycopg as pg
 
-from fixtures.api import MockApi, ApiUtil, GENESIS_ID
+from fixtures.api import MockApi, ApiUtil
+from fixtures.scenario.genesis import GENESIS_ID
 from fixtures.config import temp_cfg
-from fixtures import syntax
+from fixtures.scenario import Scenario
 from fixtures.db import bootstrap_db
 from fixtures.db import fill_rev1_db
 from fixtures.db import temp_db_class_scoped
 from fixtures.db import temp_db_rev1_class_scoped
 from fixtures.db import unconstrained_db_class_scoped
-from fixtures.addresses import AddressCatalogue as AC
+from fixtures.scenario.addresses import AddressCatalogue as AC
+from test_core import SCENARIO_DESCRIPTION
 from utils import run_watcher
 from utils import assert_pk
 from utils import assert_fk
@@ -21,10 +23,7 @@ from utils import assert_column_ge
 ORDER = 13
 
 
-def make_blocks(parent_height: int):
-    """Returns test blocks starting at next height."""
-
-    desc = """
+SCENARIO_DESCRIPTION = """
     // pub1 is a deposit address for cex1
     // pub2 is a deposit address for cex2
     // pub3 is a deposit address for cex3
@@ -84,7 +83,7 @@ def make_blocks(parent_height: int):
         // to test a conflict rollback
         pub1-box2   10
         >
-        cex2-box1   10
+        cex2-box0   10
     //------------------------------------------------------
 
     block-d-c
@@ -117,7 +116,6 @@ def make_blocks(parent_height: int):
         >
         cex3-box3    5
     """
-    return syntax.parse(desc, parent_height + 1)
 
 
 @pytest.mark.order(ORDER)
@@ -126,21 +124,20 @@ class TestSync:
     Start with bootstrapped db.
     """
 
-    start_height = 599_999
+    scenario = Scenario(SCENARIO_DESCRIPTION, 599_999, 1234560000000)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
         """
         Run watcher with mock api and return cursor to test db.
         """
-        blocks = make_blocks(self.start_height)
         with MockApi() as api:
             api = ApiUtil()
-            api.set_blocks(blocks)
+            api.set_blocks(self.scenario.blocks)
 
             # Bootstrap db
             with pg.connect(temp_db_class_scoped) as conn:
-                bootstrap_db(conn, blocks)
+                bootstrap_db(conn, self.scenario)
 
             # Run
             cp = run_watcher(temp_cfg)
@@ -151,7 +148,7 @@ class TestSync:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.start_height)
+        _test_db_state(synced_db, self.scenario)
 
 
 @pytest.mark.order(ORDER)
@@ -161,24 +158,23 @@ class TestSyncRollback:
     Forking scenario triggering a rollback.
     """
 
-    start_height = 599_999
+    scenario = Scenario(SCENARIO_DESCRIPTION, 599_999, 1234560000000)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
         """
         Run watcher with mock api and return cursor to test db.
         """
-        blocks = make_blocks(self.start_height)
         with MockApi() as api:
             api = ApiUtil()
 
             # Initially have chain a-b-c-x
-            first_blocks = blocks[0:4]
-            api.set_blocks(first_blocks)
+            self.scenario.mask(4)
+            api.set_blocks(self.scenario.blocks)
 
             # Bootstrap db
             with pg.connect(temp_db_class_scoped) as conn:
-                bootstrap_db(conn, first_blocks)
+                bootstrap_db(conn, self.scenario)
 
             # Run to include block x
             cp = run_watcher(temp_cfg)
@@ -186,7 +182,8 @@ class TestSyncRollback:
             assert "Including block block-x" in cp.stdout.decode()
 
             # Now make all blocks visible
-            api.set_blocks(blocks)
+            self.scenario.unmask()
+            api.set_blocks(self.scenario.blocks)
 
             # Run again
             cp = run_watcher(temp_cfg)
@@ -198,7 +195,7 @@ class TestSyncRollback:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.start_height)
+        _test_db_state(synced_db, self.scenario)
 
 
 @pytest.mark.order(ORDER)
@@ -207,17 +204,16 @@ class TestGenesis:
     Start with empty, unconstrained db.
     """
 
-    start_height = 0
+    scenario = Scenario(SCENARIO_DESCRIPTION, 0, 1234560000000)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, unconstrained_db_class_scoped):
         """
         Run watcher with mock api and return cursor to test db.
         """
-        blocks = make_blocks(self.start_height)
         with MockApi() as api:
             api = ApiUtil()
-            api.set_blocks(blocks)
+            api.set_blocks(self.scenario.blocks)
 
             # Run
             cp = run_watcher(temp_cfg)
@@ -228,7 +224,7 @@ class TestGenesis:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.start_height, bootstrapped=True)
+        _test_db_state(synced_db, self.scenario, bootstrapped=True)
 
 
 @pytest.mark.order(ORDER)
@@ -237,21 +233,20 @@ class TestMigrations:
     Aplly migration to synced db
     """
 
-    start_height = 599_999
+    scenario = Scenario(SCENARIO_DESCRIPTION, 599_999, 1234560000000, main_only=True)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_rev1_class_scoped):
         """
         Run watcher with mock api and return cursor to test db.
         """
-        blocks = make_blocks(self.start_height)
         with MockApi() as api:
             api = ApiUtil()
-            api.set_blocks(blocks)
+            api.set_blocks(self.scenario.blocks)
 
             # Prepare db
             with pg.connect(temp_db_rev1_class_scoped) as conn:
-                fill_rev1_db(conn, blocks)
+                fill_rev1_db(conn, self.scenario)
 
             # Run
             cp = run_watcher(temp_cfg, allow_migrations=True)
@@ -262,7 +257,7 @@ class TestMigrations:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.start_height, bootstrapped=True)
+        _test_db_state(synced_db, self.scenario, bootstrapped=True)
 
 
 @pytest.mark.order(ORDER)
@@ -273,21 +268,20 @@ class TestRepair:
 
     # Start one block later so last block has height multiple of 5
     # and trigger a repair event.
-    start_height = 599_999 + 1
+    scenario = Scenario(SCENARIO_DESCRIPTION, 599_999 + 1, 1234560000000)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
         """
         Run watcher with mock api and return cursor to test db.
         """
-        blocks = make_blocks(self.start_height)
         with MockApi() as api:
             api = ApiUtil()
-            api.set_blocks(blocks)
+            api.set_blocks(self.scenario.blocks)
 
             # Bootstrap db
             with pg.connect(temp_db_class_scoped) as conn:
-                bootstrap_db(conn, blocks)
+                bootstrap_db(conn, self.scenario)
                 # Simulate an interupted repair,
                 # Should be cleaned up at startup.
                 with conn.cursor() as cur:
@@ -305,10 +299,10 @@ class TestRepair:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.start_height, bootstrapped=True)
+        _test_db_state(synced_db, self.scenario, bootstrapped=True)
 
 
-def _test_db_state(conn: pg.Connection, start_height: int, bootstrapped=False):
+def _test_db_state(conn: pg.Connection, s: Scenario, bootstrapped=False):
     """
     Test outcomes can be different for cases that trigger bootstrapping code or
     a repair event. This is indicated through the *bootstrapped* flag.
@@ -323,9 +317,9 @@ def _test_db_state(conn: pg.Connection, start_height: int, bootstrapped=False):
         assert_cex_ids(cur)
         assert_main_addresses(cur)
         assert_deposit_addresses(cur)
-        assert_addresses_conflicts(cur, start_height)
-        assert_processing_log(cur, start_height, bootstrapped)
-        assert_supply(cur, start_height, bootstrapped)
+        assert_addresses_conflicts(cur, s)
+        assert_processing_log(cur, s, bootstrapped)
+        assert_supply(cur, s, bootstrapped)
         assert_repair_cleaned_up(cur)
 
 
@@ -443,7 +437,7 @@ def assert_deposit_addresses(cur: pg.Cursor):
     ]
 
 
-def assert_addresses_conflicts(cur: pg.Cursor, start_height):
+def assert_addresses_conflicts(cur: pg.Cursor, s: Scenario):
     pub9 = AC.get("pub9")
     cur.execute(
         """
@@ -459,11 +453,11 @@ def assert_addresses_conflicts(cur: pg.Cursor, start_height):
     rows = cur.fetchall()
     assert len(rows) == 1
     assert rows == [
-        (pub9.address, 1, "deposit", start_height + 2, start_height + 5),
+        (pub9.address, 1, "deposit", s.parent_height + 2, s.parent_height + 5),
     ]
 
 
-def assert_processing_log(cur: pg.Cursor, start_height: int, bootstrapped: bool):
+def assert_processing_log(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
     cur.execute(
         """
         select header_id
@@ -477,19 +471,29 @@ def assert_processing_log(cur: pg.Cursor, start_height: int, bootstrapped: bool)
     rows = cur.fetchall()
     assert len(rows) == 6
     expected_status = "processed" if bootstrapped else "pending"
-    assert rows[0] == (GENESIS_ID, start_height + 0, None, "processed")
-    assert rows[1] == ("block-a", start_height + 1, None, expected_status)
-    assert rows[2] == ("block-b", start_height + 2, None, expected_status)
-    assert rows[3] == ("block-c", start_height + 3, start_height + 2, expected_status)
-    assert rows[4] == ("block-d", start_height + 4, start_height + 3, expected_status)
-    assert rows[5] == ("block-e", start_height + 5, None, expected_status)
+    assert rows[0] == (GENESIS_ID, s.parent_height + 0, None, "processed")
+    assert rows[1] == ("block-a", s.parent_height + 1, None, expected_status)
+    assert rows[2] == ("block-b", s.parent_height + 2, None, expected_status)
+    assert rows[3] == (
+        "block-c",
+        s.parent_height + 3,
+        s.parent_height + 2,
+        expected_status,
+    )
+    assert rows[4] == (
+        "block-d",
+        s.parent_height + 4,
+        s.parent_height + 3,
+        expected_status,
+    )
+    assert rows[5] == ("block-e", s.parent_height + 5, None, expected_status)
 
 
-def assert_supply(cur: pg.Cursor, start_height: int, bootstrapped: bool):
-    height_b = start_height + 2
-    height_c = start_height + 3
-    height_d = start_height + 4
-    height_e = start_height + 5
+def assert_supply(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
+    height_b = s.parent_height + 2
+    height_c = s.parent_height + 3
+    height_d = s.parent_height + 4
+    height_e = s.parent_height + 5
     cur.execute(
         """
         select height

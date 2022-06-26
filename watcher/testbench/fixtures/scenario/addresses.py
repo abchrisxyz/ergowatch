@@ -157,6 +157,13 @@ class _AddressCatalogue:
         """
         return self._key2box[key]
 
+    def box_from_short_id(self, short_id: str) -> Box:
+        """
+        pub<i> | con<i> | base | fees | cex<i>
+        """
+        key = short_id.split("-")[0]
+        return self._key2box[key]
+
     def boxid2addr(self, box_id: str) -> str:
         """
         Return the address corresponding to a mock box_id pattern.

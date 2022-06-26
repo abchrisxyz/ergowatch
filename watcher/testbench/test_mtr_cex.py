@@ -1,15 +1,17 @@
+from fixtures import scenario
 import pytest
 import psycopg as pg
 
-from fixtures.api import MockApi, ApiUtil, GENESIS_ID
+from fixtures.api import MockApi, ApiUtil
+from fixtures.scenario import Scenario
+from fixtures.scenario.genesis import GENESIS_ID
 from fixtures.config import temp_cfg
-from fixtures import syntax
 from fixtures.db import bootstrap_db
 from fixtures.db import fill_rev1_db
 from fixtures.db import temp_db_class_scoped
 from fixtures.db import temp_db_rev1_class_scoped
 from fixtures.db import unconstrained_db_class_scoped
-from fixtures.addresses import AddressCatalogue as AC
+from fixtures.scenario.addresses import AddressCatalogue as AC
 from utils import run_watcher
 from utils import assert_pk
 from utils import assert_column_not_null
@@ -19,395 +21,7 @@ from utils import assert_column_ge
 ORDER = 13
 
 
-def make_blocks2(height: int):
-    """
-    Returns test blocks starting at giving height.
-
-    block a:
-        -- coinbase tx:
-        base-box1 1000 --> base-box2  950
-                           con1-box1   50
-
-    block b:
-        -- deposit 10 to CEX 1:
-        con1-box1   50 --> pub1-box1   10
-                           con1-box2   40
-
-    block c:
-        -- deposit 15 to CEX 2
-        con1-box2   40 --> pub2-box1   15
-                           con1-box3   25
-
-        -- deposit 5 to CEX 3
-        con1-box3   25 --> pub3-box1   20
-                           con1-box4    5
-
-        -- cex 1 claiming deposit (deposit was sold)
-        pub1-box1   10 --> cex1-box1   10
-
-    ----------------------fork-of-d----------------------
-    block x - fork of block d to be ignored/rolled back:
-        -- cex 3 claiming deposit (deposit was sold)
-        pub3-box1   20 --> cex3-box1   20
-    ------------------------------------------------------
-
-    block d:
-        -- cex 2 claiming part of deposit (some deposit was sold)
-        pub2-box1   15 --> cex2-box1    5
-                           pub2-box2    9
-                           fees-box1    1
-
-    block e - one more block to tell d and x appart
-        -- dummy tx
-        fees-box1    1 --> fees-box2  1
-
-    """
-    base = AC.coinbase
-    fees = AC.fees
-    con1 = AC.get("con1")
-    pub1 = AC.get("pub1")
-    pub2 = AC.get("pub2")
-    pub3 = AC.get("pub3")
-    cex1 = AC.get("cex1")
-    cex2 = AC.get("cex2")
-    cex3 = AC.get("cex3")
-
-    h = height + 1
-    tx_a1 = {
-        "id": "tx-a1",
-        "inputs": [
-            {
-                "boxId": "base-box1",
-            }
-        ],
-        "dataInputs": [],
-        "outputs": [
-            {
-                "boxId": "base-box2",
-                "value": 950,
-                "ergoTree": base.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-a1",
-                "index": 0,
-            },
-            {
-                "boxId": "con1-box1",
-                "value": 50,
-                "ergoTree": con1.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-a1",
-                "index": 1,
-            },
-        ],
-        "size": 344,
-    }
-
-    h += 1
-    tx_b1 = {
-        "id": "tx-b1",
-        "inputs": [{"boxId": "con1-box1"}],
-        "dataInputs": [],
-        "outputs": [
-            {
-                "boxId": "pub1-box1",
-                "value": 10,
-                "ergoTree": pub1.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-b1",
-                "index": 0,
-            },
-            {
-                "boxId": "con1-box2",
-                "value": 40,
-                "ergoTree": con1.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-b1",
-                "index": 1,
-            },
-        ],
-        "size": 674,
-    }
-
-    h += 1
-    tx_c1 = {
-        "id": "tx-c1",
-        "inputs": [{"boxId": "con1-box2"}],
-        "dataInputs": [],
-        "outputs": [
-            {
-                "boxId": "pub2-box1",
-                "value": 15,
-                "ergoTree": pub2.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-c1",
-                "index": 0,
-            },
-            {
-                "boxId": "con1-box3",
-                "value": 25,
-                "ergoTree": con1.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-c1",
-                "index": 1,
-            },
-        ],
-        "size": 100,
-    }
-
-    tx_c2 = {
-        "id": "tx-c2",
-        "inputs": [{"boxId": "con1-box3"}],
-        "dataInputs": [],
-        "outputs": [
-            {
-                "boxId": "pub3-box1",
-                "value": 20,
-                "ergoTree": pub3.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-c2",
-                "index": 0,
-            },
-            {
-                "boxId": "con1-box4",
-                "value": 5,
-                "ergoTree": con1.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-c2",
-                "index": 1,
-            },
-        ],
-        "size": 100,
-    }
-
-    tx_c3 = {
-        "id": "tx-c3",
-        "inputs": [{"boxId": "pub1-box1"}],
-        "dataInputs": [],
-        "outputs": [
-            {
-                "boxId": "cex1-box1",
-                "value": 10,
-                "ergoTree": cex1.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-c3",
-                "index": 0,
-            },
-        ],
-        "size": 100,
-    }
-
-    h += 1
-    tx_x1 = {
-        "id": "tx-x1",
-        "inputs": [{"boxId": "pub3-box1"}],
-        "dataInputs": [],
-        "outputs": [
-            {
-                "boxId": "cex3-box1",
-                "value": 20,
-                "ergoTree": cex3.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-x1",
-                "index": 0,
-            },
-        ],
-        "size": 674,
-    }
-
-    tx_d1 = {
-        "id": "tx-d1",
-        "inputs": [{"boxId": "pub2-box1"}],
-        "dataInputs": [],
-        "outputs": [
-            {
-                "boxId": "cex2-box1",
-                "value": 5,
-                "ergoTree": cex2.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-d1",
-                "index": 0,
-            },
-            {
-                "boxId": "pub2-box2",
-                "value": 9,
-                "ergoTree": pub2.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-d1",
-                "index": 0,
-            },
-            {
-                "boxId": "fees-box1",
-                "value": 1,
-                "ergoTree": fees.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-d1",
-                "index": 1,
-            },
-        ],
-        "size": 100,
-    }
-
-    h = +1
-    tx_e1 = {
-        "id": "tx-e1",
-        "inputs": [{"boxId": "fees-box1"}],
-        "dataInputs": [],
-        "outputs": [
-            {
-                "boxId": "fees-box2",
-                "value": 1,
-                "ergoTree": fees.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-e1",
-                "index": 0,
-            },
-        ],
-        "size": 100,
-    }
-
-    block_a = {
-        "header": {
-            "votes": "000000",
-            "timestamp": 1234560100000,
-            "size": 123,
-            "height": height + 1,
-            "id": "block-a",
-            "parentId": GENESIS_ID,
-        },
-        "blockTransactions": {
-            "headerId": "block-a",
-            "transactions": [tx_a1],
-            "blockVersion": 2,
-            "size": 1155,
-        },
-        "size": 1000,
-    }
-
-    block_b = {
-        "header": {
-            "votes": "000000",
-            "timestamp": 1234560200000,
-            "size": 123,
-            "height": height + 2,
-            "id": "block-b",
-            "parentId": "block-a",
-        },
-        "blockTransactions": {
-            "headerId": "block-b",
-            "transactions": [tx_b1],
-            "blockVersion": 2,
-            "size": 1155,
-        },
-        "size": 1000,
-    }
-
-    block_c = {
-        "header": {
-            "votes": "000000",
-            "timestamp": 1234560300000,
-            "size": 123,
-            "height": height + 3,
-            "id": "block-c",
-            "parentId": "block-b",
-        },
-        "blockTransactions": {
-            "headerId": "block-c",
-            "transactions": [tx_c1, tx_c2, tx_c3],
-            "blockVersion": 2,
-            "size": 1155,
-        },
-        "size": 1000,
-    }
-
-    block_x = {
-        "header": {
-            "votes": "000000",
-            "timestamp": 1234560400000,
-            "size": 123,
-            "height": height + 4,
-            "id": "block-x",
-            "parentId": "block-c",
-        },
-        "blockTransactions": {
-            "headerId": "block-x",
-            "transactions": [tx_x1],
-            "blockVersion": 2,
-            "size": 1155,
-        },
-        "size": 1000,
-    }
-
-    block_d = {
-        "header": {
-            "votes": "000000",
-            "timestamp": 1234560400000,
-            "size": 123,
-            "height": height + 4,
-            "id": "block-d",
-            "parentId": "block-c",
-        },
-        "blockTransactions": {
-            "headerId": "block-d",
-            "transactions": [tx_d1],
-            "blockVersion": 2,
-            "size": 1155,
-        },
-        "size": 1000,
-    }
-
-    block_e = {
-        "header": {
-            "votes": "000000",
-            "timestamp": 1234560500000,
-            "size": 123,
-            "height": height + 5,
-            "id": "block-e",
-            "parentId": "block-d",
-        },
-        "blockTransactions": {
-            "headerId": "block-e",
-            "transactions": [tx_e1],
-            "blockVersion": 2,
-            "size": 1155,
-        },
-        "size": 1000,
-    }
-
-    return [block_a, block_b, block_c, block_x, block_d, block_e]
-
-
-def make_blocks(parent_height: int):
-    """Returns test blocks starting at next height."""
-
-    desc = """
+SCENARIO_DESCRIPTION = """
     // pub1 is a deposit address for cex1
     // pub2 is a deposit address for cex2
     // pub3 is a deposit address for cex3
@@ -467,7 +81,7 @@ def make_blocks(parent_height: int):
         // to test a conflict rollback
         pub1-box2   10
         >
-        cex2-box1   10
+        cex2-box0   10
     //------------------------------------------------------
 
     block-d-c
@@ -500,7 +114,6 @@ def make_blocks(parent_height: int):
         >
         cex3-box3    5
     """
-    return syntax.parse(desc, parent_height + 1)
 
 
 @pytest.mark.order(ORDER)
@@ -509,21 +122,20 @@ class TestSync:
     Start with bootstrapped db.
     """
 
-    start_height = 599_999
+    scenario = Scenario(SCENARIO_DESCRIPTION, 599_999, 1234560000000)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
         """
         Run watcher with mock api and return cursor to test db.
         """
-        blocks = make_blocks(self.start_height)
         with MockApi() as api:
             api = ApiUtil()
-            api.set_blocks(blocks)
+            api.set_blocks(self.scenario.blocks)
 
             # Bootstrap db
             with pg.connect(temp_db_class_scoped) as conn:
-                bootstrap_db(conn, blocks)
+                bootstrap_db(conn, self.scenario)
 
             # Run
             cp = run_watcher(temp_cfg)
@@ -534,7 +146,7 @@ class TestSync:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.start_height)
+        _test_db_state(synced_db, self.scenario)
 
 
 @pytest.mark.order(ORDER)
@@ -544,24 +156,23 @@ class TestSyncRollback:
     Forking scenario triggering a rollback.
     """
 
-    start_height = 599_999
+    scenario = Scenario(SCENARIO_DESCRIPTION, 599_999, 1234560000000)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
         """
         Run watcher with mock api and return cursor to test db.
         """
-        blocks = make_blocks(self.start_height)
         with MockApi() as api:
             api = ApiUtil()
 
             # Initially have chain a-b-c-x
-            first_blocks = blocks[0:4]
-            api.set_blocks(first_blocks)
+            self.scenario.mask(4)
+            api.set_blocks(self.scenario.blocks)
 
             # Bootstrap db
             with pg.connect(temp_db_class_scoped) as conn:
-                bootstrap_db(conn, first_blocks)
+                bootstrap_db(conn, self.scenario)
 
             # Run to include block x
             cp = run_watcher(temp_cfg)
@@ -569,7 +180,8 @@ class TestSyncRollback:
             assert "Including block block-x" in cp.stdout.decode()
 
             # Now make all blocks visible
-            api.set_blocks(blocks)
+            self.scenario.unmask()
+            api.set_blocks(self.scenario.blocks)
 
             # Run again
             cp = run_watcher(temp_cfg)
@@ -581,7 +193,7 @@ class TestSyncRollback:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.start_height)
+        _test_db_state(synced_db, self.scenario)
 
 
 @pytest.mark.order(ORDER)
@@ -590,17 +202,16 @@ class TestGenesis:
     Start with empty, unconstrained db.
     """
 
-    start_height = 0
+    scenario = Scenario(SCENARIO_DESCRIPTION, 0, 1234560000000)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, unconstrained_db_class_scoped):
         """
         Run watcher with mock api and return cursor to test db.
         """
-        blocks = make_blocks(self.start_height)
         with MockApi() as api:
             api = ApiUtil()
-            api.set_blocks(blocks)
+            api.set_blocks(self.scenario.blocks)
 
             # Run
             cp = run_watcher(temp_cfg)
@@ -611,7 +222,7 @@ class TestGenesis:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.start_height, bootstrapped=True)
+        _test_db_state(synced_db, self.scenario, bootstrapped=True)
 
 
 @pytest.mark.order(ORDER)
@@ -620,21 +231,20 @@ class TestMigrations:
     Aplly migration to synced db
     """
 
-    start_height = 599_999
+    scenario = Scenario(SCENARIO_DESCRIPTION, 599_999, 1234560000000, main_only=True)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_rev1_class_scoped):
         """
         Run watcher with mock api and return cursor to test db.
         """
-        blocks = make_blocks(self.start_height)
         with MockApi() as api:
             api = ApiUtil()
-            api.set_blocks(blocks)
+            api.set_blocks(self.scenario.blocks)
 
             # Prepare db
             with pg.connect(temp_db_rev1_class_scoped) as conn:
-                fill_rev1_db(conn, blocks)
+                fill_rev1_db(conn, self.scenario)
 
             # Run
             cp = run_watcher(temp_cfg, allow_migrations=True)
@@ -645,7 +255,7 @@ class TestMigrations:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.start_height, bootstrapped=True)
+        _test_db_state(synced_db, self.scenario, bootstrapped=True)
 
 
 @pytest.mark.order(ORDER)
@@ -656,21 +266,20 @@ class TestRepair:
 
     # Start one block later so last block has height multiple of 5
     # and trigger a repair event.
-    start_height = 599_999 + 1
+    scenario = Scenario(SCENARIO_DESCRIPTION, 599_999 + 1, 1234560000000)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
         """
         Run watcher with mock api and return cursor to test db.
         """
-        blocks = make_blocks(self.start_height)
         with MockApi() as api:
             api = ApiUtil()
-            api.set_blocks(blocks)
+            api.set_blocks(self.scenario.blocks)
 
             # Bootstrap db
             with pg.connect(temp_db_class_scoped) as conn:
-                bootstrap_db(conn, blocks)
+                bootstrap_db(conn, self.scenario)
                 # Simulate an interupted repair,
                 # Should be cleaned up at startup.
                 with conn.cursor() as cur:
@@ -688,10 +297,10 @@ class TestRepair:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.start_height, bootstrapped=True)
+        _test_db_state(synced_db, self.scenario, bootstrapped=True)
 
 
-def _test_db_state(conn: pg.Connection, start_height: int, bootstrapped=False):
+def _test_db_state(conn: pg.Connection, s: Scenario, bootstrapped=False):
     """
     Test outcomes can be different for cases that trigger bootstrapping code or
     a repair event. This is indicated through the *bootstrapped* flag.
@@ -703,7 +312,7 @@ def _test_db_state(conn: pg.Connection, start_height: int, bootstrapped=False):
     """
     assert_db_constraints(conn)
     with conn.cursor() as cur:
-        assert_supply(cur, start_height, bootstrapped)
+        assert_supply(cur, s, bootstrapped)
 
 
 def assert_db_constraints(conn: pg.Connection):
@@ -716,7 +325,7 @@ def assert_db_constraints(conn: pg.Connection):
     assert_column_ge(conn, "mtr", "cex_supply", "deposit", 0)
 
 
-def assert_supply(cur: pg.Cursor, start_height: int, bootstrapped: bool):
+def assert_supply(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
     cur.execute(
         """
         select height
@@ -731,17 +340,17 @@ def assert_supply(cur: pg.Cursor, start_height: int, bootstrapped: bool):
         print(row)
     if bootstrapped:
         assert len(rows) == 6
-        assert rows[0] == (start_height + 0, 0, 0)
-        assert rows[1] == (start_height + 1, 0, 0)
-        assert rows[2] == (start_height + 2, 26, 20)
-        assert rows[3] == (start_height + 3, 41, 25)
-        assert rows[4] == (start_height + 4, 40, 19)
-        assert rows[5] == (start_height + 5, 139, 16)
+        assert rows[0] == (s.parent_height + 0, 0, 0)
+        assert rows[1] == (s.parent_height + 1, 0, 0)
+        assert rows[2] == (s.parent_height + 2, 26, 20)
+        assert rows[3] == (s.parent_height + 3, 41, 25)
+        assert rows[4] == (s.parent_height + 4, 40, 19)
+        assert rows[5] == (s.parent_height + 5, 139, 16)
     else:
         assert len(rows) == 6
-        assert rows[0] == (start_height + 0, 0, 0)
-        assert rows[1] == (start_height + 1, 0, 0)
-        assert rows[2] == (start_height + 2, 100, 94)
-        assert rows[3] == (start_height + 3, 120, 104)
-        assert rows[4] == (start_height + 4, 134, 113)
-        assert rows[5] == (start_height + 5, 233, 110)
+        assert rows[0] == (s.parent_height + 0, 0, 0)
+        assert rows[1] == (s.parent_height + 1, 0, 0)
+        assert rows[2] == (s.parent_height + 2, 100, 94)
+        assert rows[3] == (s.parent_height + 3, 120, 104)
+        assert rows[4] == (s.parent_height + 4, 134, 113)
+        assert rows[5] == (s.parent_height + 5, 233, 110)

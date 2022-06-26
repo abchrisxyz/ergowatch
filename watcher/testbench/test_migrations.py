@@ -4,243 +4,43 @@ import psycopg as pg
 import os
 from pathlib import Path
 
-from fixtures.api import MockApi, ApiUtil, GENESIS_ID
+from fixtures.api import MockApi, ApiUtil
+from fixtures.scenario import Scenario
 from fixtures.config import temp_cfg
 from fixtures.db import temp_db_rev1
 from fixtures.db import SCHEMA_PATH
 from fixtures.db import fill_rev1_db
-from fixtures.addresses import AddressCatalogue as AC
+from fixtures.scenario.addresses import AddressCatalogue as AC
+from test_mtr_cex import SCENARIO_DESCRIPTION
 from utils import run_watcher
 
 
 # TODO: copied from test_core, but could be simplified a bit
-def make_blocks(height: int):
+SCENARIO_DESCRIPTION = """
+    block-a // coinbase tx
+        base-box1 1000
+        >
+        base-box2  950
+        con1-box1   50
+
+    block-b // minting a token and using registers:
+        con1-box1   50
+        >
+        con2-box1   40
+        pub1-box1   10 (con1-box1: 2000)
+
+    block-c //using a datainput (in {}) and spending tokens
+        pub1-box1   10
+        {con2-box1}
+        >
+        pub1-box2    5 (1500 con1-box1)
+        pub2-box1    4 ( 500 con1-box1)
+        fees-box1    1
+        --
+        fees-box1    1
+        >
+        con1-box2    1
     """
-    Returns test blocks starting at giving height
-
-    block a - coinbase tx:
-        base-box1 1000 --> base-box2  950
-                           con1-box1   50
-
-    block b - minting a token and using registers:
-        con1-box1   50 --> con2-box1   40
-                           pub1-box1   10 (2000 con1-box1)
-
-    block c using a datainput (in {}) and spending tokens:
-        pub1-box1   10 --> pub1-box2    5 (1500 con1-box1)
-       {con2-box1}         pub2-box1    4 ( 500 con1-box1)
-                           fees-box1    1
-
-        fees-box1    1 --> con1-box2    1
-    """
-    base = AC.coinbase
-    fees = AC.fees
-    con1 = AC.get("con1")
-    con2 = AC.get("con2")
-    pub1 = AC.get("pub1")
-    pub2 = AC.get("pub2")
-
-    h = height + 1
-    tx_a1 = {
-        "id": "tx-a1",
-        "inputs": [
-            {
-                "boxId": "base-box1",
-            }
-        ],
-        "dataInputs": [],
-        "outputs": [
-            {
-                "boxId": "base-box2",
-                "value": 950,
-                "ergoTree": base.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-a1",
-                "index": 0,
-            },
-            {
-                "boxId": "con1-box1",
-                "value": 50,
-                "ergoTree": con1.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-a1",
-                "index": 1,
-            },
-        ],
-        "size": 344,
-    }
-
-    h += 1
-    tx_b1 = {
-        "id": "tx-b1",
-        "inputs": [{"boxId": "con1-box1"}],
-        "dataInputs": [],
-        "outputs": [
-            {
-                "boxId": "con2-box1",
-                "value": 40,
-                "ergoTree": con2.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {
-                    "R4": "0703553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8",
-                    "R5": "0e2098479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8",
-                    "R6": "05a4c3edd9998877",
-                },
-                "transactionId": "tx-b1",
-                "index": 0,
-            },
-            {
-                "boxId": "pub1-box1",
-                "value": 10,
-                "ergoTree": pub1.ergo_tree,
-                "assets": [
-                    {
-                        "tokenId": "con1-box1",
-                        "amount": 2000,
-                    }
-                ],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-b1",
-                "index": 1,
-            },
-        ],
-        "size": 674,
-    }
-
-    h += 1
-    tx_c1 = {
-        "id": "tx-c1",
-        "inputs": [{"boxId": "pub1-box1"}],
-        "dataInputs": [{"boxId": "con2-box1"}],
-        "outputs": [
-            {
-                "boxId": "pub1-box2",
-                "value": 5,
-                "ergoTree": pub1.ergo_tree,
-                "assets": [
-                    {
-                        "tokenId": "con1-box1",
-                        "amount": 1500,
-                    }
-                ],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-c1",
-                "index": 0,
-            },
-            {
-                "boxId": "pub2-box1",
-                "value": 4,
-                "ergoTree": pub2.ergo_tree,
-                "assets": [
-                    {
-                        "tokenId": "con1-box1",
-                        "amount": 500,
-                    }
-                ],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-c1",
-                "index": 1,
-            },
-            {
-                "boxId": "fees-box1",
-                "value": 1,
-                "ergoTree": fees.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-c1",
-                "index": 2,
-            },
-        ],
-        "size": 100,
-    }
-
-    tx_c2 = {
-        "id": "tx-c2",
-        "inputs": [
-            {
-                "boxId": "fees-box1",
-            }
-        ],
-        "dataInputs": [],
-        "outputs": [
-            {
-                "boxId": "con1-box2",
-                "value": 1,
-                "ergoTree": con1.ergo_tree,
-                "assets": [],
-                "creationHeight": h,
-                "additionalRegisters": {},
-                "transactionId": "tx-c2",
-                "index": 0,
-            }
-        ],
-        "size": 100,
-    }
-
-    block_a = {
-        "header": {
-            "votes": "000000",
-            "timestamp": 1234560100000,
-            "size": 123,
-            "height": height + 1,
-            "id": "block-a",
-            "parentId": GENESIS_ID,
-        },
-        "blockTransactions": {
-            "headerId": "block-a",
-            "transactions": [tx_a1],
-            "blockVersion": 2,
-            "size": 1155,
-        },
-        "size": 1000,
-    }
-
-    block_b = {
-        "header": {
-            "votes": "000000",
-            "timestamp": 1234560200000,
-            "size": 123,
-            "height": height + 2,
-            "id": "block-b",
-            "parentId": "block-a",
-        },
-        "blockTransactions": {
-            "headerId": "block-b",
-            "transactions": [tx_b1],
-            "blockVersion": 2,
-            "size": 1155,
-        },
-        "size": 1000,
-    }
-
-    block_c = {
-        "header": {
-            "votes": "000000",
-            "timestamp": 1234560200000,
-            "size": 123,
-            "height": height + 3,
-            "id": "block-c",
-            "parentId": "block-b",
-        },
-        "blockTransactions": {
-            "headerId": "block-c",
-            "transactions": [tx_c1, tx_c2],
-            "blockVersion": 2,
-            "size": 1155,
-        },
-        "size": 1000,
-    }
-
-    return [block_a, block_b, block_c]
 
 
 def get_number_of_migrations() -> int:
@@ -251,19 +51,20 @@ def get_number_of_migrations() -> int:
     return len(os.listdir(p.resolve()))
 
 
+@pytest.mark.skip("TODO")
 @pytest.mark.order(5)
 class TestMigrations:
-    start_height = 100_000
+
+    scenario = Scenario(SCENARIO_DESCRIPTION, 100_000, 1234560000000)
 
     @pytest.fixture(scope="class")
     def api(self):
         """
         Run watcher with mock api and return cursor to test db.
         """
-        blocks = make_blocks(self.start_height)
         with MockApi() as api:
             api = ApiUtil()
-            api.set_blocks(blocks)
+            api.set_blocks(self.scenario.blocks)
             yield api
 
     @pytest.fixture()
@@ -273,10 +74,10 @@ class TestMigrations:
 
         Function scoped fixture since tests will be changing the db state.
         """
-        blocks = make_blocks(self.start_height)
         with pg.connect(temp_db_rev1) as conn:
             # Fill genesis and 1st block only, so we can check if any new blocks got included
-            fill_rev1_db(conn, blocks[0:1])
+            self.scenario.mask(1)
+            fill_rev1_db(conn, self.scenario)
             yield conn
 
     def test_future_db(self, db: pg.Connection, temp_cfg):

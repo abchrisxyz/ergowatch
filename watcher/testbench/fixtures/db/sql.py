@@ -15,9 +15,11 @@ from dataclasses import dataclass
 from typing import List, Dict
 from copy import deepcopy
 
-from fixtures.addresses import AddressCatalogue as AC
-from fixtures.addresses import CEX_BOXES
+import sigpy
+from fixtures.scenario.addresses import AddressCatalogue as AC
+from fixtures.scenario.addresses import CEX_BOXES
 from fixtures.registers import RegisterCatalogue as RC
+from fixtures.scenario import Scenario
 
 BOOTSTRAP_TX_ID = "bootstrap-tx"
 DEFAULT_BOX_VALUE = 1_000
@@ -94,7 +96,7 @@ class Register:
     rendered_value: str
 
 
-def generate_rev1_sql(blocks: List[Dict]) -> str:
+def generate_rev1_sql(scenario: Scenario) -> str:
     """
     Generate sql statements to fill a db as it would be by v0.1.
 
@@ -102,22 +104,21 @@ def generate_rev1_sql(blocks: List[Dict]) -> str:
 
     Use to test migrations.
     """
-    blocks = filter_main_chain_blocks(blocks)
-    heights = [b["header"]["height"] for b in blocks]
+    heights = [b["header"]["height"] for b in scenario.blocks]
     if len(heights) != len(set(heights)):
         raise ValueError(
             "generate_rev1_sql does not handle forks. Ensure 1 block per height only."
         )
     if heights[0] == 1:
         raise ValueError("Test DB should be empty when simulating start from 1st block")
-    headers = extract_headers(blocks)
-    transactions = extract_transactions(blocks)
-    outputs = extract_outputs(blocks)
-    inputs = extract_inputs(blocks)
-    data_inputs = extract_data_inputs(blocks)
-    tokens = extract_tokens(blocks)
-    assets = extract_assets(blocks)
-    registers = extract_registers(blocks)
+    headers = extract_headers(scenario.blocks)
+    transactions = extract_transactions(scenario.blocks)
+    outputs = extract_outputs(scenario)
+    inputs = extract_inputs(scenario.blocks)
+    data_inputs = extract_data_inputs(scenario.blocks)
+    tokens = extract_tokens(scenario.blocks)
+    assets = extract_assets(scenario.blocks)
+    registers = extract_registers(scenario.blocks)
 
     sql = ""
     # Core tables
@@ -253,11 +254,12 @@ def generate_rev1_sql(blocks: List[Dict]) -> str:
     return sql
 
 
-def generate_bootstrap_sql(blocks: List[Dict]) -> str:
+def generate_bootstrap_sql(scenario: Scenario) -> str:
     """
     Generate sql statements to prepare a db to accept listed blocks.
 
-    *blocks*: list of test blocks to be processed by Watcher
+    `blocks`: list of test blocks to be processed by Watcher
+    `id_map`: maps dummy box id's to their Digest32 representation
 
     DB should contain a header that is a parent of first test block.
     DB should contain outputs for satisfy any data-inputs used in, but ont created by, any of the blocks.
@@ -268,14 +270,14 @@ def generate_bootstrap_sql(blocks: List[Dict]) -> str:
     Inserts 1 block, ensures all foreign keys are satisfied.
     Height and header_id are derived from blocks[0].
     """
-    if blocks[0]["header"]["height"] == 1:
+    if scenario.parent_height == 0:
         raise ValueError("Test DB should be empty when simulating start from 1st block")
-    header = extract_existing_header(blocks)
+    header = extract_existing_header(scenario.blocks)
     # A single tx that is supposed to have produced any outputs, tokens, etc.
     # tx = Transaction(id="1" * 64, header_id=header.id, height=header.height, index=0)
-    tx = extract_existing_transaction(blocks)
-    outputs = extract_existing_outputs(blocks)
-    tokens = extract_existing_tokens(blocks)
+    tx = extract_existing_transaction(scenario.blocks)
+    outputs = extract_existing_outputs(scenario)
+    tokens = extract_existing_tokens(scenario.blocks)
 
     sql = ""
     # Core tables
@@ -393,20 +395,6 @@ def generate_bootstrap_sql_mtr(header: Header, outputs: List[Output]) -> str:
     )
 
 
-def filter_main_chain_blocks(blocks: List[Dict]) -> List[Dict]:
-    """
-    Filter out blocks not part of main chain
-    """
-    blocks = deepcopy(blocks)
-    main_chain = [blocks.pop()]
-    blocks.reverse()
-    for block in blocks:
-        if block["header"]["id"] == main_chain[-1]["header"]["parentId"]:
-            main_chain.append(block)
-    main_chain.reverse()
-    return main_chain
-
-
 def extract_existing_header(blocks: List[Dict]) -> Header:
     # Header of first test block
     h = blocks[0]["header"]
@@ -455,22 +443,22 @@ def extract_transactions(blocks: List[Dict]) -> Header:
     ]
 
 
-def extract_existing_outputs(blocks: List[Dict]) -> List[Output]:
+def extract_existing_outputs(scenario: Scenario) -> List[Output]:
     """
     Any boxes referenced in transaction data-(inputs) and tokens
     """
-    header = extract_existing_header(blocks)
+    header = extract_existing_header(scenario.blocks)
     created_outputs = set()
     outputs = []
     index = 0
-    for block in blocks:
+    for block in scenario.blocks:
         for tx in block["blockTransactions"]["transactions"]:
             for box in tx["inputs"]:
                 if box["boxId"] not in created_outputs:
                     outputs.append(
                         Output(
                             box_id=box["boxId"],
-                            address=AC.boxid2addr(box["boxId"]),
+                            address=scenario.address(box["boxId"]),
                             header_id=header.id,
                             creation_height=header.height,
                             index=index,
@@ -494,8 +482,8 @@ def extract_existing_outputs(blocks: List[Dict]) -> List[Output]:
 
     # Add a dummy output for each token, these wont be spent,
     # they're just there to satisfy the db constraints.
-    tokens = extract_existing_tokens(blocks)
-    for itok, token in enumerate(tokens):
+    tokens = extract_existing_tokens(scenario.blocks)
+    for token in tokens:
         index = len(outputs)
         outputs.append(
             Output(
@@ -509,21 +497,21 @@ def extract_existing_outputs(blocks: List[Dict]) -> List[Output]:
     return outputs
 
 
-def extract_outputs(blocks: List[Dict]) -> List[Output]:
+def extract_outputs(scenario: Scenario) -> List[Output]:
     """
     All output boxes
     """
-    return extract_existing_outputs(blocks) + [
+    return extract_existing_outputs(scenario) + [
         Output(
             box_id=box["boxId"],
-            address=AC.boxid2addr(box["boxId"]),
+            address=scenario.address(box["boxId"]),
             index=idx,
             header_id=b["header"]["id"],
             creation_height=box["creationHeight"],
             tx_id=tx["id"],
             value=box["value"],
         )
-        for b in blocks
+        for b in scenario.blocks
         for tx in b["blockTransactions"]["transactions"]
         for idx, box in enumerate(tx["outputs"])
     ]
