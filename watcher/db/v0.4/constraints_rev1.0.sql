@@ -1,16 +1,7 @@
 /*****************************************************************************
-	This is snapshot of the db schema that shipped with v0.1.
-	It's only purpose is to test db migrations.
+	This is a snapshot of the db schema that shipped with v0.4, prior to any
+	migrations.	It's sole purpose is to test db migrations.
 *****************************************************************************/
-/*****************************************************************************
- *
- * DO NOT LOAD THIS - YOU ONLY NEED SCHEMA.SQL
- *
- * Watcher will add constraints and indexes when needed, during and after the
- * the bootstrapping process.
- *
- *****************************************************************************/
-
 
 -------------------------------------------------------------------------------
 -- Core
@@ -32,6 +23,7 @@ alter table core.outputs add primary key (box_id);
 alter table core.outputs alter column tx_id set not null;
 alter table core.outputs alter column header_id set not null;
 alter table core.outputs alter column address set not null;
+alter table core.outputs alter column size set not null;
 alter table core.outputs add foreign key (tx_id)
 	references core.transactions (id)
 	on delete cascade;

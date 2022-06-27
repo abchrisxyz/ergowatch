@@ -14,47 +14,55 @@ mod mig_009;
 mod mig_010;
 mod mig_011;
 
-// Version 1 was originial schema
-const CURRENT_VERSION: i32 = 12;
+const CURRENT_REVISION_MAJOR: i32 = 1;
+const CURRENT_REVISION_MINOR: i32 = 11;
+
+struct Revision {
+    major: i32,
+    minor: i32,
+}
 
 /// Check db version and apply migrations if needed.
 pub fn check(client: &mut Client, allow_migrations: bool) -> anyhow::Result<()> {
-    let db_version = get_db_version(client)?;
-    info!("Current db version is: {}", db_version);
+    let rev = get_db_revision(client)?;
+    info!("Current db revision: {}.{}", rev.major, rev.minor);
 
-    if db_version > CURRENT_VERSION {
+    if rev.major > CURRENT_REVISION_MAJOR || rev.minor > CURRENT_REVISION_MINOR {
         return Err(anyhow!(
             "Database was created by a more recent version of this program."
         ));
-    } else if db_version == CURRENT_VERSION {
-        info!("Database version is up to date");
+    } else if rev.major < CURRENT_REVISION_MAJOR {
+        return Err(anyhow!(
+            "Migrations are not supported for major revision changes."
+        ));
+    } else if rev.minor == CURRENT_REVISION_MINOR {
+        info!("Database revision is up to date");
         return Ok(());
     }
 
-    let diff = CURRENT_VERSION - db_version;
+    let diff = CURRENT_REVISION_MINOR - rev.minor;
     if !allow_migrations {
         return Err(anyhow!("Database is {} revision(s) behind. Run with the -m option to allow migrations to be applied.", diff));
     }
-    // Migration ID = revision - 1 (i.e. migration 1 results in revision 2)
-    for mig_id in db_version..(CURRENT_VERSION) {
+
+    for mig_id in rev.minor + 1..(CURRENT_REVISION_MINOR + 1) {
         apply_migration(client, mig_id)?;
     }
     Ok(())
 }
 
 /// Retrieves current schema version.
-fn get_db_version(client: &mut Client) -> Result<i32, postgres::Error> {
-    let row = client.query_one("select version from ew.revision;", &[])?;
-    Ok(row.get("version"))
+fn get_db_revision(client: &mut Client) -> Result<Revision, postgres::Error> {
+    let row = client.query_one("select major, minor from ew.revision;", &[])?;
+    Ok(Revision {
+        major: row.get("major"),
+        minor: row.get("minor"),
+    })
 }
 
 /// Retrieves current schema version.
 fn apply_migration(client: &mut Client, migration_id: i32) -> anyhow::Result<()> {
-    info!(
-        "Applying migration {} (revision {})",
-        migration_id,
-        migration_id + 1
-    );
+    info!("Applying migration {}", migration_id,);
     let mut tx = client.transaction()?;
     match migration_id {
         1 => mig_001::apply(&mut tx)?,
@@ -71,7 +79,7 @@ fn apply_migration(client: &mut Client, migration_id: i32) -> anyhow::Result<()>
         _ => return Err(anyhow!("Attempted to apply migration with unknown ID")),
     };
     // Increment revision
-    tx.execute("update ew.revision set version = version + 1;", &[])?;
+    tx.execute("update ew.revision set minor = minor + 1;", &[])?;
     tx.commit()?;
     Ok(())
 }

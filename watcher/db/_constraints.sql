@@ -37,6 +37,7 @@ alter table core.outputs alter column creation_height set not null;
 alter table core.outputs alter column address set not null;
 alter table core.outputs alter column index set not null;
 alter table core.outputs alter column value set not null;
+alter table core.outputs alter column size set not null;
 alter table core.outputs add foreign key (tx_id) references core.transactions (id);
 alter table core.outputs add foreign key (header_id) references core.headers (id);
 create index on core.outputs(tx_id);
@@ -191,5 +192,3 @@ alter table mtr.cex_supply add check (deposit >= 0);
 
 -- UTxO's
 alter table mtr.utxos add primary key(height);
-
-

@@ -2,10 +2,10 @@ import pytest
 import psycopg as pg
 
 from fixtures.db import bootstrap_db
-from fixtures.db import fill_rev1_db
+from fixtures.db import fill_rev0_db
 from fixtures.db import temp_db_class_scoped
 from fixtures.db import unconstrained_db_class_scoped
-from fixtures.db import temp_db_rev1_class_scoped
+from fixtures.db import temp_db_rev0_class_scoped
 from fixtures.db.sql import BOOTSTRAP_TX_ID
 from fixtures.db.sql import extract_existing_header
 from fixtures.db.sql import extract_existing_transaction
@@ -161,7 +161,7 @@ class TestPopulatedDB:
 
 
 @pytest.mark.order(3)
-class TestRev1DB:
+class TestRev0DB:
     @pytest.fixture(scope="class")
     def scenario(self):
         desc = """
@@ -386,9 +386,9 @@ class TestRev1DB:
         return [block_a, block_x, block_b]
 
     @pytest.fixture(scope="class")
-    def cur(self, temp_db_rev1_class_scoped, scenario):
-        with pg.connect(temp_db_rev1_class_scoped) as conn:
-            fill_rev1_db(conn, scenario)
+    def cur(self, temp_db_rev0_class_scoped, scenario):
+        with pg.connect(temp_db_rev0_class_scoped) as conn:
+            fill_rev0_db(conn, scenario)
             with conn.cursor() as cur:
                 yield cur
 

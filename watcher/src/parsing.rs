@@ -7,6 +7,7 @@ use ergotree_ir::chain::ergo_box::NonMandatoryRegisters;
 use ergotree_ir::chain::ergo_box::NonMandatoryRegisterId;
 use ergotree_ir::mir::constant::Constant;
 use ergotree_ir::base16_str::Base16Str;
+use ergotree_ir::serialization::SigmaSerializable;
 use log::debug;
 use crate::node;
 
@@ -79,6 +80,7 @@ pub struct Output {
     pub value: i64,
     pub additional_registers: [Option<Register>; 6],
     pub assets: Vec<Asset>,
+    pub size: i32,
 }
 
 impl Output {
@@ -100,7 +102,8 @@ impl Output {
                     .collect()
                 },
                 None => vec![]
-            }
+            },
+            size: eb.sigma_serialize_bytes().unwrap().len() as i32,
         }
     }
 }
@@ -310,7 +313,7 @@ pub mod testing {
     use super::Register;
     use super::Transaction;
 
-    /// Returns a BlockData with contents of block 600k
+    /// Returns a BlockData with contents of block 600k (dummy box sizes)
     pub fn block_600k<'a>() -> BlockData<'a> {
         let tx_1 = Transaction {
             id: "4ac89169a2f83adb895b3d76735dbcfc63ad7940bddc2492d9ee4201299bf927",
@@ -323,6 +326,7 @@ pub mod testing {
                 value: 52909132500000000,
                 additional_registers: [None, None, None, None, None, None],
                 assets: vec![],
+                size: 110,
             }, Output {
                 box_id: String::from("6cb8ffe391838b627cb893c9b2027aa2a03f3a20455dd11e5ac903c7e4179ace"),
                 creation_height: 600000,
@@ -331,6 +335,7 @@ pub mod testing {
                 value: 67500000000,
                 additional_registers: [None, None, None, None, None, None],
                 assets: vec![],
+                size: 120,
             }],
             input_box_ids: vec!["eb1c4a582ba3e8f9d4af389a19f3bc6fa6759fd33956f9902b34dcd4a1d3842f"],
             data_input_box_ids: vec![],
@@ -371,6 +376,7 @@ pub mod testing {
                             amount: 1,
                         }
                     ],
+                    size: 210,
                 },
                 Output {
                     box_id: String::from("5c029ba7b1c67deedbd68878d02e5d7bb49b54943bc68fb5a30956a7a16224e4"),
@@ -380,6 +386,7 @@ pub mod testing {
                     value: 1100000,
                     additional_registers: [None, None, None, None, None, None],
                     assets: vec![],
+                    size: 220,
                 },
                 Output {
                     box_id: String::from("22adc6d1fd18e81da0ab9fa47bc389c5948780c98906c0ea3d812eba4ef17a33"),
@@ -389,6 +396,7 @@ pub mod testing {
                     value: 2784172525,
                     additional_registers: [None, None, None, None, None, None],
                     assets: vec![],
+                    size: 230,
                 }
             ],
             input_box_ids: vec![
@@ -408,6 +416,7 @@ pub mod testing {
                 value: 1100000,
                 additional_registers: [None, None, None, None, None, None],
                 assets: vec![],
+                size: 310,
             }],
             input_box_ids: vec!["5c029ba7b1c67deedbd68878d02e5d7bb49b54943bc68fb5a30956a7a16224e4"],
             data_input_box_ids: vec![],
@@ -461,6 +470,7 @@ pub mod testing {
                             amount: 5000,
                         }
                     ],
+                    size: 110,
                 }, Output {
                     box_id: String::from("bbb7d9e0333007ff5005771dccfe11c309a98df99c0cf10e17c60e64cb7ccc5b"),
                     creation_height: 114626,
@@ -469,6 +479,7 @@ pub mod testing {
                     value: 1000000,
                     additional_registers: [None, None, None, None, None, None],
                     assets: vec![],
+                    size: 120,
                 }, Output {
                     box_id: String::from("b5d971fa03de96b5bfbdff9dba76c519ed0f1f8196a01c139c6be74a9c47040a"),
                     creation_height: 114626,
@@ -477,6 +488,7 @@ pub mod testing {
                     value: 31134600,
                     additional_registers: [None, None, None, None, None, None],
                     assets: vec![],
+                    size: 130,
             }],
             input_box_ids: vec![
                 "34d14f73cc1d5342fb06bc1185bd1335e8119c90b1795117e2874ca6ca8dd2c5",
@@ -521,6 +533,7 @@ pub mod testing {
                             amount: 1000,
                         }
                     ],
+                    size: 210,
                 },
                 Output {
                     box_id: String::from("51c38dad38332ca22508f7614568f31b62fb5ccd09b5287734f2152ef8c04360"),
@@ -530,6 +543,7 @@ pub mod testing {
                     value: 1000000,
                     additional_registers: [None, None, None, None, None, None],
                     assets: vec![],
+                    size: 220,
                 },
                 Output {
                     box_id: String::from("f6fa1d664ca8153f4b696453ef1e7b18c75de67cce1237312d1ce39349cc7160"),
@@ -539,6 +553,7 @@ pub mod testing {
                     value: 1998949240,
                     additional_registers: [None, None, None, None, None, None],
                     assets: vec![],
+                    size: 230,
                 }
             ],
             input_box_ids: vec!["3c65b325ebf58f4907d6c085d216e176d105a5093540704baf1f7a2a42ad60f8"],
@@ -581,6 +596,7 @@ pub mod testing {
                             amount: 10,
                         },
                     ],
+                    size: 110,
                 },
                 Output {
                     box_id: String::from("9291258a91ccf04ed8e906484733d561cc3eaabdcb518426343e9b8d3a604660"),
@@ -590,6 +606,7 @@ pub mod testing {
                     value: 1000000,
                     additional_registers: [None, None, None, None, None, None],
                     assets: vec![],
+                    size: 120,
                 },
                 Output {
                     box_id: String::from("e879169e8a393ae3f803e863bb4519983eea3ca0c5b6e8aa54cd25121a14ea9d"),
@@ -609,6 +626,7 @@ pub mod testing {
                             amount: 2,
                         }
                     ],
+                    size: 130,
                 },
             ],
             input_box_ids: vec![
@@ -655,6 +673,7 @@ pub mod testing {
                             amount: 3000,
                         },
                     ],
+                    size: 110,
                 },
             ],
             input_box_ids: vec![

@@ -1,16 +1,15 @@
 import pytest
 import psycopg as pg
-from typing import Dict
 
 from fixtures.api import MockApi, ApiUtil, GENESIS_ID
 from fixtures.config import temp_cfg
 from fixtures.db import bootstrap_db
-from fixtures.db import fill_rev1_db
+from fixtures.db import fill_rev0_db
 from fixtures.db import temp_db_class_scoped
-from fixtures.db import temp_db_rev1_class_scoped
+from fixtures.db import temp_db_rev0_class_scoped
 from fixtures.db import unconstrained_db_class_scoped
+from fixtures.db.sql import DEFAULT_BOX_SIZE
 from fixtures.scenario import Scenario
-from fixtures.scenario import syntax
 from utils import run_watcher
 from utils import assert_pk
 from utils import assert_fk
@@ -265,7 +264,7 @@ class TestMigrations:
     )
 
     @pytest.fixture(scope="class")
-    def synced_db(self, temp_cfg, temp_db_rev1_class_scoped):
+    def synced_db(self, temp_cfg, temp_db_rev0_class_scoped):
         """
         Run watcher with mock api and return cursor to test db.
         """
@@ -274,16 +273,16 @@ class TestMigrations:
             api.set_blocks(self.scenario.blocks)
 
             # Prepare db
-            with pg.connect(temp_db_rev1_class_scoped) as conn:
-                fill_rev1_db(conn, self.scenario)
+            with pg.connect(temp_db_rev0_class_scoped) as conn:
+                fill_rev0_db(conn, self.scenario)
 
             # Run
             cp = run_watcher(temp_cfg, allow_migrations=True)
             assert cp.returncode == 0
-            assert "Applying migration 1 (revision 2)" in cp.stdout.decode()
-            assert "Applying migration 2 (revision 3)" in cp.stdout.decode()
+            assert "Applying migration 1" in cp.stdout.decode()
+            assert "Applying migration 2" in cp.stdout.decode()
 
-            with pg.connect(temp_db_rev1_class_scoped) as conn:
+            with pg.connect(temp_db_rev0_class_scoped) as conn:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
@@ -331,7 +330,7 @@ def assert_db_constraints(conn: pg.Connection):
     assert_column_not_null(conn, "core", "outputs", "address")
     assert_column_not_null(conn, "core", "outputs", "index")
     assert_column_not_null(conn, "core", "outputs", "value")
-    # assert_column_not_null(conn, "core", "outputs", "size")
+    assert_column_not_null(conn, "core", "outputs", "size")
     assert_fk(conn, "core", "outputs", "outputs_tx_id_fkey")
     assert_fk(conn, "core", "outputs", "outputs_header_id_fkey")
     assert_index(conn, "core", "outputs", "outputs_tx_id_idx")
@@ -483,6 +482,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
             , box_id
             , value
             , address
+            , size is not null and size >= 63 and size <= 268
         from core.outputs
         order by creation_height, tx_id, index;
     """
@@ -498,6 +498,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         s.id("base-box1"),
         1000,
         s.address("base-box1"),
+        True,
     )
     assert rows[1] == (
         s.parent_height + 1,
@@ -507,6 +508,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         s.id("base-box2"),
         950,
         s.address("base-box2"),
+        True,
     )
     assert rows[2] == (
         s.parent_height + 1,
@@ -516,6 +518,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         s.id("con1-box1"),
         50,
         s.address("con1-box1"),
+        True,
     )
     assert rows[3] == (
         s.parent_height + 2,
@@ -525,6 +528,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         s.id("con2-box1"),
         40,
         s.address("con2-box1"),
+        True,
     )
     assert rows[4] == (
         s.parent_height + 2,
@@ -534,6 +538,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         s.id("pub1-box1"),
         10,
         s.address("pub1-box1"),
+        True,
     )
     assert rows[5] == (
         s.parent_height + 3,
@@ -543,6 +548,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         s.id("pub1-box2"),
         5,
         s.address("pub1-box2"),
+        True,
     )
     assert rows[6] == (
         s.parent_height + 3,
@@ -552,6 +558,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         s.id("pub2-box1"),
         4,
         s.address("pub2-box1"),
+        True,
     )
     assert rows[7] == (
         s.parent_height + 3,
@@ -561,6 +568,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         s.id("fees-box1"),
         1,
         s.address("fees-box1"),
+        True,
     )
     assert rows[8] == (
         s.parent_height + 3,
@@ -570,6 +578,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         s.id("con1-box2"),
         1,
         s.address("con1-box2"),
+        True,
     )
 
 

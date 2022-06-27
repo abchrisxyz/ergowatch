@@ -1,6 +1,6 @@
 /*****************************************************************************
-	This is snapshot of the db schema that shipped with v0.1.
-	It's only purpose is to test db migrations.
+	This is a snapshot of the db schema that shipped with v0.4, prior to any
+	migrations.	It's sole purpose is to test db migrations.
 *****************************************************************************/
 -------------------------------------------------------------------------------
 -- Migrations
@@ -8,10 +8,11 @@
 create schema ew;
 create table ew.revision (
 	singleton int primary key default 1,
-	version integer not null,
+	major integer not null,
+	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (version) values (1);
+insert into ew.revision (major, minor) values (1, 0);
 
 create table ew.constraints (
 	singleton int primary key default 1,
@@ -20,7 +21,6 @@ create table ew.constraints (
 	check(singleton = 1)
 );
 insert into ew.constraints (singleton) values (1);
-
 
 -------------------------------------------------------------------------------
 -- Core
@@ -47,10 +47,9 @@ create table core.outputs (
 	header_id text,
 	creation_height int,
 	address text,
-	-- settlement_height int,
 	index int,
-	value bigint
--- 	additional_registers json
+	value bigint,
+	size integer -- box size in bytes
 );
 
 create table core.inputs (

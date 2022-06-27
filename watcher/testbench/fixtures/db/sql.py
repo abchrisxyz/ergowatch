@@ -24,6 +24,7 @@ from fixtures.scenario import Scenario
 BOOTSTRAP_TX_ID = "bootstrap-tx"
 DEFAULT_BOX_VALUE = 1_000
 DEFAULT_TOKEN_EMISSION_AMOUNT = 5_000
+DEFAULT_BOX_SIZE = 123
 
 
 @dataclass
@@ -51,6 +52,7 @@ class Output:
     creation_height: int
     tx_id: str = BOOTSTRAP_TX_ID
     value: int = DEFAULT_BOX_VALUE
+    size: int = DEFAULT_BOX_SIZE
 
 
 @dataclass
@@ -96,18 +98,18 @@ class Register:
     rendered_value: str
 
 
-def generate_rev1_sql(scenario: Scenario) -> str:
+def generate_rev0_sql(scenario: Scenario) -> str:
     """
-    Generate sql statements to fill a db as it would be by v0.1.
+    Generate sql statements to fill a db as it would be by v0.4.
 
-    *blocks*: list of test blocks to be processed by Watcher
+    *scenario*: Scenario for which to bootstrap db
 
     Use to test migrations.
     """
     heights = [b["header"]["height"] for b in scenario.blocks]
     if len(heights) != len(set(heights)):
         raise ValueError(
-            "generate_rev1_sql does not handle forks. Ensure 1 block per height only."
+            "generate_rev0_sql does not handle forks. Ensure 1 block per height only."
         )
     if heights[0] == 1:
         raise ValueError("Test DB should be empty when simulating start from 1st block")
@@ -665,7 +667,7 @@ def format_transaction_sql(tx: Transaction):
 def format_output_sql(box: Output):
     return dedent(
         f"""
-        insert into core.outputs(box_id, tx_id, header_id, creation_height, address, index, value)
+        insert into core.outputs(box_id, tx_id, header_id, creation_height, address, index, value, size)
         values (
             '{box.box_id}',
             '{box.tx_id}',
@@ -673,7 +675,8 @@ def format_output_sql(box: Output):
             {box.creation_height},
             '{box.address}',
             {box.index},
-            {box.value}
+            {box.value},
+            {box.size}
         );
     """
     )

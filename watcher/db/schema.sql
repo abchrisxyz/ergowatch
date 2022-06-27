@@ -4,10 +4,11 @@
 create schema ew;
 create table ew.revision (
 	singleton int primary key default 1,
-	version integer not null,
+	major integer not null,
+	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (version) values (12);
+insert into ew.revision (major, minor) values (1, 11);
 
 
 -------------------------------------------------------------------------------
@@ -36,7 +37,8 @@ create table core.outputs (
 	creation_height int,
 	address text,
 	index int,
-	value bigint
+	value bigint,
+	size integer -- box size in bytes
 );
 
 create table core.inputs (

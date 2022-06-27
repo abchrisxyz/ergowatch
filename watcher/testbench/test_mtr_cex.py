@@ -7,9 +7,9 @@ from fixtures.scenario import Scenario
 from fixtures.scenario.genesis import GENESIS_ID
 from fixtures.config import temp_cfg
 from fixtures.db import bootstrap_db
-from fixtures.db import fill_rev1_db
+from fixtures.db import fill_rev0_db
 from fixtures.db import temp_db_class_scoped
-from fixtures.db import temp_db_rev1_class_scoped
+from fixtures.db import temp_db_rev0_class_scoped
 from fixtures.db import unconstrained_db_class_scoped
 from fixtures.scenario.addresses import AddressCatalogue as AC
 from utils import run_watcher
@@ -234,7 +234,7 @@ class TestMigrations:
     scenario = Scenario(SCENARIO_DESCRIPTION, 599_999, 1234560000000, main_only=True)
 
     @pytest.fixture(scope="class")
-    def synced_db(self, temp_cfg, temp_db_rev1_class_scoped):
+    def synced_db(self, temp_cfg, temp_db_rev0_class_scoped):
         """
         Run watcher with mock api and return cursor to test db.
         """
@@ -243,15 +243,15 @@ class TestMigrations:
             api.set_blocks(self.scenario.blocks)
 
             # Prepare db
-            with pg.connect(temp_db_rev1_class_scoped) as conn:
-                fill_rev1_db(conn, self.scenario)
+            with pg.connect(temp_db_rev0_class_scoped) as conn:
+                fill_rev0_db(conn, self.scenario)
 
             # Run
             cp = run_watcher(temp_cfg, allow_migrations=True)
             assert cp.returncode == 0
-            assert "Applying migration 1 (revision 2)" in cp.stdout.decode()
+            assert "Applying migration 1" in cp.stdout.decode()
 
-            with pg.connect(temp_db_rev1_class_scoped) as conn:
+            with pg.connect(temp_db_rev0_class_scoped) as conn:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):

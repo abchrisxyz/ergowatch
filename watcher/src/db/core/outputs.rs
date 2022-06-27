@@ -10,9 +10,10 @@ const INSERT_OUTPUT: &str = "
         creation_height,
         address,
         index,
-        value
+        value,
+        size
     )
-    values ($1, $2, $3, $4, $5, $6, $7);";
+    values ($1, $2, $3, $4, $5, $6, $7, $8);";
 
 pub(super) struct Output<'a> {
     pub box_id: &'a str,
@@ -22,6 +23,7 @@ pub(super) struct Output<'a> {
     pub address: &'a str,
     pub index: i32,
     pub value: i64,
+    pub size: i32,
 }
 
 pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
@@ -36,6 +38,7 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
                 Type::TEXT, // address
                 Type::INT4, // index
                 Type::INT8, // value
+                Type::INT4, // size
             ],
         )
         .unwrap();
@@ -51,6 +54,7 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
                 &op.address,
                 &op.index,
                 &op.value,
+                &op.size,
             ],
         )
         .unwrap();
@@ -74,6 +78,7 @@ pub(super) fn include_genesis_boxes(
                 &op.address,
                 &op.index,
                 &op.value,
+                &op.size,
             ],
         )
         .unwrap();
@@ -101,6 +106,7 @@ pub(super) fn set_constraints(tx: &mut Transaction) {
         "alter table core.outputs alter column address set not null;",
         "alter table core.outputs alter column index set not null;",
         "alter table core.outputs alter column value set not null;",
+        "alter table core.outputs alter column size set not null;",
         "alter table core.outputs add foreign key (tx_id)
             references core.transactions (id) on delete cascade;",
         "alter table core.outputs add foreign key (header_id)
@@ -129,6 +135,7 @@ fn extract_outputs<'a>(block: &'a BlockData) -> Vec<Output<'a>> {
                 address: &op.address,
                 index: op.index,
                 value: op.value,
+                size: op.size,
             })
         })
         .collect()
@@ -166,5 +173,6 @@ mod tests {
         );
         assert_eq!(op.index, 2);
         assert_eq!(op.value, 2784172525);
+        assert_eq!(op.size, 230);
     }
 }
