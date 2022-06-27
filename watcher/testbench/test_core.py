@@ -65,6 +65,21 @@ SCENARIO_DESCRIPTION = """
     """
 
 
+def set_scenario_votes(s: Scenario):
+    """
+    Modifies votes in scenario block headers.
+    """
+    assert len(s._blocks) in (3, 4)
+    if len(s._blocks) == 4:
+        # Block x
+        s._blocks[1]["header"]["votes"] = "030500"
+        # Block b
+        s._blocks[2]["header"]["votes"] = "080400"
+    if len(s._blocks) == 3:
+        # Block b
+        s._blocks[1]["header"]["votes"] = "080400"
+
+
 @pytest.mark.order(ORDER)
 class TestSync:
     """
@@ -78,6 +93,7 @@ class TestSync:
         parent_height,
         first_ts,
     )
+    set_scenario_votes(scenario)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
@@ -119,6 +135,7 @@ class TestSyncRollback:
         parent_height,
         first_ts,
     )
+    set_scenario_votes(scenario)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
@@ -172,6 +189,7 @@ class TestSyncNoForkChild:
         parent_height,
         first_ts,
     )
+    set_scenario_votes(scenario)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
@@ -226,6 +244,7 @@ class TestGenesis:
         parent_height,
         first_ts,
     )
+    set_scenario_votes(scenario)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, unconstrained_db_class_scoped):
@@ -262,6 +281,7 @@ class TestMigrations:
         first_ts,
         main_only=True,
     )
+    set_scenario_votes(scenario)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_rev0_class_scoped):
@@ -309,6 +329,9 @@ def assert_db_constraints(conn: pg.Connection):
     assert_column_not_null(conn, "core", "headers", "id")
     assert_column_not_null(conn, "core", "headers", "parent_id")
     assert_column_not_null(conn, "core", "headers", "timestamp")
+    assert_column_not_null(conn, "core", "headers", "vote1")
+    assert_column_not_null(conn, "core", "headers", "vote2")
+    assert_column_not_null(conn, "core", "headers", "vote3")
     assert_unique(conn, "core", "headers", ["id"])
     assert_unique(conn, "core", "headers", ["parent_id"])
 
@@ -393,7 +416,7 @@ def assert_db_constraints(conn: pg.Connection):
 def assert_headers(cur: pg.Cursor, s):
     # 4 headers: 1 parent + 3 from blocks
     cur.execute(
-        "select height, id, parent_id, timestamp from core.headers order by 1, 2;"
+        "select height, id, parent_id, timestamp, vote1, vote2, vote3 from core.headers order by 1, 2;"
     )
     rows = cur.fetchall()
     assert len(rows) == 4
@@ -404,6 +427,9 @@ def assert_headers(cur: pg.Cursor, s):
             GENESIS_ID,
             "genesis",
             s.genesis_ts,
+            0,
+            0,
+            0,
         )
     else:
         # Genesis parent_id and timestamp are set by db fixture
@@ -412,24 +438,36 @@ def assert_headers(cur: pg.Cursor, s):
             GENESIS_ID,
             "bootstrap-parent-header-id",
             s.first_ts - s.dt,
+            0,
+            0,
+            0,
         )
     assert rows[1] == (
         s.parent_height + 1,
         "block-a",
         GENESIS_ID,
         s.first_ts + s.DT * 0,
+        0,
+        0,
+        0,
     )
     assert rows[2] == (
         s.parent_height + 2,
         "block-b",
         "block-a",
         s.first_ts + s.dt * 1,
+        8,
+        4,
+        0,
     )
     assert rows[3] == (
         s.parent_height + 3,
         "block-c",
         "block-b",
         s.first_ts + s.dt * 2,
+        0,
+        0,
+        0,
     )
 
 

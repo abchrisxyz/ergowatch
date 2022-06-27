@@ -31,7 +31,10 @@ create table core.headers (
 	height int,
 	id text,
 	parent_id text,
-	timestamp bigint
+	timestamp bigint,
+	vote1 smallint,
+	vote2 smallint,
+	vote3 smallint
 );
 
 create table core.transactions (

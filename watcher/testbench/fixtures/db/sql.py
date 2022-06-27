@@ -12,10 +12,10 @@ DB should contain headers and txs references by any outputs present at bootstrap
 
 from textwrap import dedent
 from dataclasses import dataclass
-from typing import List, Dict
-from copy import deepcopy
+from typing import List
+from typing import Dict
+from typing import Tuple
 
-import sigpy
 from fixtures.scenario.addresses import AddressCatalogue as AC
 from fixtures.scenario.addresses import CEX_BOXES
 from fixtures.registers import RegisterCatalogue as RC
@@ -25,6 +25,7 @@ BOOTSTRAP_TX_ID = "bootstrap-tx"
 DEFAULT_BOX_VALUE = 1_000
 DEFAULT_TOKEN_EMISSION_AMOUNT = 5_000
 DEFAULT_BOX_SIZE = 123
+DEFAULT_VOTE = 0
 
 
 @dataclass
@@ -33,6 +34,7 @@ class Header:
     id: str
     parent_id: str
     timestamp: int
+    votes: Tuple[int, int, int]
 
 
 @dataclass
@@ -409,16 +411,21 @@ def extract_existing_header(blocks: List[Dict]) -> Header:
         parent_id="bootstrap-parent-header-id",
         # Timestamp is 100 seconds less than first test block
         timestamp=h["timestamp"] - 100_000,
+        votes=tuple([DEFAULT_VOTE, DEFAULT_VOTE, DEFAULT_VOTE]),
     )
 
 
 def extract_headers(blocks: List[Dict]) -> List[Header]:
+    def parse_votes(votes: str) -> Tuple[int, int, int]:
+        return tuple([int(votes[i : i + 2], 16) for i in (0, 2, 4)])
+
     return [extract_existing_header(blocks),] + [
         Header(
             height=b["header"]["height"],
             id=b["header"]["id"],
             parent_id=b["header"]["parentId"],
             timestamp=b["header"]["timestamp"],
+            votes=parse_votes(b["header"]["votes"]),
         )
         for b in blocks
     ]
@@ -639,12 +646,15 @@ def extract_registers(blocks: List[Dict]) -> List[Register]:
 def format_header_sql(h: Header):
     return dedent(
         f"""
-        insert into core.headers (height, id, parent_id, timestamp)
+        insert into core.headers (height, id, parent_id, timestamp, vote1, vote2, vote3)
         values (
             {h.height},
             '{h.id}',
             '{h.parent_id}',
-            {h.timestamp}
+            {h.timestamp},
+            {h.votes[0]},
+            {h.votes[1]},
+            {h.votes[2]}
         );
     """
     )

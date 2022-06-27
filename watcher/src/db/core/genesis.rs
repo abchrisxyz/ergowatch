@@ -1,6 +1,7 @@
 use crate::parsing::Output;
 
 const ZERO: i32 = 0;
+const ZERO_VOTE: i16 = 0;
 const ZERO_HEADER: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 const GENESIS_HEADER_ID: &str = ZERO_HEADER;
 const GENESIS_HEADER_PARENT_ID: &str = "genesis";
@@ -14,13 +15,16 @@ pub fn include_genesis_boxes(tx: &mut postgres::Transaction, boxes: &Vec<Output>
     // Genesis header
     tx.execute(
         "
-        insert into core.headers (height, id, parent_id, timestamp)
-        values ($1, $2, $3, $4);",
+        insert into core.headers (height, id, parent_id, timestamp, vote1, vote2, vote3)
+        values ($1, $2, $3, $4, $5, $6, $7);",
         &[
             &ZERO,
             &GENESIS_HEADER_ID,
             &GENESIS_HEADER_PARENT_ID,
             &GENESIS_TIMESTAMP,
+            &ZERO_VOTE,
+            &ZERO_VOTE,
+            &ZERO_VOTE,
         ],
     )
     .unwrap();

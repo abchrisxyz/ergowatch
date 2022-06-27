@@ -10,6 +10,9 @@ alter table core.headers add primary key (height);
 alter table core.headers alter column id set not null;
 alter table core.headers alter column parent_id set not null;
 alter table core.headers alter column timestamp set not null;
+alter table core.headers alter column vote1 set not null;
+alter table core.headers alter column vote2 set not null;
+alter table core.headers alter column vote3 set not null;
 alter table core.headers add constraint headers_unique_id unique(id);
 alter table core.headers add constraint headers_unique_parent_id unique(parent_id);
 
