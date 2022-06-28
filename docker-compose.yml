@@ -8,13 +8,13 @@ services:
   # Postgresql database
   db:
     build:
-      context: ./watcher/db
+      context: ./db
     environment:
       POSTGRES_DB: ergo
       POSTGRES_USER: ergo
     env_file:
       # Defines POSTGRES_PASSWORD
-      - ./watcher/db/db.secret
+      - ./db/db.secret
     volumes:
       - /var/lib/ergowatch_pg/14/data:/var/lib/postgresql/data
     ports:
@@ -54,7 +54,7 @@ services:
       POSTGRES_USER: ergo
     env_file:
       # Defines POSTGRES_PASSWORD
-      - ./watcher/db/db.secret
+      - ./db/db.secret
     links:
       - "db"
     ports:

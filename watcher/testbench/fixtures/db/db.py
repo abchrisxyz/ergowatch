@@ -11,21 +11,21 @@ from fixtures.scenario import Scenario
 
 # Latest schema
 SCHEMA_PATH = (
-    Path(__file__).parent.parent.absolute() / Path("../../db/schema.sql")
+    Path(__file__).parent.parent.absolute() / Path("../../../db/schema.sql")
 ).absolute()
 
 CONSTRAINTS_PATH = (
-    Path(__file__).parent.parent.absolute() / Path("../../db/_constraints.sql")
+    Path(__file__).parent.parent.absolute() / Path("../../../db/_constraints.sql")
 ).absolute()
 
 # Initial schema (to test migrations)
 SCHEMA_PATH_REV0 = (
-    Path(__file__).parent.parent.absolute() / Path("../../db/v0.4/schema_rev1.0.sql")
+    Path(__file__).parent.parent.absolute() / Path("../../../db/v0.4/schema_rev1.0.sql")
 ).absolute()
 
 CONSTRAINTS_PATH_REV0 = (
     Path(__file__).parent.parent.absolute()
-    / Path("../../db/v0.4/constraints_rev1.0.sql")
+    / Path("../../../db/v0.4/constraints_rev1.0.sql")
 ).absolute()
 
 

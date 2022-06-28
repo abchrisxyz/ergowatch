@@ -23,11 +23,11 @@ os.environ["POSTGRES_PASSWORD"] = DB_PASS
 os.environ["POSTGRES_DB"] = TEST_DB_NAME
 
 SCHEMA_PATH = (
-    Path(__file__).parent.parent.absolute() / Path("../../watcher/db/schema.sql")
+    Path(__file__).parent.parent.absolute() / Path("../../db/schema.sql")
 ).absolute()
 
 CONSTRAINTS_PATH = (
-    Path(__file__).parent.parent.absolute() / Path("../../watcher/db/_constraints.sql")
+    Path(__file__).parent.parent.absolute() / Path("../../db/_constraints.sql")
 ).absolute()
 
 
