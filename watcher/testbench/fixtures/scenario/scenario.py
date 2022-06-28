@@ -1,4 +1,3 @@
-from copy import deepcopy
 from . import syntax
 from .addresses import AddressCatalogue as AC
 from .addresses import Box
