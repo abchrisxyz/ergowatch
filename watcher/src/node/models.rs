@@ -79,25 +79,6 @@ pub struct DataInput {
     pub box_id: BoxID,
 }
 
-// #[derive(Deserialize, Debug)]
-// #[serde(rename_all = "camelCase")]
-// pub struct Output {
-//     pub box_id: BoxID,
-//     pub value: Value,
-//     pub ergo_tree: String,
-//     pub assets: Vec<Asset>,
-//     pub creation_height: Height,
-//     pub additional_registers: Registers,
-//     pub transaction_id: TransactionID,
-//     pub index: u32,
-// }
-
-// #[derive(Deserialize, Debug)]
-// #[serde(rename_all = "camelCase")]
-// pub struct Asset {
-//     pub token_id: TokenID,
-//     pub amount: u64,
-// }
 
 #[cfg(test)]
 pub mod testing {
