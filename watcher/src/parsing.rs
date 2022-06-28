@@ -24,6 +24,7 @@ pub struct BlockData<'a> {
     pub header_id: &'a str,
     pub parent_header_id: &'a str,
     pub timestamp: i64,
+    pub difficulty: i64,
     pub votes: [i8;3],
     pub transactions: Vec<Transaction<'a>>,
 }
@@ -35,6 +36,7 @@ impl<'a> BlockData<'a> {
             header_id: &block.header.id,
             parent_header_id: &block.header.parent_id,
             timestamp: block.header.timestamp as i64,
+            difficulty: block.header.difficulty.parse::<i64>().unwrap(),
             votes: votes::from_str(&block.header.votes),
             transactions: block
                 .block_transactions
@@ -429,6 +431,7 @@ pub mod testing {
             header_id: "5cacca81066cb5ffd64e26096fd6ad4b6b590e7a3c09208bfda79779a7ab90a4",
             parent_header_id: "eac9b85b5faca84fda89ed344730488bf11c5689165e04a059bf523776ae39d1",
             timestamp: 1634511451404,
+            difficulty: 185435213004800,
             votes: [0, 0, 0],
             transactions: vec![tx_1, tx_2, tx_3],
         }
@@ -568,6 +571,7 @@ pub mod testing {
             header_id: "5cacca81066cb5ffd64e26096fd6ad4b6b590e7a3c09208bfda79779a7ab90a4",
             parent_header_id: "eac9b85b5faca84fda89ed344730488bf11c5689165e04a059bf523776ae39d1",
             timestamp: 1634511451404,
+            difficulty: 185435213004800,
             votes: [0, 0, 0],
             transactions: vec![
                 tx_1_minting_eip4_tokens,
@@ -645,6 +649,7 @@ pub mod testing {
             header_id: "bdecd56368e9c62ac51802b5cc5bb2446852227a7dd9448db817f9d5335c05ec",
             parent_header_id: "c2b3b5905965ebbf023dc092622e02301e711b346cf2459de9efe29c47c47ad5",
             timestamp: 1622328822475,
+            difficulty: 185435213004800,
             votes: [0, 0, 0],
             transactions: vec![tx_1_multi_asset_mint],
         }
@@ -693,6 +698,7 @@ pub mod testing {
             header_id: "bdecd56368e9c62ac51802b5cc5bb2446852227a7dd9448db817f9d5335c05ec",
             parent_header_id: "c2b3b5905965ebbf023dc092622e02301e711b346cf2459de9efe29c47c47ad5",
             timestamp: 1622328822475,
+            difficulty: 185435213004800,
             votes: [0, 0, 0],
             transactions: vec![tx_1_multi_asset_mint],
         }

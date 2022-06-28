@@ -40,12 +40,12 @@ import copy
 import re
 from typing import List, Dict, Tuple
 from collections import namedtuple
-from black import out
+
 
 import sigpy
 from fixtures.scenario.addresses import AddressCatalogue as AC
 from fixtures.scenario.genesis import GENESIS_BOX, GENESIS_ID
-
+from .defaults import DEFAULT_DIFFICULTY
 
 BlockAttributes = namedtuple(
     "BlockAttributes", ["id", "header_id", "timestamp", "height", "parent_id"]
@@ -149,6 +149,7 @@ def parse_block(s: str, attrs: BlockAttributes) -> Dict:
     return {
         "header": {
             "votes": "000000",
+            "difficulty": f"{DEFAULT_DIFFICULTY}",
             "timestamp": attrs.timestamp,
             "size": 123,
             "height": attrs.height,

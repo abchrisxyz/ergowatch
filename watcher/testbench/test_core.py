@@ -8,7 +8,6 @@ from fixtures.db import fill_rev0_db
 from fixtures.db import temp_db_class_scoped
 from fixtures.db import temp_db_rev0_class_scoped
 from fixtures.db import unconstrained_db_class_scoped
-from fixtures.db.sql import DEFAULT_BOX_SIZE
 from fixtures.scenario import Scenario
 from utils import run_watcher
 from utils import assert_pk
@@ -65,7 +64,15 @@ SCENARIO_DESCRIPTION = """
     """
 
 
-def set_scenario_votes(s: Scenario):
+def set_scenario_headers(s: Scenario):
+    """
+    Modifies headers.
+    """
+    set_header_difficulty(s)
+    set_header_votes(s)
+
+
+def set_header_votes(s: Scenario):
     """
     Modifies votes in scenario block headers.
     """
@@ -78,6 +85,21 @@ def set_scenario_votes(s: Scenario):
     if len(s._blocks) == 3:
         # Block b
         s._blocks[1]["header"]["votes"] = "080400"
+
+
+def set_header_difficulty(s: Scenario):
+    """
+    Modifies dificulty in scenario block headers.
+    """
+    assert len(s._blocks) in (3, 4)
+    if len(s._blocks) == 4:
+        # Block x
+        s._blocks[1]["header"]["difficulty"] = f"{s.DEFAULT_DIFFICULTY + 2}"
+        # Block b
+        s._blocks[2]["header"]["difficulty"] = f"{s.DEFAULT_DIFFICULTY + 1}"
+    if len(s._blocks) == 3:
+        # Block b
+        s._blocks[1]["header"]["difficulty"] = f"{s.DEFAULT_DIFFICULTY + 1}"
 
 
 @pytest.mark.order(ORDER)
@@ -93,7 +115,7 @@ class TestSync:
         parent_height,
         first_ts,
     )
-    set_scenario_votes(scenario)
+    set_scenario_headers(scenario)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
@@ -135,7 +157,7 @@ class TestSyncRollback:
         parent_height,
         first_ts,
     )
-    set_scenario_votes(scenario)
+    set_scenario_headers(scenario)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
@@ -189,7 +211,7 @@ class TestSyncNoForkChild:
         parent_height,
         first_ts,
     )
-    set_scenario_votes(scenario)
+    set_scenario_headers(scenario)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
@@ -244,7 +266,7 @@ class TestGenesis:
         parent_height,
         first_ts,
     )
-    set_scenario_votes(scenario)
+    set_scenario_headers(scenario)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, unconstrained_db_class_scoped):
@@ -281,7 +303,7 @@ class TestMigrations:
         first_ts,
         main_only=True,
     )
-    set_scenario_votes(scenario)
+    set_scenario_headers(scenario)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_rev0_class_scoped):
@@ -329,6 +351,7 @@ def assert_db_constraints(conn: pg.Connection):
     assert_column_not_null(conn, "core", "headers", "id")
     assert_column_not_null(conn, "core", "headers", "parent_id")
     assert_column_not_null(conn, "core", "headers", "timestamp")
+    assert_column_not_null(conn, "core", "headers", "difficulty")
     assert_column_not_null(conn, "core", "headers", "vote1")
     assert_column_not_null(conn, "core", "headers", "vote2")
     assert_column_not_null(conn, "core", "headers", "vote3")
@@ -416,7 +439,7 @@ def assert_db_constraints(conn: pg.Connection):
 def assert_headers(cur: pg.Cursor, s):
     # 4 headers: 1 parent + 3 from blocks
     cur.execute(
-        "select height, id, parent_id, timestamp, vote1, vote2, vote3 from core.headers order by 1, 2;"
+        "select height, id, parent_id, timestamp, difficulty, vote1, vote2, vote3 from core.headers order by 1, 2;"
     )
     rows = cur.fetchall()
     assert len(rows) == 4
@@ -427,6 +450,7 @@ def assert_headers(cur: pg.Cursor, s):
             GENESIS_ID,
             "genesis",
             s.genesis_ts,
+            0,  # zero difficulty
             0,
             0,
             0,
@@ -438,6 +462,7 @@ def assert_headers(cur: pg.Cursor, s):
             GENESIS_ID,
             "bootstrap-parent-header-id",
             s.first_ts - s.dt,
+            s.DEFAULT_DIFFICULTY,
             0,
             0,
             0,
@@ -447,6 +472,7 @@ def assert_headers(cur: pg.Cursor, s):
         "block-a",
         GENESIS_ID,
         s.first_ts + s.DT * 0,
+        s.DEFAULT_DIFFICULTY,
         0,
         0,
         0,
@@ -456,6 +482,7 @@ def assert_headers(cur: pg.Cursor, s):
         "block-b",
         "block-a",
         s.first_ts + s.dt * 1,
+        s.DEFAULT_DIFFICULTY + 1,
         8,
         4,
         0,
@@ -465,6 +492,7 @@ def assert_headers(cur: pg.Cursor, s):
         "block-c",
         "block-b",
         s.first_ts + s.dt * 2,
+        s.DEFAULT_DIFFICULTY,
         0,
         0,
         0,

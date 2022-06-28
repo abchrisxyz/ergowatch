@@ -21,6 +21,7 @@ create table core.headers (
 	id text,
 	parent_id text,
 	timestamp bigint,
+	difficulty bigint,
 	vote1 smallint,
 	vote2 smallint,
 	vote3 smallint

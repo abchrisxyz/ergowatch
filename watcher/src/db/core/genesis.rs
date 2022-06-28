@@ -6,6 +6,7 @@ const ZERO_HEADER: &str = "00000000000000000000000000000000000000000000000000000
 const GENESIS_HEADER_ID: &str = ZERO_HEADER;
 const GENESIS_HEADER_PARENT_ID: &str = "genesis";
 const GENESIS_TIMESTAMP: i64 = 1561978800000;
+const DIFFICULTY: i64 = 0;
 const GENESIS_TX_ID: &str = ZERO_HEADER;
 
 /// Helper function to include genesis boxes in db.
@@ -15,13 +16,14 @@ pub fn include_genesis_boxes(tx: &mut postgres::Transaction, boxes: &Vec<Output>
     // Genesis header
     tx.execute(
         "
-        insert into core.headers (height, id, parent_id, timestamp, vote1, vote2, vote3)
-        values ($1, $2, $3, $4, $5, $6, $7);",
+        insert into core.headers (height, id, parent_id, timestamp, difficulty, vote1, vote2, vote3)
+        values ($1, $2, $3, $4, $5, $6, $7, $8);",
         &[
             &ZERO,
             &GENESIS_HEADER_ID,
             &GENESIS_HEADER_PARENT_ID,
             &GENESIS_TIMESTAMP,
+            &DIFFICULTY,
             &ZERO_VOTE,
             &ZERO_VOTE,
             &ZERO_VOTE,

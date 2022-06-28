@@ -29,7 +29,7 @@ pub struct Block {
 #[serde(rename_all = "camelCase")]
 pub struct Header {
     // pub extension_id: Digest32,
-    // pub difficulty: String,
+    pub difficulty: String,
     pub votes: String,
     pub timestamp: Timestamp,
     pub size: u32,
@@ -94,6 +94,7 @@ pub mod testing {
     pub fn block_600k() -> Block {
         Block {
             header: Header {
+                difficulty: String::from("185435213004800"),
                 votes: String::from("000000"),
                 timestamp: 1634511451404,
                 size: 221,

@@ -2,6 +2,7 @@ import pytest
 from fixtures.scenario.syntax import parse
 from fixtures.scenario.genesis import GENESIS_ID
 from fixtures.scenario.addresses import AddressCatalogue as AC
+from fixtures.scenario.defaults import DEFAULT_DIFFICULTY
 
 
 @pytest.mark.order(1)
@@ -54,6 +55,7 @@ class TestParsing:
         assert len(d) == 4
         assert d[0]["header"] == {
             "votes": "000000",
+            "difficulty": f"{DEFAULT_DIFFICULTY}",
             "timestamp": start_ts,
             "size": 123,
             "height": start_height,
@@ -63,6 +65,7 @@ class TestParsing:
 
         assert d[1]["header"] == {
             "votes": "000000",
+            "difficulty": f"{DEFAULT_DIFFICULTY}",
             "timestamp": start_ts + 100000,
             "size": 123,
             "height": start_height + 1,
@@ -72,6 +75,7 @@ class TestParsing:
 
         assert d[2]["header"] == {
             "votes": "000000",
+            "difficulty": f"{DEFAULT_DIFFICULTY}",
             "timestamp": start_ts + 100000,
             "size": 123,
             "height": start_height + 1,
@@ -81,6 +85,7 @@ class TestParsing:
 
         assert d[3]["header"] == {
             "votes": "000000",
+            "difficulty": f"{DEFAULT_DIFFICULTY}",
             "timestamp": start_ts + 200000,
             "size": 123,
             "height": start_height + 2,

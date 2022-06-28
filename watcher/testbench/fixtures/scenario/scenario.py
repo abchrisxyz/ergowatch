@@ -1,7 +1,8 @@
 from . import syntax
 from .addresses import AddressCatalogue as AC
 from .addresses import Box
-from fixtures.scenario.genesis import GENESIS_BOX
+from .defaults import DEFAULT_DIFFICULTY
+from .genesis import GENESIS_BOX
 
 # Actual genesis timestamp
 GENSIS_TIMESTAMP = 1561978800000
@@ -16,6 +17,7 @@ class Scenario:
     """
 
     DT = TIMESTAMP_INTERVAL
+    DEFAULT_DIFFICULTY = DEFAULT_DIFFICULTY
 
     def __init__(
         self,

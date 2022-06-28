@@ -6,13 +6,14 @@ pub(super) struct Header<'a> {
     id: &'a str,
     parent_id: &'a str,
     timestamp: i64,
+    difficulty: i64,
     votes: [i16; 3],
 }
 
 pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
     let sql = "
-        insert into core.headers (height, id, parent_id, timestamp, vote1, vote2, vote3)
-        values ($1, $2, $3, $4, $5, $6, $7);";
+        insert into core.headers (height, id, parent_id, timestamp, difficulty, vote1, vote2, vote3)
+        values ($1, $2, $3, $4, $5, $6, $7, $8);";
 
     let header = extract_header(block);
 
@@ -23,6 +24,7 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
             &header.id,
             &header.parent_id,
             &header.timestamp,
+            &header.difficulty,
             &header.votes[0],
             &header.votes[1],
             &header.votes[2],
@@ -43,6 +45,7 @@ fn extract_header<'a>(block: &'a BlockData) -> Header<'a> {
         id: block.header_id,
         parent_id: block.parent_header_id,
         timestamp: block.timestamp,
+        difficulty: block.difficulty,
         // Postgres has no single byte int, so convert to smallint
         votes: [
             block.votes[0] as i16,
@@ -59,6 +62,7 @@ pub(super) fn set_constraints(tx: &mut Transaction) {
         "alter table core.headers alter column id set not null;",
         "alter table core.headers alter column parent_id set not null;",
         "alter table core.headers alter column timestamp set not null;",
+        "alter table core.headers alter column difficulty set not null;",
         "alter table core.headers alter column vote1 set not null;",
         "alter table core.headers alter column vote2 set not null;",
         "alter table core.headers alter column vote3 set not null;",
@@ -90,5 +94,6 @@ mod tests {
             "eac9b85b5faca84fda89ed344730488bf11c5689165e04a059bf523776ae39d1"
         );
         assert_eq!(h.timestamp, 1634511451404);
+        assert_eq!(h.difficulty, 185435213004800);
     }
 }

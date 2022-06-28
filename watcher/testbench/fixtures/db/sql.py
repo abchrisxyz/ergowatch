@@ -16,7 +16,6 @@ from typing import List
 from typing import Dict
 from typing import Tuple
 
-from fixtures.scenario.addresses import AddressCatalogue as AC
 from fixtures.scenario.addresses import CEX_BOXES
 from fixtures.registers import RegisterCatalogue as RC
 from fixtures.scenario import Scenario
@@ -34,6 +33,7 @@ class Header:
     id: str
     parent_id: str
     timestamp: int
+    difficulty: int
     votes: Tuple[int, int, int]
 
 
@@ -411,6 +411,7 @@ def extract_existing_header(blocks: List[Dict]) -> Header:
         parent_id="bootstrap-parent-header-id",
         # Timestamp is 100 seconds less than first test block
         timestamp=h["timestamp"] - 100_000,
+        difficulty=h["difficulty"],
         votes=tuple([DEFAULT_VOTE, DEFAULT_VOTE, DEFAULT_VOTE]),
     )
 
@@ -425,6 +426,7 @@ def extract_headers(blocks: List[Dict]) -> List[Header]:
             id=b["header"]["id"],
             parent_id=b["header"]["parentId"],
             timestamp=b["header"]["timestamp"],
+            difficulty=b["header"]["difficulty"],
             votes=parse_votes(b["header"]["votes"]),
         )
         for b in blocks
@@ -646,12 +648,13 @@ def extract_registers(blocks: List[Dict]) -> List[Register]:
 def format_header_sql(h: Header):
     return dedent(
         f"""
-        insert into core.headers (height, id, parent_id, timestamp, vote1, vote2, vote3)
+        insert into core.headers (height, id, parent_id, timestamp, difficulty, vote1, vote2, vote3)
         values (
             {h.height},
             '{h.id}',
             '{h.parent_id}',
             {h.timestamp},
+            {h.difficulty},
             {h.votes[0]},
             {h.votes[1]},
             {h.votes[2]}
