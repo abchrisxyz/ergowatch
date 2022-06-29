@@ -58,6 +58,7 @@ pub(super) fn set_constraints(tx: &mut Transaction) {
         "alter table core.box_assets add foreign key (box_id)
             references core.outputs (box_id) on delete cascade;",
         "alter table core.box_assets add check (amount > 0);",
+        "create index on core.box_assets (box_id)",
     ];
 
     for statement in statements {

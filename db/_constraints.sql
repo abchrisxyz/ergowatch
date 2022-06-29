@@ -95,6 +95,7 @@ alter table core.box_assets alter column token_id set not null;
 alter table core.box_assets alter column amount set not null;
 alter table core.box_assets	add foreign key (box_id) references core.outputs (box_id);
 alter table core.box_assets add check (amount > 0);
+create index on core.box_assets (box_id);
 
 alter table core.system_parameters add primary key (height);
 

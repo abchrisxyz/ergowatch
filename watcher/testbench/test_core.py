@@ -470,6 +470,7 @@ def assert_db_constraints(conn: pg.Connection):
     assert_column_not_null(conn, "core", "box_assets", "amount")
     assert_fk(conn, "core", "box_assets", "box_assets_box_id_fkey")
     assert_column_ge(conn, "core", "box_assets", "amount", 0)
+    assert_index(conn, "core", "box_assets", "box_assets_box_id_idx")
 
     # System parameters
     assert_pk(conn, "core", "system_parameters", ["height"])
