@@ -27,6 +27,7 @@ pub struct BlockData<'a> {
     pub difficulty: i64,
     pub votes: [i8;3],
     pub transactions: Vec<Transaction<'a>>,
+    pub extension: Extension<'a>,
 }
 
 impl<'a> BlockData<'a> {
@@ -45,6 +46,7 @@ impl<'a> BlockData<'a> {
                 .enumerate()
                 .map(|(i, tx)| Transaction::from_node_transaction(tx, i))
                 .collect(),
+            extension: Extension::from_node_extension(&block.extension)
         }
     }
 }
@@ -202,6 +204,29 @@ impl std::ops::Add for Asset {
     }
 }
 
+#[derive(Debug)]
+pub struct Extension<'a> {
+    pub fields: Vec<ExtensionField<'a>>,
+}
+
+#[derive(Debug)]
+pub struct ExtensionField<'a> {
+    pub key: &'a str,
+    pub val: &'a str,
+}
+
+impl<'a> Extension<'a> {
+
+    /// Create Extension from node extension data
+    pub fn from_node_extension(extension: &'a node::models::Extension) -> Self {
+        Extension {
+            fields: extension.fields.iter().map(|f| ExtensionField {
+                key: &f.key,
+                val: &f.value,
+            }).collect()
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -314,6 +339,7 @@ mod tests {
 pub mod testing {
     use super::Asset;
     use super::BlockData;
+    use super::Extension;
     use super::Output;
     use super::Register;
     use super::Transaction;
@@ -434,6 +460,7 @@ pub mod testing {
             difficulty: 185435213004800,
             votes: [0, 0, 0],
             transactions: vec![tx_1, tx_2, tx_3],
+            extension: Extension {fields: vec![]},
         }
     }
 
@@ -577,6 +604,7 @@ pub mod testing {
                 tx_1_minting_eip4_tokens,
                 tx_2_minting_non_compliant_eip4_token,
             ],
+            extension: Extension {fields: vec![]},
         }
     }
 
@@ -652,6 +680,7 @@ pub mod testing {
             difficulty: 185435213004800,
             votes: [0, 0, 0],
             transactions: vec![tx_1_multi_asset_mint],
+            extension: Extension {fields: vec![]},
         }
     }
 
@@ -701,6 +730,7 @@ pub mod testing {
             difficulty: 185435213004800,
             votes: [0, 0, 0],
             transactions: vec![tx_1_multi_asset_mint],
+            extension: Extension {fields: vec![]},
         }
     }
 }

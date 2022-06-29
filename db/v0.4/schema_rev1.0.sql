@@ -94,6 +94,28 @@ create table core.box_assets (
 	amount bigint
 );
 
+create table core.system_parameters (
+	height integer,
+	storage_fee integer,        -- 1. Storage fee nanoErg/byte
+	min_box_value integer,      -- 2. Minimum box value in nanoErg
+	max_block_size integer,     -- 3. Maximum block size
+	max_cost integer,           -- 4. Maximum computational cost of a block
+	token_access_cost integer,  -- 5. Token access cost
+	tx_input_cost integer,      -- 6. Cost per tx input
+	tx_data_input_cost integer, -- 7. Cost per tx data-input
+	tx_output_cost integer,     -- 8. Cost per tx output
+	block_version integer       -- 123. Block version
+);
+
+
+-- Placeholder for unhandled extension fields.
+-- Just storing whatever k,v show up for later processing.
+create table core.unhandled_extension_fields (
+	height integer,
+	key text,
+	value text
+);
+
 
 -------------------------------------------------------------------------------
 -- Unpent boxes

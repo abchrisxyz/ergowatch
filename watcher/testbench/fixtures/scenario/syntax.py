@@ -162,6 +162,50 @@ def parse_block(s: str, attrs: BlockAttributes) -> Dict:
             "blockVersion": 2,
             "size": 234,
         },
+        "extension": {
+            "fields": [
+                [
+                    "0100",
+                    "01b0244dfc267baca974a4caee06120321562784303a8a688976ae56170e4d175b",
+                ],
+                [
+                    "0101",
+                    "031155d54de65f0130fae142aa4cf5a7728b7c30f5939d33fddf077e2008040a15",
+                ],
+                [
+                    "0104",
+                    "02bf770872186c2f6dcc8f765b4732937592d358c2a585f64c3d7f73f703a666a0",
+                ],
+                [
+                    "0106",
+                    "03add47135bafaae6144f5db597896a57af3248c39d257450014cb0bea892dae8a",
+                ],
+                [
+                    "0109",
+                    "02a54b85c48a879315f33751cf54fc050f9ab8f123b1ec7d6d83633b821c2fd146",
+                ],
+                [
+                    "010b",
+                    "019094d347af89806c9e3f8417f69b88299cb6ad288133928a0701ff2ad413a036",
+                ],
+                [
+                    "010c",
+                    "01911ad00d56e5b77e1687983a137f8346a2438138fa05fb4b9b93c88334d0523a",
+                ],
+                [
+                    "010d",
+                    "05f06862f5ae2acfadcd60ad8603dd4a4078ff16527069ec75726414a56bfde0a7",
+                ],
+                [
+                    "0112",
+                    "020011c0d9d0826ef506d7250be0da5f00192adea26a2c7a2e0af946c884a31919",
+                ],
+                [
+                    "0114",
+                    "01f5085e06d644f1a5b339eac11dc9bbce12f8ef8a7d9a8bde2aa1fdd6dc4bf0b6",
+                ],
+            ]
+        },
         "size": 1234,
     }
 

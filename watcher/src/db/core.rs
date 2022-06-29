@@ -7,6 +7,7 @@ pub mod genesis;
 mod additional_registers;
 mod assets;
 mod data_inputs;
+mod extension;
 mod headers;
 mod inputs;
 mod outputs;
@@ -25,10 +26,12 @@ pub(super) fn include_block(tx: &mut Transaction, block: &BlockData) -> anyhow::
     additional_registers::include(tx, block);
     tokens::include(tx, block);
     assets::include(tx, block);
+    extension::include(tx, block);
     Ok(())
 }
 
 pub(super) fn rollback_block(tx: &mut Transaction, block: &BlockData) -> anyhow::Result<()> {
+    extension::rollback(tx, block);
     assets::rollback(tx, block);
     tokens::rollback(tx, block);
     additional_registers::rollback(tx, block);
@@ -37,7 +40,6 @@ pub(super) fn rollback_block(tx: &mut Transaction, block: &BlockData) -> anyhow:
     outputs::rollback(tx, block);
     transactions::rollback(tx, block);
     headers::rollback(tx, block);
-
     Ok(())
 }
 
@@ -50,4 +52,5 @@ pub(super) fn set_constraints(tx: &mut Transaction) {
     additional_registers::set_constraints(tx);
     tokens::set_constraints(tx);
     assets::set_constraints(tx);
+    extension::set_constraints(tx);
 }

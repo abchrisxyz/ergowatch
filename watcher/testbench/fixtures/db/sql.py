@@ -100,6 +100,27 @@ class Register:
     rendered_value: str
 
 
+@dataclass
+class SystemParameters:
+    height: int
+    storage_fee: int = None
+    min_box_value: int = None
+    max_block_size: int = None
+    max_cost: int = None
+    token_access_cost: int = None
+    tx_input_cost: int = None
+    tx_data_input_cost: int = None
+    tx_output_cost: int = None
+    block_version: int = None
+
+
+@dataclass
+class ExtensionField:
+    height: int
+    key: str = None
+    value: str = None
+
+
 def generate_rev0_sql(scenario: Scenario) -> str:
     """
     Generate sql statements to fill a db as it would be by v0.4.
@@ -123,6 +144,8 @@ def generate_rev0_sql(scenario: Scenario) -> str:
     tokens = extract_tokens(scenario.blocks)
     assets = extract_assets(scenario.blocks)
     registers = extract_registers(scenario.blocks)
+    sys_params = extract_system_parameters(scenario.blocks)
+    unhandled_ext_fields = extract_unhandled_extension_fields(scenario.blocks)
 
     sql = ""
     # Core tables
@@ -142,6 +165,10 @@ def generate_rev0_sql(scenario: Scenario) -> str:
         sql += format_asset_sql(asset)
     for register in registers:
         sql += format_register_sql(register)
+    for sp in sys_params:
+        sql += format_system_parameters(sp)
+    for f in unhandled_ext_fields:
+        sql += format_unhandled_extension_fields(f)
 
     # Unspent
     sql += """
@@ -645,6 +672,65 @@ def extract_registers(blocks: List[Dict]) -> List[Register]:
     ]
 
 
+def extract_system_parameters(blocks: List[Dict]) -> List[SystemParameters]:
+    ps = []
+    for block in blocks:
+        p = SystemParameters(height=block["header"]["height"])
+
+        for field in block["extension"]["fields"]:
+            prefix = int(field[0][0:2], 16)
+            if prefix != 0:
+                continue
+            key = int(field[0][2:4], 16)
+            if key == 1:
+                p.storage_fee = int(field[1], 16)
+            elif key == 2:
+                p.min_box_value = int(field[1], 16)
+            elif key == 3:
+                p.max_block_size = int(field[1], 16)
+            elif key == 4:
+                p.max_cost = int(field[1], 16)
+            elif key == 5:
+                p.token_access_cost = int(field[1], 16)
+            elif key == 6:
+                p.tx_input_cost = int(field[1], 16)
+            elif key == 7:
+                p.tx_data_input_cost = int(field[1], 16)
+            elif key == 8:
+                p.tx_output_cost = int(field[1], 16)
+            elif key == 123:
+                p.block_version = int(field[1], 16)
+            elif key in (120, 121, 122, 124):
+                continue
+            else:
+                raise ValueError(
+                    f"Unknown system parameter extension field key ({key}) in field: {field}"
+                )
+
+        # Should ideally check all fields but assuming one these ones will always be set if others are.
+        if p.storage_fee is not None or p.block_version is not None:
+            ps.append(p)
+
+    return ps
+
+
+def extract_unhandled_extension_fields(blocks: List[Dict]) -> List[ExtensionField]:
+    fields = []
+    for block in blocks:
+        for field in block["extension"]["fields"]:
+            prefix = int(field[0][0:2], 16)
+            if prefix == 1:
+                continue
+            if prefix == 0 and int(field[0][2:4], 16) in (1, 2, 3, 4, 5, 6, 7, 8, 123):
+                continue
+            fields.append(
+                ExtensionField(
+                    height=block["header"]["height"], key=field[0], value=field[1]
+                )
+            )
+    return fields
+
+
 def format_header_sql(h: Header):
     return dedent(
         f"""
@@ -771,6 +857,59 @@ def format_register_sql(r: Register):
             '{r.value_type}',
             '{r.serialized_value}',
             '{r.rendered_value}'
+        );
+    """
+    )
+
+
+def format_system_parameters(p: SystemParameters):
+    def nullify(val):
+        return "null" if val is None else val
+
+    return dedent(
+        f"""
+        insert into core.system_parameters (
+            height,
+            storage_fee,
+            min_box_value,
+            max_block_size,
+            max_cost,
+            token_access_cost,
+            tx_input_cost,
+            tx_data_input_cost,
+            tx_output_cost,
+            block_version
+        )
+        values (
+            {p.height},
+            {nullify(p.storage_fee)},
+            {nullify(p.min_box_value)},
+            {nullify(p.max_block_size)},
+            {nullify(p.max_cost)},
+            {nullify(p.token_access_cost)},
+            {nullify(p.tx_input_cost)},
+            {nullify(p.tx_data_input_cost)},
+            {nullify(p.tx_output_cost)},
+            {nullify(p.block_version)}
+        );
+    """
+    )
+
+
+def format_unhandled_extension_fields(f: ExtensionField):
+    assert f.key is not None
+    assert f.value is not None
+    return dedent(
+        f"""
+        insert into core.unhandled_extension_fields (
+            height,
+            key,
+            value
+        )
+        values (
+            {f.height},
+            '{f.key}',
+            '{f.value}'
         );
     """
     )

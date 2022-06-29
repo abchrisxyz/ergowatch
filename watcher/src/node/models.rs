@@ -20,7 +20,7 @@ pub struct NodeInfo {
 pub struct Block {
     pub header: Header,
     pub block_transactions: BlockTransactions,
-    // pub extension: Extension,
+    pub extension: Extension,
     // pub ad_proofs: ADProofs,
     pub size: u32,
 }
@@ -79,6 +79,20 @@ pub struct DataInput {
     pub box_id: BoxID,
 }
 
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Extension {
+    // header_id: String,
+    // digest: String,
+    pub fields: Vec<ExtensionField>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ExtensionField {
+    pub key: String,
+    pub value: String,
+}
+
 
 #[cfg(test)]
 pub mod testing {
@@ -86,6 +100,8 @@ pub mod testing {
     use super::BlockTransactions;
     use super::DataInput;
     use super::ErgoBox;
+    use super::Extension;
+    use super::ExtensionField;
     use super::Header;
     use super::Input;
     use super::Transaction;
@@ -244,6 +260,19 @@ pub mod testing {
                 ],
                 block_version: 2,
                 size: 1155,
+            },
+            extension: Extension {
+                // Some fields
+                fields: vec![
+                    ExtensionField {
+                        key: String::from("0100"),
+                        value: String::from("01b0244dfc267baca974a4caee06120321562784303a8a688976ae56170e4d175b"),
+                    },
+                    ExtensionField {
+                        key: String::from("0101"),
+                        value: String::from("01557fd0590616b4f6e51eaf54436d61e5585eebfc5a9e860861fc0876064bd3d9"),
+                    },
+                ]
             },
             size: 8486,
         }

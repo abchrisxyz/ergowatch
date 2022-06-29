@@ -1,3 +1,4 @@
+from os import system
 import pytest
 import psycopg as pg
 
@@ -64,12 +65,13 @@ SCENARIO_DESCRIPTION = """
     """
 
 
-def set_scenario_headers(s: Scenario):
+def set_scenario_headers_and_extension(s: Scenario):
     """
-    Modifies headers.
+    Modifies headers and extension
     """
     set_header_difficulty(s)
     set_header_votes(s)
+    set_block_extensions(s)
 
 
 def set_header_votes(s: Scenario):
@@ -102,6 +104,38 @@ def set_header_difficulty(s: Scenario):
         s._blocks[1]["header"]["difficulty"] = f"{s.DEFAULT_DIFFICULTY + 1}"
 
 
+def set_block_extensions(s: Scenario):
+    """
+    Modifies block extensions
+    """
+    assert len(s._blocks) in (3, 4)
+    system_parameters = [
+        ["0001", "00000001"],
+        ["0002", "00000002"],
+        ["0003", "00000003"],
+        ["0004", "00000004"],
+        ["0005", "00000005"],
+        ["0006", "00000006"],
+        ["0007", "00000007"],
+        ["0008", "00000008"],
+        ["0078", "should-be-unhandled-120"],  # 120
+        ["0079", "should-be-unhandled-121"],  # 121
+        ["007a", "should-be-unhandled-122"],  # 122
+        ["007b", "00000002"],  # 123
+        ["007c", "should-be-unhandled-124"],  # 124
+        ["0201", "should-be-unhandled-too"],
+    ]
+    if len(s._blocks) == 4:
+        # Block x - with block version = 3
+        s._blocks[1]["extension"]["fields"].append(["007b", "00000003"])
+        # Block b
+        s._blocks[2]["extension"]["fields"].extend(system_parameters)
+        assert s._blocks[2]["header"]["id"] == "block-b"
+    if len(s._blocks) == 3:
+        # Block b
+        s._blocks[1]["extension"]["fields"].extend(system_parameters)
+
+
 @pytest.mark.order(ORDER)
 class TestSync:
     """
@@ -115,7 +149,7 @@ class TestSync:
         parent_height,
         first_ts,
     )
-    set_scenario_headers(scenario)
+    set_scenario_headers_and_extension(scenario)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
@@ -157,7 +191,7 @@ class TestSyncRollback:
         parent_height,
         first_ts,
     )
-    set_scenario_headers(scenario)
+    set_scenario_headers_and_extension(scenario)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
@@ -211,7 +245,7 @@ class TestSyncNoForkChild:
         parent_height,
         first_ts,
     )
-    set_scenario_headers(scenario)
+    set_scenario_headers_and_extension(scenario)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
@@ -266,7 +300,7 @@ class TestGenesis:
         parent_height,
         first_ts,
     )
-    set_scenario_headers(scenario)
+    set_scenario_headers_and_extension(scenario)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, unconstrained_db_class_scoped):
@@ -303,7 +337,7 @@ class TestMigrations:
         first_ts,
         main_only=True,
     )
-    set_scenario_headers(scenario)
+    set_scenario_headers_and_extension(scenario)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_rev0_class_scoped):
@@ -342,6 +376,8 @@ def _test_db_state(conn: pg.Connection, s: Scenario):
         assert_box_registers(cur, s)
         assert_tokens(cur, s)
         assert_box_assets(cur, s)
+        assert_system_parameters(cur, s)
+        assert_unhandled_extension_fields(cur, s)
 
 
 def assert_db_constraints(conn: pg.Connection):
@@ -434,6 +470,9 @@ def assert_db_constraints(conn: pg.Connection):
     assert_column_not_null(conn, "core", "box_assets", "amount")
     assert_fk(conn, "core", "box_assets", "box_assets_box_id_fkey")
     assert_column_ge(conn, "core", "box_assets", "amount", 0)
+
+    # System parameters
+    assert_pk(conn, "core", "system_parameters", ["height"])
 
 
 def assert_headers(cur: pg.Cursor, s):
@@ -730,3 +769,44 @@ def assert_box_assets(cur: pg.Cursor, s: Scenario):
     assert rows[0] == (s.id("pub1-box1"), s.id("con1-box1"), 2000)
     assert rows[1] == (s.id("pub1-box2"), s.id("con1-box1"), 1500)
     assert rows[2] == (s.id("pub2-box1"), s.id("con1-box1"), 500)
+
+
+def assert_system_parameters(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        """
+        select height
+            , storage_fee
+            , min_box_value
+            , max_block_size
+            , max_cost
+            , token_access_cost
+            , tx_input_cost
+            , tx_data_input_cost
+            , tx_output_cost
+            , block_version
+        from core.system_parameters
+        order by height;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 1
+    assert rows[0] == (s.parent_height + 2, 1, 2, 3, 4, 5, 6, 7, 8, 2)
+
+
+def assert_unhandled_extension_fields(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        """
+        select height
+            , key
+            , value
+        from core.unhandled_extension_fields
+        order by key;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 5
+    assert rows[0] == (s.parent_height + 2, "0078", "should-be-unhandled-120")
+    assert rows[1] == (s.parent_height + 2, "0079", "should-be-unhandled-121")
+    assert rows[2] == (s.parent_height + 2, "007a", "should-be-unhandled-122")
+    assert rows[3] == (s.parent_height + 2, "007c", "should-be-unhandled-124")
+    assert rows[4] == (s.parent_height + 2, "0201", "should-be-unhandled-too")
