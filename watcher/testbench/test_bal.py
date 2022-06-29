@@ -44,7 +44,7 @@ SCENARIO_DESCRIPTION = """
         pub1-box1   10
         {con2-box1}
         >
-        pub1-box2    6 (con1-box1: 1500)
+        pub1-box2    6 (con1-box1: 1500, pub1-box1: 50)
         pub2-box1    3 (con1-box1: 500)
         fees-box1    1
         --
@@ -52,7 +52,8 @@ SCENARIO_DESCRIPTION = """
         >
         con1-box2    1
         --
-        // intra-block partial spend
+        // intra-block partial spend of token con1-box1
+        // full burning of token pub1-box1
         pub2-box1    3
         pub1-box2    6
         >
@@ -224,8 +225,8 @@ def _test_db_state(conn: pg.Connection, s: Scenario):
     with conn.cursor() as cur:
         assert_erg_balances(cur, s)
         assert_erg_diffs(cur, s)
-        assert_tokens_balances(cur, s)
         assert_tokens_diffs(cur, s)
+        assert_tokens_balances(cur, s)
 
 
 def assert_db_constraints(conn: pg.Connection):
@@ -316,10 +317,12 @@ def assert_tokens_diffs(cur: pg.Cursor, s: Scenario):
         "select height, tx_id, address, token_id, value from bal.tokens_diffs order by 1, 2, 3;"
     )
     rows = cur.fetchall()
-    assert len(rows) == 5
+    assert len(rows) == 7
     assert rows[0] == (h + 2, s.id("tx-b1"), s.address("pub1"), s.id("con1-box1"), 2000)
 
     assert rows[1] == (h + 3, s.id("tx-c1"), s.address("pub1"), s.id("con1-box1"), -500)
-    assert rows[2] == (h + 3, s.id("tx-c1"), s.address("pub2"), s.id("con1-box1"), 500)
-    assert rows[3] == (h + 3, s.id("tx-c3"), s.address("pub1"), s.id("con1-box1"), 100)
-    assert rows[4] == (h + 3, s.id("tx-c3"), s.address("pub2"), s.id("con1-box1"), -100)
+    assert rows[2] == (h + 3, s.id("tx-c1"), s.address("pub1"), s.id("pub1-box1"), 50)
+    assert rows[3] == (h + 3, s.id("tx-c1"), s.address("pub2"), s.id("con1-box1"), 500)
+    assert rows[4] == (h + 3, s.id("tx-c3"), s.address("pub1"), s.id("con1-box1"), 100)
+    assert rows[5] == (h + 3, s.id("tx-c3"), s.address("pub1"), s.id("pub1-box1"), -50)
+    assert rows[6] == (h + 3, s.id("tx-c3"), s.address("pub2"), s.id("con1-box1"), -100)
