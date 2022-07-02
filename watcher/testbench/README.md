@@ -2,6 +2,8 @@
 
 The test bench is python 3 package, so make sure you have python 3 running on your system.
 
+Build and install the `sigpy` package, see `sigpy/README.md` for instructions.
+
 Install the dependencies listed in `.requirements.txt`. Psycopg can be tricky on some devices, see further instructions below.
 
 Finally, install the test bench package itself:

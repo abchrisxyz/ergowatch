@@ -11,7 +11,7 @@ API docs available at https://ergo.watch/api/v0/docs.
 
 If looking for the frontend of https://ergo.watch see https://github.com/abchrisxyz/ergowatch-ui.
 
-Note that https://ergo.watch is currenlty running on older backend (https://github.com/abchrisxyz/ergowatch/tree/explorer-based), soon to be replaced.
+Note that https://ergo.watch is currenlty running on an older backend (https://github.com/abchrisxyz/ergowatch/tree/explorer-based), soon to be replaced.
 
 ## Roadmap
 
@@ -23,7 +23,7 @@ Note that https://ergo.watch is currenlty running on older backend (https://gith
 
 - [ ] SigmaUSD
 
-At this point, should be ready to retire old backend and merge with main branch.
+At this point, should be ready to retire old backend and migrate https://ergo.watch.
 
 - [ ] V2 Oracle Pools
 
@@ -42,7 +42,6 @@ OPTIONS:
     -v, --version                                Print version information
     -x, --exit                                   Exit once synced (mostly for integration tests)
 ```
-
 
 
 ### Requirements
@@ -65,9 +64,7 @@ There is also a testbench performing a number of integration tests that need acc
 
 #### Database
 
-The watcher expects a database with the schema defined in `watcher/db/schema.sql` . Constraints and indexes are defined separately in `watcher/db/constraints.sql` and will be loaded by the watcher after the  bootstrapping process. The exact path to `constraints.sql` can be specified with the `-k` option.
-
-If using the Dockerfiles, the above will be preconfigured.
+The watcher expects a database with the schema defined in `db/schema.sql`. Constraints and indexes are set by the watcher when appropriate and should not be loaded beforehand.
 
 ### Usage
 
@@ -94,8 +91,6 @@ The `docker-compose.yml` might also be a good place to look at to see how things
 #### Initial Sync
 
 When running for the first time (i.e. with an empty database), the watcher will first sync core tables only, then load database constraints and populate other tables. If interrupted during the bootstrap process, it is safe to restart the watcher, it'll pick up where it left off.
-
-The boostrapping process takes around 24h on common hardware (old desktop) to reach height 700k.
 
 ### Fork handling
 
