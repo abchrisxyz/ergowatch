@@ -134,21 +134,4 @@ mod tests {
         let box_ids = super::extract_inputs(&block);
         assert_eq!(box_ids.len(), 4);
     }
-
-    // #[test]
-    // fn check_bootstrap_statements() -> () {
-    //     let statements = super::prep_bootstrap(600000);
-    //     assert_eq!(statements.len(), 2);
-    //     assert_eq!(
-    //         statements[0].sql,
-    //         usp::bootstrapping::INSERT_NEW_BOXES_AT_HEIGHT
-    //     );
-    //     assert_eq!(
-    //         statements[1].sql,
-    //         usp::bootstrapping::DELETE_SPENT_BOXES_AT_HEIGHT
-    //     );
-
-    //     assert_eq!(statements[0].args[0], SQLArg::Integer(600000));
-    //     assert_eq!(statements[1].args[0], SQLArg::Integer(600000));
-    // }
 }
