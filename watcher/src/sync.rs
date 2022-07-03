@@ -92,10 +92,7 @@ fn include_genesis_boxes(session: &mut Session) -> Result<(), &'static str> {
             error!("{}", e);
             return Err("Failed to retrieve genesis boxes from node");
         }
-    }
-    .iter()
-    .map(|b| crate::parsing::Output::from_ergo_box(&b))
-    .collect();
+    };
     session.db.include_genesis_boxes(boxes).unwrap();
 
     // Resync cache now that db got modified

@@ -136,6 +136,15 @@ def set_block_extensions(s: Scenario):
         s._blocks[1]["extension"]["fields"].extend(system_parameters)
 
 
+def set_invalid_ergo_tree(s: Scenario):
+    """
+    Modifies ergo tree of a specific box to trigger error handling.
+    """
+    # First block is alwats block a
+    box = s._blocks[0]["blockTransactions"]["transactions"][0]["outputs"][0]
+    box["ergoTree"] = box["ergoTree"][:-2]
+
+
 @pytest.mark.order(ORDER)
 class TestSync:
     """
@@ -363,6 +372,66 @@ class TestMigrations:
 
     def test_db_state(self, synced_db: pg.Connection):
         _test_db_state(synced_db, self.scenario)
+
+
+@pytest.mark.order(ORDER)
+class TestSyncDeserError:
+    """
+    Separate scenario to check ergo box deserialization error handling.
+    """
+
+    desc = """
+        block-a
+        // coinbase tx:
+        base-box1 1000
+        >
+        base-box2  950
+        con1-box1   50
+    """
+
+    parent_height = 599_999
+    first_ts = 1234560000000 + Scenario.DT
+    scenario = Scenario(desc, parent_height, first_ts)
+
+    @pytest.fixture(scope="class")
+    def synced_db(self, temp_cfg, temp_db_class_scoped):
+        """
+        Run watcher with mock api and return cursor to test db.
+        """
+
+        with MockApi() as api:
+            # Mess with the ergo tree
+            s = self.scenario
+            box = s._blocks[0]["blockTransactions"]["transactions"][0]["outputs"][0]
+            box["ergoTree"] = box["ergoTree"][:-2]
+
+            api = ApiUtil()
+            api.set_blocks(self.scenario.blocks)
+
+            # Bootstrap db
+            with pg.connect(temp_db_class_scoped) as conn:
+                bootstrap_db(conn, self.scenario)
+
+            # Run
+            cp = run_watcher(temp_cfg)
+            assert cp.returncode == 0
+            assert "Including block block-a" in cp.stdout.decode()
+
+            with pg.connect(temp_db_class_scoped) as conn:
+                yield conn
+
+    def test_box_size(self, synced_db: pg.Connection):
+        with synced_db.cursor() as cur:
+            cur.execute(
+                f"""
+                select size
+                from core.outputs
+                where box_id = '{self.scenario.id("base-box2")}';
+            """
+            )
+            row = cur.fetchone()
+        # Undeserializable box has size 0
+        assert row[0] == 0
 
 
 def _test_db_state(conn: pg.Connection, s: Scenario):

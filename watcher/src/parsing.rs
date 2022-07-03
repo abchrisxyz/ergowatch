@@ -3,13 +3,11 @@ mod register;
 mod votes;
 
 use ergotree_ir::chain::ergo_box::ErgoBox;
-use ergotree_ir::chain::ergo_box::NonMandatoryRegisters;
-use ergotree_ir::chain::ergo_box::NonMandatoryRegisterId;
-use ergotree_ir::mir::constant::Constant;
-use ergotree_ir::base16_str::Base16Str;
 use ergotree_ir::serialization::SigmaSerializable;
 use log::debug;
+use log::warn;
 use crate::node;
+
 
 
 /// A preprocessed version of block data provided by the node.
@@ -55,7 +53,7 @@ impl<'a> BlockData<'a> {
 pub struct Transaction<'a> {
     pub id: &'a str,
     pub index: i32,
-    pub outputs: Vec<Output>,
+    pub outputs: Vec<Output<'a>>,
     pub input_box_ids: Vec<&'a str>,
     pub data_input_box_ids: Vec<&'a str>,
 }
@@ -69,7 +67,7 @@ impl<'a> Transaction<'a> {
             outputs: tx
                 .outputs
                 .iter()
-                .map(|op| Output::from_ergo_box(&op))
+                .map(|op| Output::from_node_output(&op))
                 .collect(),
             input_box_ids: tx.inputs.iter().map(|i| &*i.box_id).collect(),
             data_input_box_ids: tx.data_inputs.iter().map(|d| &*d.box_id).collect(),
@@ -78,43 +76,68 @@ impl<'a> Transaction<'a> {
 }
 
 #[derive(Debug)]
-pub struct Output {
-    pub box_id: String,
+pub struct Output<'a> {
+    pub box_id: &'a str,
     pub creation_height: i32,
     pub address: String,
     pub index: i32,
     pub value: i64,
     pub additional_registers: [Option<Register>; 6],
-    pub assets: Vec<Asset>,
+    pub assets: Vec<Asset<'a>>,
     pub size: i32,
 }
 
-impl Output {
-    pub fn from_ergo_box(eb: &ErgoBox) -> Self {
-        debug!("Processing output {:?}", eb.box_id());
+impl<'a> Output<'a> {
+    pub fn from_node_output(output: &'a node::models::Output) -> Self {
+        debug!("Processing output {}", &output.box_id);
         Output {
-            box_id: String::from(eb.box_id()),
-            creation_height: eb.creation_height as i32,
-            address: ergo_tree::address_from_ergo_tree(&eb.ergo_tree),
-            index: eb.index as i32,
-            value: eb.value.as_i64(),
-            additional_registers: parse_additional_registers(&eb.additional_registers),
-            assets: match &eb.tokens {
-                Some(ts) => {
-                    ts.iter().map(|t| Asset {
-                        token_id: String::from(t.token_id.clone()),
-                        amount: i64::from(t.amount),
-                    })
-                    .collect()
-                },
-                None => vec![]
+            box_id: &output.box_id,
+            creation_height: output.creation_height as i32,
+            address: ergo_tree::base16_to_address(&output.ergo_tree),
+            index: output.index as i32,
+            value: output.value as i64,
+            additional_registers: parse_additional_registers(&output.additional_registers),
+            assets: output
+                .assets
+                .iter()
+                .map(|a| Asset {
+                    token_id: &a.token_id,
+                    amount: a.amount as i64,
+                })
+                .collect(),
+            size: match calc_box_size(&output) {
+                Some(s) => s,
+                None => 0,
             },
-            size: eb.sigma_serialize_bytes().unwrap().len() as i32,
+
         }
     }
+
+    // pub fn from_ergo_box(eb: &ErgoBox) -> Self {
+    //     debug!("Processing output {:?}", eb.box_id());
+    //     Output {
+    //         box_id: String::from(eb.box_id()),
+    //         creation_height: eb.creation_height as i32,
+    //         address: ergo_tree::address_from_ergo_tree(&eb.ergo_tree),
+    //         index: eb.index as i32,
+    //         value: eb.value.as_i64(),
+    //         additional_registers: parse_additional_registers(&eb.additional_registers),
+    //         assets: match &eb.tokens {
+    //             Some(ts) => {
+    //                 ts.iter().map(|t| Asset {
+    //                     token_id: String::from(t.token_id.clone()),
+    //                     amount: i64::from(t.amount),
+    //                 })
+    //                 .collect()
+    //             },
+    //             None => vec![]
+    //         },
+    //         size: eb.sigma_serialize_bytes().unwrap().len() as i32,
+    //     }
+    // }
 }
 
-impl Output {
+impl Output<'_> {
     pub fn r4(&self) -> &Option<Register> {
         &self.additional_registers[0]
     }
@@ -136,6 +159,45 @@ impl Output {
     // }
 }
 
+/// Calculate box size in bytes.
+/// 
+/// Node boxes are not guaranteed to be valid,
+/// see https://github.com/ergoplatform/sigma-rust/issues/587.
+fn calc_box_size(output: &node::models::Output) -> Option<i32> {
+    let json = format!("
+        {{
+            \"boxId\": \"{}\",
+            \"value\": {},
+            \"ergoTree\": \"{}\",
+            \"assets\": [{}],
+            \"creationHeight\": {},
+            \"additionalRegisters\": {},
+            \"transactionId\": \"{}\",
+            \"index\": {}
+        }}"
+        , output.box_id
+        , output.value
+        , output.ergo_tree
+        , format_assets(&output.assets)
+        , output.creation_height
+        , output.additional_registers
+        , output.transaction_id, output.index
+    );
+    let ergo_box: Result<ErgoBox, serde_json::error::Error> = serde_json::from_str(&json);
+    match ergo_box {
+        Ok(eb) => Some(eb.sigma_serialize_bytes().unwrap().len() as i32),
+        Err(e) => {
+            warn!("Encountered undeserializable box {}", output.box_id);
+            warn!("{:?}", e);
+            None
+        }
+    }
+}
+
+fn format_assets(assets: &Vec<crate::node::models::Asset>) -> String {
+    assets.iter().map(|a| format!("{{\"tokenId\": \"{}\", \"amount\": {} }}", a.token_id, a.amount)).collect::<Vec<String>>().join(",")
+}
+
 #[derive(Debug)]
 pub struct Register {
     pub id: i16,
@@ -144,56 +206,61 @@ pub struct Register {
     pub rendered_value: String,
 }
 
-fn parse_additional_registers(regs: &NonMandatoryRegisters) -> [Option<Register>; 6] {
-    if regs.is_empty() {
-        return [None, None, None, None, None, None];
+fn parse_additional_registers(regs: &serde_json::Value) -> [Option<Register>; 6] {
+    match regs {
+        serde_json::Value::Null => [None, None, None, None, None, None],
+        serde_json::Value::Object(map) => [
+            match map.get("R4") {
+                Some(v) => decode_register(&v, 4),
+                None => None,
+            },
+            match map.get("R5") {
+                Some(v) => decode_register(&v, 5),
+                None => None,
+            },
+            match map.get("R6") {
+                Some(v) => decode_register(&v, 6),
+                None => None,
+            },
+            match map.get("R7") {
+                Some(v) => decode_register(&v, 7),
+                None => None,
+            },
+            match map.get("R8") {
+                Some(v) => decode_register(&v, 8),
+                None => None,
+            },
+            match map.get("R9") {
+                Some(v) => decode_register(&v, 9),
+                None => None,
+            },
+        ],
+        _ => {
+            panic!("Non map object for additional registers: {:?}", &regs);
+        }
     }
-    [
-        match regs.get(NonMandatoryRegisterId::R4) {
-            Some(cst) => parse_register(cst, 4),
-            None => None,
-        },
-        match regs.get(NonMandatoryRegisterId::R5) {
-            Some(cst) => parse_register(cst, 5),
-            None => None,
-        },
-        match regs.get(NonMandatoryRegisterId::R6) {
-            Some(cst) => parse_register(cst, 6),
-            None => None,
-        },
-        match regs.get(NonMandatoryRegisterId::R7) {
-            Some(cst) => parse_register(cst, 7),
-            None => None,
-        },
-        match regs.get(NonMandatoryRegisterId::R8) {
-            Some(cst) => parse_register(cst, 8),
-            None => None,
-        },
-        match regs.get(NonMandatoryRegisterId::R9) {
-            Some(cst) => parse_register(cst, 9),
-            None => None,
-        },
-    ]
 }
 
-fn parse_register(cst: &Constant, id: i16) -> Option<Register> {
-    let rendered_register = register::render_register_value(&cst);
-    Some(Register {
-        id: id,
-        stype: rendered_register.value_type,
-        // The const was deserialized from json, so safe to serialize again.
-        serialized_value: cst.base16_str().unwrap(),
-        rendered_value: rendered_register.value,
-    })
+fn decode_register(value: &serde_json::Value, id: i16) -> Option<Register> {
+    if let serde_json::Value::String(s) = value {
+        let rendered_register = register::render_register_value(&s);
+        return Some(Register {
+            id: id,
+            stype: rendered_register.value_type,
+            serialized_value: s.to_string(),
+            rendered_value: rendered_register.value,
+        });
+    }
+    panic!("Non string value in register: {}", value);
 }
 
 #[derive(Debug)]
-pub struct Asset {
-    pub token_id: String,
+pub struct Asset<'a> {
+    pub token_id: &'a str,
     pub amount: i64,
 }
 
-impl std::ops::Add for Asset {
+impl std::ops::Add for Asset<'_> {
     type Output = Self;
     fn add(self, other: Self) -> Self {
         assert_eq!(self.token_id, other.token_id);
@@ -264,19 +331,19 @@ mod tests {
 
     #[test]
     fn output_from_node_output() {
-        let ergo_box = &block_600k().block_transactions.transactions[1].outputs[0];
-        let output = Output::from_ergo_box(&ergo_box);
-        assert_eq!(output.box_id, String::from(ergo_box.box_id()));
-        assert_eq!(output.creation_height, ergo_box.creation_height as i32);
-        assert_eq!(output.index, ergo_box.index as i32);
-        assert_eq!(output.value, ergo_box.value.as_i64());
+        let node_output = &block_600k().block_transactions.transactions[1].outputs[0];
+        let output = Output::from_node_output(&node_output);
+        assert_eq!(output.box_id, node_output.box_id);
+        assert_eq!(output.creation_height, node_output.creation_height as i32);
+        assert_eq!(output.index, node_output.index as i32);
+        assert_eq!(output.value, node_output.value as i64);
         assert_eq!(output.address, "jL2aaqw6XU61SZznvcri5VZnx1Gn8hfZWK87JH6PM7o1YMDMZfpH1uoGJSd3gDQabX6AmCZKLyMSBqSoUAo8X7E5oNRV9JgCdLBFjV6i1BEjZLwgGo3RUr4p8zchqrJ1FeGPLf2DidW6F41aeM1zCM64ZjfBqcy8d6fgEnAn53W28GEDQi5W1XCWRjFvgTFuDdAzd6Yj65KGJhdvMSgffP7pELpCtqK5Z4dX9SQKtt8Y4RMBaeEKtKB1pEx1n");
     }
 
     #[test]
     fn output_registers() {
-        let ergo_box = &block_600k().block_transactions.transactions[1].outputs[0];
-        let output = Output::from_ergo_box(&ergo_box);
+        let node_output = &block_600k().block_transactions.transactions[1].outputs[0];
+        let output = Output::from_node_output(&node_output);
         
         let r4 = &output.r4().as_ref().unwrap();
         assert_eq!(r4.id, 4);
@@ -299,19 +366,31 @@ mod tests {
 
     #[test]
     fn output_assets() {
-        let ergo_box = &block_600k().block_transactions.transactions[1].outputs[0];
-        let output = Output::from_ergo_box(&ergo_box);
+        let node_output = &block_600k().block_transactions.transactions[1].outputs[0];
+        let output = Output::from_node_output(&node_output);
         assert_eq!(output.assets.len(), 1usize);
+    }
+
+    #[test]
+    fn output_size() {
+        // No assers, no additional registers
+        let node_output = &block_600k().block_transactions.transactions[0].outputs[0];
+        let output = Output::from_node_output(&node_output);
+        assert_eq!(output.size, 274);
+        // With assets and additional registers
+        let node_output = &block_600k().block_transactions.transactions[1].outputs[0];
+        let output = Output::from_node_output(&node_output);
+        assert_eq!(output.size, 331);
     }
 
     #[test]
     fn test_assets_with_same_token_id_can_be_added() {
         let bag_a = Asset {
-            token_id: String::from("token_id"),
+            token_id: "token_id",
             amount: 1000,
         };
         let bag_b = Asset {
-            token_id: String::from("token_id"),
+            token_id: "token_id",
             amount: 2000,
         };
         let total = bag_a + bag_b;
@@ -324,11 +403,11 @@ mod tests {
     #[allow(unused)]
     fn test_adding_assets_with_different_token_id_panics() {
         let bag_a = Asset {
-            token_id: String::from("token_id"),
+            token_id: "token_id",
             amount: 1000,
         };
         let bag_b = Asset {
-            token_id: String::from("other_token_id"),
+            token_id: "other_token_id",
             amount: 2000,
         };
         bag_a + bag_b;
@@ -350,7 +429,7 @@ pub mod testing {
             id: "4ac89169a2f83adb895b3d76735dbcfc63ad7940bddc2492d9ee4201299bf927",
             index: 0,
             outputs: vec![Output {
-                box_id: String::from("029bc1cb151aaef51c3678d2c74f3e82c9f4d197dd37e7a4eb73612f9da4f1f6"),
+                box_id: "029bc1cb151aaef51c3678d2c74f3e82c9f4d197dd37e7a4eb73612f9da4f1f6",
                 creation_height: 600000,
                 address: String::from("2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU"),
                 index: 0,
@@ -359,7 +438,7 @@ pub mod testing {
                 assets: vec![],
                 size: 110,
             }, Output {
-                box_id: String::from("6cb8ffe391838b627cb893c9b2027aa2a03f3a20455dd11e5ac903c7e4179ace"),
+                box_id: "6cb8ffe391838b627cb893c9b2027aa2a03f3a20455dd11e5ac903c7e4179ace",
                 creation_height: 600000,
                 address: String::from("88dhgzEuTXaRvR2VKsnXYTGUPh3A9VK8ojeRcpHihcrBu23dnwbB12BbVcJuTcdGfRuSzA8bW25Az6n9"),
                 index: 1,
@@ -376,7 +455,7 @@ pub mod testing {
             index: 1,
             outputs: vec![
                 Output {
-                    box_id: String::from("aa94183d21f9e8fee38d4f3326d2acf8258dd36e6dff38142fa93e633d01464d"),
+                    box_id: "aa94183d21f9e8fee38d4f3326d2acf8258dd36e6dff38142fa93e633d01464d",
                     creation_height: 599998,
                     address: String::from("jL2aaqw6XU61SZznvcri5VZnx1Gn8hfZWK87JH6PM7o1YMDMZfpH1uoGJSd3gDQabX6AmCZKLyMSBqSoUAo8X7E5oNRV9JgCdLBFjV6i1BEjZLwgGo3RUr4p8zchqrJ1FeGPLf2DidW6F41aeM1zCM64ZjfBqcy8d6fgEnAn53W28GEDQi5W1XCWRjFvgTFuDdAzd6Yj65KGJhdvMSgffP7pELpCtqK5Z4dX9SQKtt8Y4RMBaeEKtKB1pEx1n"),
                     index: 0,
@@ -403,14 +482,14 @@ pub mod testing {
                         None, None, None],
                     assets: vec![
                         Asset {
-                            token_id: String::from("01e6498911823f4d36deaf49a964e883b2c4ae2a4530926f18b9c1411ab2a2c2"),
+                            token_id: "01e6498911823f4d36deaf49a964e883b2c4ae2a4530926f18b9c1411ab2a2c2",
                             amount: 1,
                         }
                     ],
                     size: 210,
                 },
                 Output {
-                    box_id: String::from("5c029ba7b1c67deedbd68878d02e5d7bb49b54943bc68fb5a30956a7a16224e4"),
+                    box_id: "5c029ba7b1c67deedbd68878d02e5d7bb49b54943bc68fb5a30956a7a16224e4",
                     creation_height: 599998,
                     address: String::from("2iHkR7CWvD1R4j1yZg5bkeDRQavjAaVPeTDFGGLZduHyfWMuYpmhHocX8GJoaieTx78FntzJbCBVL6rf96ocJoZdmWBL2fci7NqWgAirppPQmZ7fN9V6z13Ay6brPriBKYqLp1bT2Fk4FkFLCfdPpe"),
                     index: 1,
@@ -420,7 +499,7 @@ pub mod testing {
                     size: 220,
                 },
                 Output {
-                    box_id: String::from("22adc6d1fd18e81da0ab9fa47bc389c5948780c98906c0ea3d812eba4ef17a33"),
+                    box_id: "22adc6d1fd18e81da0ab9fa47bc389c5948780c98906c0ea3d812eba4ef17a33",
                     creation_height: 599998,
                     address: String::from("9h7L7sUHZk43VQC3PHtSp5ujAWcZtYmWATBH746wi75C5XHi68b"),
                     index: 2,
@@ -440,7 +519,7 @@ pub mod testing {
             id: "db3d79ab228b1b93bcb8cd742bacb0a4b49ad5fe67cc11b495482b8c541d3ae2",
             index: 2,
             outputs: vec![Output {
-                box_id: String::from("98d0271b7a29d62b672d8dd002e38b8cfbfc8e4055a637422b3e9d59cd6ff86d"),
+                box_id: "98d0271b7a29d62b672d8dd002e38b8cfbfc8e4055a637422b3e9d59cd6ff86d",
                 creation_height: 600000,
                 address: String::from("2iHkR7CWvD1R4j1yZg5bkeDRQavjAaVPeTDFGGLZduHyfWMuYpmhHocX8GJoaieTx78FntzJbCBVL6rf96ocJoZdmWBL2fci7NqWgAirppPQmZ7fN9V6z13Ay6brPriBKYqLp1bT2Fk4FkFLCfdPpe"),
                 index: 0,
@@ -473,7 +552,7 @@ pub mod testing {
             index: 0,
             outputs: vec![
                 Output{
-                    box_id: String::from("5410f440002d0f350781463633ff6be869c54149cebeaeb935eb2968918e846b"),
+                    box_id: "5410f440002d0f350781463633ff6be869c54149cebeaeb935eb2968918e846b",
                     creation_height: 114626,
                     address: String::from("9ggm43XYvHgqp2DfAuqdPoFJ9UgG33Y3fDrk9ydkH9h9k15eGwK"),
                     index: 0,
@@ -500,13 +579,13 @@ pub mod testing {
                         None, None, None],
                     assets: vec![
                         Asset {
-                            token_id: String::from("34d14f73cc1d5342fb06bc1185bd1335e8119c90b1795117e2874ca6ca8dd2c5"),
+                            token_id: "34d14f73cc1d5342fb06bc1185bd1335e8119c90b1795117e2874ca6ca8dd2c5",
                             amount: 5000,
                         }
                     ],
                     size: 110,
                 }, Output {
-                    box_id: String::from("bbb7d9e0333007ff5005771dccfe11c309a98df99c0cf10e17c60e64cb7ccc5b"),
+                    box_id: "bbb7d9e0333007ff5005771dccfe11c309a98df99c0cf10e17c60e64cb7ccc5b",
                     creation_height: 114626,
                     address: String::from("2iHkR7CWvD1R4j1yZg5bkeDRQavjAaVPeTDFGGLZduHyfWMuYpmhHocX8GJoaieTx78FntzJbCBVL6rf96ocJoZdmWBL2fci7NqWgAirppPQmZ7fN9V6z13Ay6brPriBKYqLp1bT2Fk4FkFLCfdPpe"),
                     index: 1,
@@ -515,7 +594,7 @@ pub mod testing {
                     assets: vec![],
                     size: 120,
                 }, Output {
-                    box_id: String::from("b5d971fa03de96b5bfbdff9dba76c519ed0f1f8196a01c139c6be74a9c47040a"),
+                    box_id: "b5d971fa03de96b5bfbdff9dba76c519ed0f1f8196a01c139c6be74a9c47040a",
                     creation_height: 114626,
                     address: String::from("9ggm43XYvHgqp2DfAuqdPoFJ9UgG33Y3fDrk9ydkH9h9k15eGwK"),
                     index: 2,
@@ -536,7 +615,7 @@ pub mod testing {
             index: 1,
             outputs: vec![
                 Output {
-                    box_id: String::from("48461e901b2a518d66b8d147a5282119cfc5b065a3ebba6a56b354686686a48c"),
+                    box_id: "48461e901b2a518d66b8d147a5282119cfc5b065a3ebba6a56b354686686a48c",
                     creation_height: 106481,
                     address: String::from("9fjo2FEBvkpJkq7TB5eaqcT3zUcokDRSL4JaGpEonLr9cS1JZZ2"),
                     index: 0,
@@ -563,14 +642,14 @@ pub mod testing {
                         None, None, None],
                     assets: vec![
                         Asset {
-                            token_id: String::from("3c65b325ebf58f4907d6c085d216e176d105a5093540704baf1f7a2a42ad60f8"),
+                            token_id: "3c65b325ebf58f4907d6c085d216e176d105a5093540704baf1f7a2a42ad60f8",
                             amount: 1000,
                         }
                     ],
                     size: 210,
                 },
                 Output {
-                    box_id: String::from("51c38dad38332ca22508f7614568f31b62fb5ccd09b5287734f2152ef8c04360"),
+                    box_id: "51c38dad38332ca22508f7614568f31b62fb5ccd09b5287734f2152ef8c04360",
                     creation_height: 106481,
                     address: String::from("2iHkR7CWvD1R4j1yZg5bkeDRQavjAaVPeTDFGGLZduHyfWMuYpmhHocX8GJoaieTx78FntzJbCBVL6rf96ocJoZdmWBL2fci7NqWgAirppPQmZ7fN9V6z13Ay6brPriBKYqLp1bT2Fk4FkFLCfdPpe"),
                     index: 1,
@@ -580,7 +659,7 @@ pub mod testing {
                     size: 220,
                 },
                 Output {
-                    box_id: String::from("f6fa1d664ca8153f4b696453ef1e7b18c75de67cce1237312d1ce39349cc7160"),
+                    box_id: "f6fa1d664ca8153f4b696453ef1e7b18c75de67cce1237312d1ce39349cc7160",
                     creation_height: 599998,
                     address: String::from("9fjo2FEBvkpJkq7TB5eaqcT3zUcokDRSL4JaGpEonLr9cS1JZZ2"),
                     index: 2,
@@ -616,7 +695,7 @@ pub mod testing {
             index: 0,
             outputs: vec![
                 Output {
-                    box_id: String::from("e9ad4b744b96abc9244287b21c21720622f57b72d8fb2995c1fe4b4afe63f9d2"),
+                    box_id: "e9ad4b744b96abc9244287b21c21720622f57b72d8fb2995c1fe4b4afe63f9d2",
                     creation_height: 500114,
                     address: String::from("9hz1B19M44TNpmVe8MS4xvXyycehh5uP5aCfj4a6iAowj88hkd2"),
                     index: 0,
@@ -625,18 +704,18 @@ pub mod testing {
                     assets: vec![
                         Asset {
                             token_id:
-                            String::from("a342ae8776207b9a7529b93450187a33538ce86b68d11483758debffea667c25"),
+                            "a342ae8776207b9a7529b93450187a33538ce86b68d11483758debffea667c25",
                             amount: 10,
                         }, Asset {
                             token_id:
-                            String::from("a342ae8776207b9a7529b93450187a33538ce86b68d11483758debffea667c25"),
+                            "a342ae8776207b9a7529b93450187a33538ce86b68d11483758debffea667c25",
                             amount: 10,
                         },
                     ],
                     size: 110,
                 },
                 Output {
-                    box_id: String::from("9291258a91ccf04ed8e906484733d561cc3eaabdcb518426343e9b8d3a604660"),
+                    box_id: "9291258a91ccf04ed8e906484733d561cc3eaabdcb518426343e9b8d3a604660",
                     creation_height: 500114,
                     address: String::from("2iHkR7CWvD1R4j1yZg5bkeDRQavjAaVPeTDFGGLZduHyfWMuYpmhHocX8GJoaieTx78FntzJbCBVL6rf96ocJoZdmWBL2fci7NqWgAirppPQmZ7fN9V6z13Ay6brPriBKYqLp1bT2Fk4FkFLCfdPpe"),
                     index: 1,
@@ -646,7 +725,7 @@ pub mod testing {
                     size: 120,
                 },
                 Output {
-                    box_id: String::from("e879169e8a393ae3f803e863bb4519983eea3ca0c5b6e8aa54cd25121a14ea9d"),
+                    box_id: "e879169e8a393ae3f803e863bb4519983eea3ca0c5b6e8aa54cd25121a14ea9d",
                     creation_height: 500114,
                     address: String::from("9hz1B19M44TNpmVe8MS4xvXyycehh5uP5aCfj4a6iAowj88hkd2"),
                     index: 2,
@@ -655,11 +734,11 @@ pub mod testing {
                     assets: vec![
                         Asset {
                             token_id:
-                            String::from("2fc8abf612bc8b36af382e8c10a8e9df6227afdbe508c9b08b0a575fc4937b5e"),
+                            "2fc8abf612bc8b36af382e8c10a8e9df6227afdbe508c9b08b0a575fc4937b5e",
                             amount: 100,
                         }, Asset {
                             token_id:
-                            String::from("749fe0b8c63213be3451af2578eacabd620a9e687f5c55c54f1ec571b17c9c85"),
+                            "749fe0b8c63213be3451af2578eacabd620a9e687f5c55c54f1ec571b17c9c85",
                             amount: 2,
                         }
                     ],
@@ -693,7 +772,7 @@ pub mod testing {
             index: 0,
             outputs: vec![
                 Output {
-                    box_id: String::from("067d2db48bc674c277a2488293d58396b22bc04280542259fa4186abd42d0860"),
+                    box_id: "067d2db48bc674c277a2488293d58396b22bc04280542259fa4186abd42d0860",
                     creation_height: 740228,
                     address: String::from("9h7abJG9Er7zqUp72PfboshWnqycXdkSZtahPrdi77TfWEJHmYR"),
                     index: 0,
@@ -701,15 +780,15 @@ pub mod testing {
                     additional_registers: [None, None, None, None, None, None],
                     assets: vec![
                         Asset {
-                            token_id: String::from("a699d8e6467a9d0bb32d84c135b05dfb0cdddd4fc8e2caa9b9af0aa2666a3a6f"),
+                            token_id: "a699d8e6467a9d0bb32d84c135b05dfb0cdddd4fc8e2caa9b9af0aa2666a3a6f",
                             amount: 1500,
                         },
                         Asset {
-                            token_id: String::from("0cd8c9f416e5b1ca9f986a7f10a84191dfb85941619e49e53c0dc30ebf83324b"),
+                            token_id: "0cd8c9f416e5b1ca9f986a7f10a84191dfb85941619e49e53c0dc30ebf83324b",
                             amount: 1500,
                         },
                         Asset {
-                            token_id: String::from("a699d8e6467a9d0bb32d84c135b05dfb0cdddd4fc8e2caa9b9af0aa2666a3a6f"),
+                            token_id: "a699d8e6467a9d0bb32d84c135b05dfb0cdddd4fc8e2caa9b9af0aa2666a3a6f",
                             amount: 3000,
                         },
                     ],
