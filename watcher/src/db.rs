@@ -78,22 +78,28 @@ impl DB {
     }
 
     pub fn bootstrap_derived_schemas(&self) -> anyhow::Result<()> {
-        let mut client = Client::connect(&self.conn_str, NoTls)?;
-        let mut tx = client.transaction()?;
         info!("Local work mem: {}", &self.bootstrapping_work_mem_kb);
 
-        tx.execute(
-            &format!("set local work_mem = {};", self.bootstrapping_work_mem_kb),
-            &[],
-        )
-        .unwrap();
+        /// Configures db transaction for each bootstrap function.
+        fn run(db: &DB, f: &dyn Fn(&mut Transaction) -> anyhow::Result<()>) -> anyhow::Result<()> {
+            let mut client = Client::connect(&db.conn_str, NoTls)?;
+            let mut tx = client.transaction()?;
+            tx.execute(
+                &format!("set local work_mem = {};", db.bootstrapping_work_mem_kb),
+                &[],
+            )
+            .unwrap();
+            f(&mut tx)?;
+            tx.commit()?;
+            Ok(())
+        }
 
-        unspent::bootstrap(&mut tx)?;
-        balances::bootstrap(&mut tx)?;
-        cexs::bootstrap(&mut tx)?;
-        metrics::bootstrap(&mut tx)?;
+        let mut client = Client::connect(&self.conn_str, NoTls)?;
 
-        tx.commit()?;
+        run(&self, &unspent::bootstrap)?;
+        balances::bootstrap(&mut client)?;
+        run(&self, &cexs::bootstrap)?;
+        run(&self, &metrics::bootstrap)?;
 
         Ok(())
     }

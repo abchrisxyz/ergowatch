@@ -282,6 +282,11 @@ def generate_rev0_sql(scenario: Scenario) -> str:
         order by 1, 2;
     """
 
+    # Bal bootstrap flag
+    sql += """
+        update bal._log set bootstrapped = TRUE;
+    """
+
     return sql
 
 
@@ -323,6 +328,10 @@ def generate_bootstrap_sql(scenario: Scenario) -> str:
     sql += generate_bootstrap_sql_usp(outputs)
     sql += generate_bootstrap_sql_bal_erg(header, outputs)
     # TODO: generate_bootstrap_sql_bal_tokens (works fine for now because no case has tokens initially)
+    # Bal bootstrap flag
+    sql += """
+        update bal._log set bootstrapped = TRUE;
+    """
     sql += generate_bootstrap_sql_cex(header, outputs)
     sql += generate_bootstrap_sql_mtr(header, outputs)
 

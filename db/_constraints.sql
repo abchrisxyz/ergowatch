@@ -138,6 +138,8 @@ alter table bal.tokens_diffs alter column tx_id set not null;
 alter table bal.tokens_diffs alter column value set not null;
 create index on bal.tokens_diffs(height);
 
+update bal._log set constraints_set = TRUE;
+
 
 -------------------------------------------------------------------------------
 -- CEX's

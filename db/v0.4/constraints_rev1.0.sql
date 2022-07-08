@@ -118,6 +118,8 @@ create index on bal.tokens(value);
 alter table bal.tokens_diffs add primary key(address, token_id, height, tx_id);
 create index on bal.tokens_diffs(height);
 
+update bal._log set constraints_set = TRUE;
+
 
 -------------------------------------------------------------------------------
 -- Finally

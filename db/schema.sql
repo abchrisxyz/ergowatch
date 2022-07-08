@@ -120,6 +120,15 @@ create table usp.boxes (
 ------------------------------------------------------------------------------- 
 create schema bal;
 
+-- U can't touch this too-do-do-do
+create table bal._log (
+	singleton int primary key default 1,
+	constraints_set bool not null default FALSE,
+	bootstrapped bool not null default FALSE,
+	check(singleton = 1)
+);
+insert into bal._log(singleton) values (1);
+
 -- Running ERG balances
 create table bal.erg (
 	address text,
