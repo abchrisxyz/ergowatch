@@ -1,17 +1,9 @@
 use crate::parsing::BlockData;
-use postgres::types::Type;
 use postgres::Transaction;
 
 pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
-    let statement = tx
-        .prepare_typed(INSERT_DIFFS_FOR_TX, &[Type::TEXT])
+    tx.execute(INSERT_DIFFS_FOR_HEIGHT, &[&block.height])
         .unwrap();
-
-    let tx_ids: Vec<&str> = block.transactions.iter().map(|tx| tx.id).collect();
-
-    for tx_id in tx_ids {
-        tx.execute(&statement, &[&tx_id]).unwrap();
-    }
 }
 
 pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
@@ -21,36 +13,6 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
     )
     .unwrap();
 }
-
-const INSERT_DIFFS_FOR_TX: &str = "
-    with inputs as (
-        select tx.height
-        , tx.id as tx_id
-        , op.address
-        , sum(op.value) as value
-        from core.transactions tx
-        join core.inputs ip on ip.tx_id = tx.id
-        join core.outputs op on op.box_id = ip.box_id
-        where tx.id = $1
-        group by 1, 2, 3
-    ), outputs as (
-        select tx.height
-        , tx.id as tx_id
-        , op.address
-        , sum(op.value) as value
-        from core.transactions tx
-        join core.outputs op on op.tx_id = tx.id
-        where tx.id = $1
-        group by 1, 2, 3
-    )
-    insert into bal.erg_diffs (address, height, tx_id, value)
-    select coalesce(i.address, o.address) as address
-    , coalesce(i.height, o.height) as height
-    , coalesce(i.tx_id, o.tx_id) as tx_id
-    , sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0))
-    from inputs i
-    full outer join outputs o on o.address = i.address
-    group by 1, 2, 3 having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) <> 0";
 
 pub const INSERT_DIFFS_FOR_HEIGHT: &str = "
     with transactions as (	
