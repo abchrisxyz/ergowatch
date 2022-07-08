@@ -84,7 +84,7 @@ tags_metadata = [
 
 app = FastAPI(
     title="ErgoWatch",
-    version="0.4.0-dev",
+    version="0.4.0",
     description=description,
     terms_of_service="http://ergo.watch/apis/",
     openapi_tags=tags_metadata,

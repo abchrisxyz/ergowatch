@@ -1,7 +1,7 @@
 # Changelog
 
 
-## v0.4.0 - UNRELEASED
+## v0.4.0 - 2022-07-08
 
 BREAKING CHANGES - requires a full db resync
 
