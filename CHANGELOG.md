@@ -3,6 +3,19 @@
 
 ## v0.4.0 - UNRELEASED
 
+BREAKING CHANGES - requires a full db resync
+
+### New features
+[Issue 49](https://github.com/abchrisxyz/ergowatch/issues/49) - Block difficulty is stored to db.
+
+[Issue 50](https://github.com/abchrisxyz/ergowatch/issues/50) - Box sizes are stored to db.
+
+[Issue 51](https://github.com/abchrisxyz/ergowatch/issues/51) - Block extensions are stored to db.
+
+[Issue 52](https://github.com/abchrisxyz/ergowatch/issues/51) - Block extensions are stored to db.
+
+### Fixed
+Faster balance diff processing.
 
 ## v0.3.0 - 2022-06-13
 
