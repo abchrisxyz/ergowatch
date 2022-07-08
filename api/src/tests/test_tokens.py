@@ -14,18 +14,18 @@ TOKEN_X = "validxtokenxidxofxnonxexistingxtokenxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 def client():
     P2PK = "9" * 51
     sql = f"""
-        insert into core.headers (height, id, parent_id, timestamp) values 
-        (10, 'header10', 'header09', 1567123456789),
-        (20, 'header20', 'header19', 1568123456789),
-        (30, 'header30', 'header29', 1569123456789);
+        insert into core.headers (height, id, parent_id, timestamp, difficulty, vote1, vote2, vote3) values 
+        (10, 'header10', 'header09', 1567123456789, 111222333, 0, 0, 0),
+        (20, 'header20', 'header19', 1568123456789, 111222333, 0, 0, 0),
+        (30, 'header30', 'header29', 1569123456789, 111222333, 0, 0, 0);
 
         insert into core.transactions (id, header_id, height, index) values 
         ('tx-1', 'header10', 10, 0),
         ('tx-2', 'header20', 20, 0);
 
-        insert into core.outputs(box_id, tx_id, header_id, creation_height, address, index, value) values
-        ('box-1', 'tx-1', 'header10', 10, 'addr1', 0, 10000000),
-        ('box-2', 'tx-2', 'header20', 20, 'addr1', 0, 10000000);
+        insert into core.outputs(box_id, tx_id, header_id, creation_height, address, index, value, size) values
+        ('box-1', 'tx-1', 'header10', 10, 'addr1', 0, 10000000, 123),
+        ('box-2', 'tx-2', 'header20', 20, 'addr1', 0, 10000000, 123);
         
         insert into core.tokens (id, box_id, emission_amount) values
         ('{TOKEN_A}', 'box-1', 900);

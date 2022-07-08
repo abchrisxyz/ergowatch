@@ -16,13 +16,13 @@ def client():
         (40, 1, 2000,   2500),
         (50, 2, 3500,    500);
         
-        insert into core.headers (height, id, parent_id, timestamp) values 
-        ( 1, 'header01', 'header00', 1560023456789),
-        (10, 'header10', 'header09', 1561023456789),
-        (20, 'header20', 'header19', 1562023456789),
-        (30, 'header30', 'header29', 1563023456789),
-        (40, 'header40', 'header39', 1564023456789),
-        (50, 'header50', 'header49', 1565023456789);
+        insert into core.headers (height, id, parent_id, timestamp, difficulty, vote1, vote2, vote3) values 
+        ( 1, 'header01', 'header00', 1560023456789, 111222333, 0, 0, 0),
+        (10, 'header10', 'header09', 1561023456789, 111222333, 0, 0, 0),
+        (20, 'header20', 'header19', 1562023456789, 111222333, 0, 0, 0),
+        (30, 'header30', 'header29', 1563023456789, 111222333, 0, 0, 0),
+        (40, 'header40', 'header39', 1564023456789, 111222333, 0, 0, 0),
+        (50, 'header50', 'header49', 1565023456789, 111222333, 0, 0, 0);
     """
     with MockDB(sql=sql) as _:
         with TestClient(app) as client:

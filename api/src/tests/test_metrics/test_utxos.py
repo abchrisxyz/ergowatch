@@ -16,47 +16,49 @@ GENESIS_TIMESTAMP = metrics.GENESIS_TIMESTAMP
 
 @pytest.fixture(scope="module")
 def client():
+    # Difficulty and votes
+    dvs = "111222333, 0, 0, 0"
     sql = f"""
-        insert into core.headers (height, id, parent_id, timestamp) values 
+        insert into core.headers (difficulty, vote1, vote2, vote3, height, id, parent_id, timestamp) values 
         -- block level data
-        (0, 'header0', 'header_', 1561978800000), -- genesis
-        (1, 'header1', 'header0', 1561978900000), -- + 100k (1 block)
-        (2, 'header2', 'header1', 1561979000000), -- + 100k (1 block)
-        (3, 'header3', 'header2', 1561979100000), -- + 100k (1 block)
-        (4, 'header4', 'header3', 1561979200000), -- + 100k (1 block)
-        (5, 'header5', 'header4', 1561979300000), -- + 100k (1 block)
+        ({dvs}, 0, 'header0', 'header_', 1561978800000), -- genesis
+        ({dvs}, 1, 'header1', 'header0', 1561978900000), -- + 100k (1 block)
+        ({dvs}, 2, 'header2', 'header1', 1561979000000), -- + 100k (1 block)
+        ({dvs}, 3, 'header3', 'header2', 1561979100000), -- + 100k (1 block)
+        ({dvs}, 4, 'header4', 'header3', 1561979200000), -- + 100k (1 block)
+        ({dvs}, 5, 'header5', 'header4', 1561979300000), -- + 100k (1 block)
         
         -- round hours +/- a delta
         -- need some blocks on round hours, others in between.
         -- Should span several hours and more than hourly time window limit
-        ( 6, 'header06', 'header05', 1561982400000         ), -- h1 spot
-        ( 7, 'header07', 'header06', 1561986000000 - 100000), -- h1
-        ( 8, 'header08', 'header07', 1561986000000 + 100000), -- h2
-        ( 9, 'header09', 'header08', 1561986000000 + 200000), -- h2
-        (10, 'header10', 'header09', 1561989600000 - 100000), -- h2
-        (11, 'header11', 'header10', 1561989600000 + 100000), -- h3
-        (12, 'header12', 'header11', 1561993200000 - 100000), -- h3
-        (13, 'header13', 'header12', 1561993200000         ), -- h4 spot
-        (14, 'header14', 'header13', 1561993200000 + 100000), -- h4
-        (15, 'header15', 'header14', 1561996800000 + 100000), -- h5
-        (16, 'header16', 'header15', 1561996800000 + 200000), -- h5
-        (17, 'header17', 'header16', 1562000400000 + 100000), -- h6
+        ({dvs},  6, 'header06', 'header05', 1561982400000         ), -- h1 spot
+        ({dvs},  7, 'header07', 'header06', 1561986000000 - 100000), -- h1
+        ({dvs},  8, 'header08', 'header07', 1561986000000 + 100000), -- h2
+        ({dvs},  9, 'header09', 'header08', 1561986000000 + 200000), -- h2
+        ({dvs}, 10, 'header10', 'header09', 1561989600000 - 100000), -- h2
+        ({dvs}, 11, 'header11', 'header10', 1561989600000 + 100000), -- h3
+        ({dvs}, 12, 'header12', 'header11', 1561993200000 - 100000), -- h3
+        ({dvs}, 13, 'header13', 'header12', 1561993200000         ), -- h4 spot
+        ({dvs}, 14, 'header14', 'header13', 1561993200000 + 100000), -- h4
+        ({dvs}, 15, 'header15', 'header14', 1561996800000 + 100000), -- h5
+        ({dvs}, 16, 'header16', 'header15', 1561996800000 + 200000), -- h5
+        ({dvs}, 17, 'header17', 'header16', 1562000400000 + 100000), -- h6
 
         -- round days +/- a delta
         -- need some blocks on round days, others in between.
         -- Should span several days and more than daily time window limit
-        (18, 'header18', 'header17', 1562025600000),          -- d1 spot
-        (19, 'header19', 'header18', 1562112000000 - 100000), -- d1
-        (20, 'header20', 'header19', 1562112000000 + 100000), -- d2
-        (21, 'header21', 'header20', 1562112000000 + 200000), -- d2
-        (22, 'header22', 'header21', 1562198400000 - 100000), -- d2 
-        (23, 'header23', 'header22', 1562198400000 + 100000), -- d3 
-        (24, 'header24', 'header23', 1562284800000 - 100000), -- d3
-        (25, 'header25', 'header24', 1562284800000         ), -- d4 spot
-        (26, 'header26', 'header25', 1562284800000 + 100000), -- d4
-        (27, 'header27', 'header26', 1562371200000 + 100000), -- d5 
-        (28, 'header28', 'header27', 1562371200000 + 200000), -- d5 
-        (29, 'header29', 'header28', 1562457600000 + 100000); -- d6 
+        ({dvs}, 18, 'header18', 'header17', 1562025600000),          -- d1 spot
+        ({dvs}, 19, 'header19', 'header18', 1562112000000 - 100000), -- d1
+        ({dvs}, 20, 'header20', 'header19', 1562112000000 + 100000), -- d2
+        ({dvs}, 21, 'header21', 'header20', 1562112000000 + 200000), -- d2
+        ({dvs}, 22, 'header22', 'header21', 1562198400000 - 100000), -- d2 
+        ({dvs}, 23, 'header23', 'header22', 1562198400000 + 100000), -- d3 
+        ({dvs}, 24, 'header24', 'header23', 1562284800000 - 100000), -- d3
+        ({dvs}, 25, 'header25', 'header24', 1562284800000         ), -- d4 spot
+        ({dvs}, 26, 'header26', 'header25', 1562284800000 + 100000), -- d4
+        ({dvs}, 27, 'header27', 'header26', 1562371200000 + 100000), -- d5 
+        ({dvs}, 28, 'header28', 'header27', 1562371200000 + 200000), -- d5 
+        ({dvs}, 29, 'header29', 'header28', 1562457600000 + 100000); -- d6 
       
         insert into mtr.utxos (height, value) values 
         (0, 3),
