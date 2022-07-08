@@ -82,8 +82,6 @@ pub(super) fn bootstrap(client: &mut Client) -> anyhow::Result<()> {
         let stmt_tokens_insert = tx.prepare_typed(tokens::INSERT_BALANCES, &[Type::INT4])?;
         let stmt_tokens_delete = tx.prepare_typed(tokens::DELETE_ZERO_BALANCES, &[])?;
 
-        // set_tables_unlogged(&mut tx);
-
         for h in batch_heights {
             // Diffs go first
             tx.execute(&stmt_erg_diffs_insert, &[&h]).unwrap();
@@ -99,7 +97,6 @@ pub(super) fn bootstrap(client: &mut Client) -> anyhow::Result<()> {
             tx.execute(&stmt_tokens_delete, &[]).unwrap();
         }
 
-        // set_tables_logged(&mut tx);
         tx.commit()?;
 
         info!(
@@ -146,27 +143,6 @@ fn set_constraints(tx: &mut Transaction) {
     tokens::set_constraints(tx);
     tokens_diffs::set_constraints(tx);
     tx.execute("update bal._log set constraints_set = TRUE;", &[])
-        .unwrap();
-}
-
-fn set_tables_logged(tx: &mut Transaction) {
-    tx.execute("alter table bal.erg set logged;", &[]).unwrap();
-    tx.execute("alter table bal.erg_diffs set logged;", &[])
-        .unwrap();
-    tx.execute("alter table bal.tokens set logged;", &[])
-        .unwrap();
-    tx.execute("alter table bal.tokens_diffs set logged;", &[])
-        .unwrap();
-}
-
-fn set_tables_unlogged(tx: &mut Transaction) {
-    tx.execute("alter table bal.erg set unlogged;", &[])
-        .unwrap();
-    tx.execute("alter table bal.erg_diffs set unlogged;", &[])
-        .unwrap();
-    tx.execute("alter table bal.tokens set unlogged;", &[])
-        .unwrap();
-    tx.execute("alter table bal.tokens_diffs set unlogged;", &[])
         .unwrap();
 }
 
