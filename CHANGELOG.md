@@ -14,7 +14,7 @@ BREAKING CHANGES - requires a full db resync
 
 [Issue 51](https://github.com/abchrisxyz/ergowatch/issues/51) - Block extensions are stored to db.
 
-[Issue 52](https://github.com/abchrisxyz/ergowatch/issues/51) - Block extensions are stored to db.
+[Issue 52](https://github.com/abchrisxyz/ergowatch/issues/52) - Block votes are stored to db.
 
 ### Fixed
 Faster balance diff processing.
