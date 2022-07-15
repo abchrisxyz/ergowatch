@@ -98,6 +98,9 @@ class TempDB:
     def _create_db(self):
         with pg.connect(conn_str("postgres"), autocommit=True) as conn:
             with conn.cursor() as cur:
+                cur.execute(
+                    SQL("drop database if exists {};").format(Identifier(self._dbname))
+                )
                 cur.execute(SQL("create database {};").format(Identifier(self._dbname)))
 
     def _drop_db(self):
