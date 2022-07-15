@@ -6,7 +6,6 @@ mod migrations;
 pub mod repair;
 pub mod unspent;
 
-use crate::cache::Cache;
 use log::debug;
 use log::info;
 use postgres::{Client, NoTls, Transaction};
@@ -19,6 +18,7 @@ pub struct DB {
     conn_str: String,
     bootstrapping_work_mem_kb: u32,
     repair_event: Option<repair::RepairEvent>,
+    cache: Cache,
 }
 
 impl DB {
@@ -37,15 +37,15 @@ impl DB {
     }
 
     /// Add block to database
-    pub fn include_block(&self, block: &BlockData, cache: &mut Cache) -> anyhow::Result<()> {
+    pub fn include_block(&mut self, block: &BlockData) -> anyhow::Result<()> {
         let mut client = Client::connect(&self.conn_str, NoTls)?;
         let mut tx = client.transaction()?;
 
         core::include_block(&mut tx, block)?;
         unspent::include_block(&mut tx, block)?;
         balances::include_block(&mut tx, block)?;
-        cexs::include_block(&mut tx, block, &mut cache.cexs)?;
-        metrics::include_block(&mut tx, block, &mut cache.metrics)?;
+        cexs::include_block(&mut tx, block, &mut self.cache.cexs)?;
+        metrics::include_block(&mut tx, block, &mut self.cache.metrics)?;
 
         tx.commit()?;
 
@@ -53,12 +53,12 @@ impl DB {
     }
 
     /// Restore db state to what it was before including given block
-    pub fn rollback_block(&self, block: &BlockData, cache: &mut Cache) -> anyhow::Result<()> {
+    pub fn rollback_block(&mut self, block: &BlockData) -> anyhow::Result<()> {
         let mut client = Client::connect(&self.conn_str, NoTls)?;
         let mut tx = client.transaction()?;
 
-        metrics::rollback_block(&mut tx, block, &mut cache.metrics)?;
-        cexs::rollback_block(&mut tx, block, &mut cache.cexs)?;
+        metrics::rollback_block(&mut tx, block, &mut self.cache.metrics)?;
+        cexs::rollback_block(&mut tx, block, &mut self.cache.cexs)?;
         balances::rollback_block(&mut tx, block)?;
         unspent::rollback_block(&mut tx, block)?;
         core::rollback_block(&mut tx, block)?;
@@ -125,6 +125,7 @@ impl DB {
             ),
             bootstrapping_work_mem_kb,
             repair_event: None,
+            cache: Cache::new(),
         }
     }
 
@@ -225,12 +226,31 @@ impl DB {
     }
 
     /// Load initialized cache
-    pub fn load_cache(&self) -> Cache {
-        info!("Preparing cache");
+    pub fn load_cache(&mut self) {
         let mut client = Client::connect(&self.conn_str, NoTls).unwrap();
-        Cache {
-            cexs: cexs::Cache::load(&mut client),
-            metrics: metrics::Cache::load(&mut client),
+        self.cache.load(&mut client);
+    }
+}
+
+#[derive(Debug)]
+pub struct Cache {
+    pub cexs: cexs::Cache,
+    pub metrics: metrics::Cache,
+}
+
+impl Cache {
+    /// Initialize a cache with default values, representing an empty database.
+    pub fn new() -> Self {
+        Self {
+            cexs: cexs::Cache::new(),
+            metrics: metrics::Cache::new(),
         }
+    }
+
+    /// Load cache values from db
+    pub fn load(&mut self, client: &mut Client) {
+        info!("Loading cache");
+        self.cexs = cexs::Cache::load(client);
+        self.metrics = metrics::Cache::load(client);
     }
 }

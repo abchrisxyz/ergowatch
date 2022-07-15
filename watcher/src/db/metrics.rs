@@ -34,6 +34,7 @@ pub(super) fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[derive(Debug)]
 pub struct Cache {
     pub utxos: i64,
 }

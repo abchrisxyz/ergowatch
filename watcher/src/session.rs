@@ -3,7 +3,6 @@ use clap::Parser;
 use log::error;
 use log::info;
 
-use crate::cache::Cache;
 use crate::db;
 use crate::node;
 use crate::settings::Settings;
@@ -40,7 +39,6 @@ pub struct Session {
     pub exit_when_synced: bool,
     pub head: crate::types::Head,
     pub allow_rollbacks: bool,
-    pub cache: Cache,
     pub repair_interval: u32,
     pub repair_offset: u32,
 }
@@ -115,7 +113,6 @@ impl Session {
             exit_when_synced: cli.exit,
             head: db_core_head,
             allow_rollbacks: db_has_constraints,
-            cache: Cache::new(),
             repair_interval: cfg.repairs.interval,
             repair_offset: cfg.repairs.offset,
         })

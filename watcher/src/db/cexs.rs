@@ -316,6 +316,7 @@ fn set_constraints(tx: &mut Transaction) {
     }
 }
 
+#[derive(Debug)]
 pub struct Cache {
     /// Maps cex_id to latest supply on its main addresses
     pub(super) main_supply: HashMap<i32, i64>,

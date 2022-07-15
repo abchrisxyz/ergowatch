@@ -105,7 +105,7 @@ fn include_genesis_boxes(session: &mut Session) -> Result<(), &'static str> {
 
 /// Process block data into database
 fn include_block(session: &mut Session, block: &BlockData) {
-    session.db.include_block(block, &mut session.cache).unwrap();
+    session.db.include_block(block).unwrap();
 }
 
 /// Discard block data from database
@@ -113,10 +113,7 @@ fn rollback_block(session: &mut Session, block: &BlockData) {
     if session.db.is_repairing_height(block.height) {
         session.db.abort_repairs();
     }
-    session
-        .db
-        .rollback_block(block, &mut session.cache)
-        .unwrap();
+    session.db.rollback_block(block).unwrap();
 }
 
 /// Get latest block height from node.
