@@ -221,7 +221,7 @@ fn start(conn_str: String, fr: i32, to: i32, rx: mpsc::Receiver<Message>) -> any
     // Load caches of state just prior to start height
     let mut cex_cache = cexs::Cache::load_at(&mut client, fr - 1);
 
-    // Mark non-onvalidating blocks as processed
+    // Mark non-invalidating blocks as processed
     let mut tx = client.transaction()?;
     cexs::repair::process_non_invalidating_blocks(&mut tx);
     tx.commit().unwrap();
