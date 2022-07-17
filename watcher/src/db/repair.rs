@@ -63,11 +63,6 @@ pub struct RepairEvent {
 }
 
 impl RepairEvent {
-    // fn new(fr_height: i32, to_height: i32) -> Result<Self, RepairError> {
-    //     let statements = vec![];
-    //     todo!()
-    // }
-
     /// Start repair.
     ///
     /// Spawns a new thread and returns.
