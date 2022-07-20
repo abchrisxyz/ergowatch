@@ -77,7 +77,10 @@ impl DB {
         Ok(())
     }
 
-    pub fn bootstrap_derived_schemas(&self) -> anyhow::Result<()> {
+    /// Bootstraps non-core tables and reloads db cache.
+    ///
+    /// Bootstrapped schema's are skipped automatically.
+    pub fn bootstrap_derived_schemas(&mut self) -> anyhow::Result<()> {
         debug!("Local work mem: {}", &self.bootstrapping_work_mem_kb);
 
         /// Configures db transaction for each bootstrap function.
@@ -101,6 +104,12 @@ impl DB {
         run(&self, &cexs::bootstrap)?;
         run(&self, &metrics::bootstrap)?;
 
+        // Bootstrapping doesn't rely on cache and will not update it,
+        // so reload it now to pick up latest db state.
+        self.load_cache();
+
+        Ok(())
+    }
         Ok(())
     }
 }
