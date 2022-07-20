@@ -78,7 +78,7 @@ impl DB {
     }
 
     pub fn bootstrap_derived_schemas(&self) -> anyhow::Result<()> {
-        info!("Local work mem: {}", &self.bootstrapping_work_mem_kb);
+        debug!("Local work mem: {}", &self.bootstrapping_work_mem_kb);
 
         /// Configures db transaction for each bootstrap function.
         fn run(db: &DB, f: &dyn Fn(&mut Transaction) -> anyhow::Result<()>) -> anyhow::Result<()> {
