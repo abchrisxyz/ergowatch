@@ -1,4 +1,3 @@
-from os import system
 import pytest
 import psycopg as pg
 
@@ -166,7 +165,7 @@ class TestSync:
         Run watcher with mock api and return cursor to test db.
         """
 
-        with MockApi() as api:
+        with MockApi():
             api = ApiUtil()
             api.set_blocks(self.scenario.blocks)
 
@@ -207,7 +206,7 @@ class TestSyncRollback:
         """
         Run watcher with mock api and return cursor to test db.
         """
-        with MockApi() as api:
+        with MockApi():
             api = ApiUtil()
 
             # Initially have blocks a and x only
@@ -261,7 +260,7 @@ class TestSyncNoForkChild:
         """
         Run watcher with mock api and return cursor to test db.
         """
-        with MockApi() as api:
+        with MockApi():
             api = ApiUtil()
 
             # Initially have blocks a, b and x
@@ -316,7 +315,7 @@ class TestGenesis:
         """
         Run watcher with mock api and return cursor to test db.
         """
-        with MockApi() as api:
+        with MockApi():
             api = ApiUtil()
             api.set_blocks(self.scenario.blocks)
 
@@ -353,7 +352,7 @@ class TestMigrations:
         """
         Run watcher with mock api and return cursor to test db.
         """
-        with MockApi() as api:
+        with MockApi():
             api = ApiUtil()
             api.set_blocks(self.scenario.blocks)
 
@@ -399,7 +398,7 @@ class TestSyncDeserError:
         Run watcher with mock api and return cursor to test db.
         """
 
-        with MockApi() as api:
+        with MockApi():
             # Mess with the ergo tree
             s = self.scenario
             box = s._blocks[0]["blockTransactions"]["transactions"][0]["outputs"][0]

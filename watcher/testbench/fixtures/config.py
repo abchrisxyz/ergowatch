@@ -2,7 +2,7 @@ import pytest
 import textwrap
 from pathlib import Path
 
-from fixtures.api import MOCK_NODE_HOST
+from fixtures.api import MOCK_APIS_HOST
 from local import DB_HOST, DB_PORT, DB_USER, DB_PASS
 from .db import TEST_DB_NAME
 
@@ -20,12 +20,16 @@ CONFIG = textwrap.dedent(
     bootstrapping_work_mem_kb = 4000
 
     [node]
-    url = "http://{MOCK_NODE_HOST}"
+    url = "http://{MOCK_APIS_HOST}"
     poll_interval = 5
 
     [repairs]
     interval = 5 # blocks
     offset = 0 # blocks - will repair up to last height
+
+    [coingecko]
+    url = "http://{MOCK_APIS_HOST}/coingecko"
+    interval = 0 # mock api is not rate-limited
     """
 )
 

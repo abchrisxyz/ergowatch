@@ -17,3 +17,8 @@ interval = 500 # blocks
 # This is to reduce the chance of including non-main chain blocks in
 # a repair event.
 offset = 5 # blocks
+
+[coingecko]
+url = "https://api.coingecko.com/api/v3/coins/ergo/market_chart/range"
+# Time to wait between consecutive requests
+interval = 0.2 # seconds

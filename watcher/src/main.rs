@@ -1,3 +1,5 @@
+mod coingecko;
+mod constants;
 mod db;
 mod node;
 mod parsing;

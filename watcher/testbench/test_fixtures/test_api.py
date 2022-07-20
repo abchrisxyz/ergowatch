@@ -123,3 +123,21 @@ class TestPopulatedApi:
         next_block["header"]["height"] = 599_999
         with pytest.raises(AssertionError):
             api.add_block(next_block)
+
+
+@pytest.mark.order(1)
+class TestCoinGeckoApi:
+    """
+    Test mock coingecko endpoint
+    """
+
+    @pytest.fixture
+    def api(self, mock_api):
+        return mock_api
+
+    def test_range(self, api):
+        r = requests.get(f"{api.url}/coingecko?fr=100&to=200")
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data) == 3
+        assert data["prices"] == [[100 * 1000, 10.0], [200 * 1000, 10.0]]

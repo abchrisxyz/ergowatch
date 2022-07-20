@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (1, 11);
+insert into ew.revision (major, minor) values (1, 12);
 
 
 -------------------------------------------------------------------------------
@@ -349,6 +349,19 @@ insert into cex.addresses_ignored (address) values
 	-- Sent 20 ERG to 9iKFBB on 27 September 2020 - https://explorer.ergoplatform.com/en/transactions/8bc2caf976e5e5f0786ee54bb886f3344e6dac1c034491766e977c4b3a828305
 	-- First ever tx to 9iKFBB (!)
 	('9iHCMtd2gAPoYGhWadjruygKwNKRoeQGq1xjS2Fkm5bT197YFdR');
+
+
+-------------------------------------------------------------------------------
+-- Coingecko
+------------------------------------------------------------------------------- 
+create schema cgo;
+
+-- Raw hourly ERG/USD from Coingecko (market_chart api)
+create table cgo.ergusd (
+	timestamp bigint primary key not null, -- in ms, just like in core.headers
+	value double precision not null
+);
+
 
 -------------------------------------------------------------------------------
 -- Metrics

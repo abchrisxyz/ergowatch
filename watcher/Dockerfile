@@ -19,6 +19,7 @@ RUN cargo build --release --bin watcher
 
 # We do not need the Rust toolchain to run the binary!
 FROM debian:bullseye-slim AS runtime
+RUN apt-get update && apt install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /ew
 COPY --from=builder /app/target/release/watcher /ew/watcher
 ENTRYPOINT ["/ew/watcher", "-c", "/ew/config.toml"]

@@ -1,5 +1,6 @@
 pub mod balances;
 pub mod cexs;
+pub mod coingecko;
 pub mod core;
 pub mod metrics;
 mod migrations;
@@ -110,6 +111,20 @@ impl DB {
 
         Ok(())
     }
+
+    pub fn last_coingecko_timestamp(&self) -> u64 {
+        self.cache.coingecko.last_timestamp
+    }
+
+    /// Add `timeseries` data to db
+    pub fn inlcude_coingecko(
+        &mut self,
+        timeseries: crate::coingecko::TimeSeries,
+    ) -> anyhow::Result<()> {
+        let mut client = Client::connect(&self.conn_str, NoTls)?;
+        let mut tx = client.transaction()?;
+        coingecko::include_timeseries(&mut tx, &timeseries, &mut self.cache.coingecko)?;
+        tx.commit()?;
         Ok(())
     }
 }
@@ -244,6 +259,7 @@ impl DB {
 #[derive(Debug)]
 pub struct Cache {
     pub cexs: cexs::Cache,
+    pub coingecko: coingecko::Cache,
     pub metrics: metrics::Cache,
 }
 
@@ -252,6 +268,7 @@ impl Cache {
     pub fn new() -> Self {
         Self {
             cexs: cexs::Cache::new(),
+            coingecko: coingecko::Cache::new(),
             metrics: metrics::Cache::new(),
         }
     }
@@ -260,6 +277,7 @@ impl Cache {
     pub fn load(&mut self, client: &mut Client) {
         info!("Loading cache");
         self.cexs = cexs::Cache::load(client);
+        self.coingecko = coingecko::Cache::load(client);
         self.metrics = metrics::Cache::load(client);
     }
 }

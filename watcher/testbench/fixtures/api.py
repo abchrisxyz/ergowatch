@@ -1,6 +1,7 @@
 # """
 # Node API mockup.
 # """
+import datetime
 import shlex
 import subprocess
 import sys
@@ -15,7 +16,27 @@ import requests
 from fixtures.scenario.genesis import GENESIS_ID
 from fixtures.scenario.genesis import GENESIS_BOX
 
-MOCK_NODE_HOST = "localhost:9053"
+MOCK_APIS_HOST = "localhost:9053"
+
+
+def coingecko_get_range():
+    """
+    Dummy market_chart range for ERG/USD.
+    """
+    fr = int(bottle.request.query.fr) * 1000
+    to = int(bottle.request.query.to) * 1000
+    now = int(datetime.datetime.now().timestamp() * 1000)
+
+    res = {
+        "prices": [
+            [fr, 10.0],
+            [min(to, now), 10.0],
+        ],
+        "market_caps": [],
+        "volumes": [],
+    }
+    bottle.response.content_type = "application/json"
+    return json.dumps(res)
 
 
 class API(bottle.Bottle):
@@ -43,6 +64,9 @@ class API(bottle.Bottle):
         self.add_route(
             bottle.Route(self, "/utxo/genesis", "GET", self.get_genesis_boxes)
         )
+
+        # Coingecko API"
+        self.add_route(bottle.Route(self, "/coingecko", "GET", coingecko_get_range))
 
     @property
     def height(self):
@@ -201,7 +225,7 @@ class MockApi:
     def __enter__(self):
         os.chdir(Path(__file__).parent.absolute())
         args = [sys.executable]
-        args.extend(shlex.split(f"-m bottle -b {MOCK_NODE_HOST} api:{self._api}"))
+        args.extend(shlex.split(f"-m bottle -b {MOCK_APIS_HOST} api:{self._api}"))
         print(f"Subprocess args: {args}")
         self._p = subprocess.Popen(args)
         # Give it some time to start up before allowing tests to query the api

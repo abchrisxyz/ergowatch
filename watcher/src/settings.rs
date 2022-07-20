@@ -29,10 +29,19 @@ pub struct Repairs {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct Coingecko {
+    /// ERG/USD price api
+    pub url: String,
+    /// Time between consecutive requests, in seconds
+    pub interval: f32,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Settings {
     pub database: Database,
     pub node: Node,
     pub repairs: Repairs,
+    pub coingecko: Coingecko,
 }
 
 impl Settings {

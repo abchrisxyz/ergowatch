@@ -30,6 +30,10 @@ pub fn sync_and_track(session: &mut Session) -> Result<(), &'static str> {
             }
             info!("Database is synced - waiting for next block");
             node_height = weight_for_next_block(&session);
+
+            // Sync CoinGecko after waiting new block,
+            // so that latest price data is available when it gets included.
+            coingecko::sync(session);
         }
 
         sync_to_height(session, node_height).unwrap();
@@ -144,7 +148,48 @@ fn weight_for_next_block(session: &Session) -> u32 {
     }
 }
 
+pub mod coingecko {
+    use super::Session;
+    use log::warn;
+
+    pub fn sync(session: &mut Session) {
+        if coingecko_needs_syncing(session) {
+            session.db.pause_repairs();
+            sync_coingecko(session);
+            session.db.resume_repairs();
+        }
+    }
+
+    /// Has it been long enought since last CoinGecko sync?
+    ///
+    /// Checks if last datapoint is older than 1 hour.
+    fn coingecko_needs_syncing(session: &Session) -> bool {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            * 1000;
+        let last = session.db.last_coingecko_timestamp();
+        now > last && now - last > 3600 * 1000
+    }
+
+    /// Sync latest CoinGecko data
+    fn sync_coingecko(session: &mut Session) {
+        match session
+            .coingecko
+            .fetch_since(session.db.last_coingecko_timestamp())
+        {
+            Ok(timeseries) => session.db.inlcude_coingecko(timeseries).unwrap(),
+            Err(e) => {
+                // CoinGecko may be down. That's fine.
+                warn!("Could not retrieve CoinGecko data. Error was: {:?}", e);
+            }
+        };
+    }
+}
+
 pub mod bootstrap {
+    use super::coingecko;
     use super::get_node_height_blocking;
     use crate::parsing::BlockData;
     use crate::session::Session;
@@ -158,6 +203,7 @@ pub mod bootstrap {
             session.allow_rollbacks = true;
             info!("Core bootstrapping completed");
         }
+        coingecko::sync(session);
         session.db.bootstrap_derived_schemas().unwrap();
         Ok(())
     }

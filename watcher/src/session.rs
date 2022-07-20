@@ -3,6 +3,7 @@ use clap::Parser;
 use log::error;
 use log::info;
 
+use crate::coingecko::CoingeckoService;
 use crate::db;
 use crate::node;
 use crate::settings::Settings;
@@ -33,6 +34,7 @@ struct Cli {
 
 /// Session parameters
 pub struct Session {
+    pub coingecko: CoingeckoService,
     pub db: db::DB,
     pub node: node::Node,
     pub poll_interval: u64,
@@ -61,6 +63,7 @@ impl Session {
                 return Err("Failed loading config");
             }
         };
+        let coingecko = CoingeckoService::new(cfg.coingecko.url, cfg.coingecko.interval);
         let node = node::Node::new(cfg.node.url);
         let db = db::DB::new(
             &cfg.database.host,
@@ -82,10 +85,6 @@ impl Session {
         // let db_constraints_status = db.constraints_status().unwrap();
         let db_has_constraints = db.has_constraints().unwrap();
         let db_core_head = db.get_head().unwrap();
-        // let unfinished_bootstrap = match db.get_bootstrap_height().unwrap() {
-        //     Some(h) => h < db_core_head.height as i32,
-        //     None => false,
-        // };
 
         // Check cli args and db state
         if db_is_empty && db_has_constraints {
@@ -107,6 +106,7 @@ impl Session {
         db.check_migrations(cli.allow_migrations).unwrap();
 
         Ok(Session {
+            coingecko,
             db,
             node: node,
             poll_interval: cfg.node.poll_interval,
