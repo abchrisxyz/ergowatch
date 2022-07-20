@@ -43,9 +43,17 @@ pub enum RepairInitError {
     OtherRunning,
 }
 
-/// MPSC messages between RepairEvent and spawn thread
+/// MPSC messages from RepairEvent to spawn thread
 enum Message {
     Abort,
+    Pause,
+    Resume,
+}
+
+/// MPSC messages to RepairEvent from spawn thread
+enum Response {
+    Paused,
+    Resumed,
 }
 
 #[derive(Debug)]
@@ -60,6 +68,8 @@ pub struct RepairEvent {
     tracer: Option<Arc<()>>,
     /// MPSC sender to spawn thread
     tx: Option<mpsc::Sender<Message>>,
+    /// MPSC sender to spawn thread
+    rx: Option<mpsc::Receiver<Response>>,
 }
 
 impl RepairEvent {
@@ -78,9 +88,11 @@ impl RepairEvent {
         // Copy height params to be moved into thread
         let fr = self.fr_height;
         let to = self.to_height;
-        // Prepare message passing channel
-        let (tx, rx) = mpsc::channel();
-        self.tx = Some(tx);
+        // Prepare message passing channels
+        let (tx1, rx1) = mpsc::channel();
+        let (tx2, rx2) = mpsc::channel();
+        self.tx = Some(tx1);
+        self.rx = Some(rx2);
         // Track tracer livespan
         let tracker = Arc::new(());
         let tracer = tracker.clone();
@@ -88,7 +100,7 @@ impl RepairEvent {
         thread::spawn(move || {
             let _t = tracer;
             debug!("Repair thread started");
-            start(conn_str, fr, to, rx).unwrap();
+            start(conn_str, fr, to, rx1, tx2).unwrap();
         });
     }
 
@@ -120,6 +132,73 @@ impl RepairEvent {
             info!("Repair event aborted");
         }
     }
+
+    /// Pause repair event.
+    ///
+    /// Blocks until repair is paused.
+    pub fn pause(&self) {
+        info!("Pausing repair event");
+        if let Some(tx) = &self.tx {
+            // Send signal
+            match tx.send(Message::Pause) {
+                Ok(_) => (),
+                Err(err) => {
+                    debug!("{:?}", err);
+                    warn!("Tried to pause terminated repair event");
+                    return;
+                }
+            };
+            // Now wait for pause ankownledgement or end of channel
+            // if pause request request was semt during last pass.
+            if let Some(rx) = &self.rx {
+                match rx.recv() {
+                    Ok(Response::Paused) => info!("Repair event paused"),
+                    Ok(Response::Resumed) => {
+                        panic!("Received unexpected resumed signal from repair thread")
+                    }
+                    Err(rcv_error) => {
+                        info!(
+                            "Repair event finished before it could be paused ({})",
+                            rcv_error
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /// Resume paused repair event.
+    ///
+    /// Blocks until repair is resumed.
+    pub fn resume(&self) {
+        info!("Resuming repair event");
+        if let Some(tx) = &self.tx {
+            // Send signal
+            match tx.send(Message::Resume) {
+                Ok(_) => (),
+                Err(err) => {
+                    debug!("{:?}", err);
+                    info!("Tried to resume terminated repair event (likely before it completed before it could be paused)");
+                    return;
+                }
+            };
+            // Now wait for resume ankownledgement
+            if let Some(rx) = &self.rx {
+                match rx.recv() {
+                    Ok(Response::Resumed) => info!("Repair event resumed"),
+                    Ok(Response::Paused) => {
+                        panic!("Received unexpected pause signal from repair thread")
+                    }
+                    Err(rcv_error) => {
+                        info!(
+                            "Repair event finished before resuming could be confirmed ({})",
+                            rcv_error
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl DB {
@@ -148,6 +227,7 @@ impl DB {
             conn_str: String::from(&self.conn_str),
             tracer: None,
             tx: None,
+            rx: None,
         };
         e.start();
         self.repair_event = Some(e);
@@ -178,6 +258,20 @@ impl DB {
             e.abort();
             let mut client = Client::connect(&self.conn_str, NoTls).unwrap();
             cleanup(&mut client);
+        }
+    }
+
+    /// Pause running repairs
+    pub fn pause_repairs(&self) {
+        if let Some(e) = &self.repair_event {
+            e.pause();
+        }
+    }
+
+    /// Resume paused repairs
+    pub fn resume_repairs(&self) {
+        if let Some(e) = &self.repair_event {
+            e.resume();
         }
     }
 
@@ -214,7 +308,13 @@ fn init(client: &mut Client) -> Result<(), RepairInitError> {
 }
 
 /// Start a previously prepared repair session
-fn start(conn_str: String, fr: i32, to: i32, rx: mpsc::Receiver<Message>) -> anyhow::Result<()> {
+fn start(
+    conn_str: String,
+    fr: i32,
+    to: i32,
+    channel_rx: mpsc::Receiver<Message>,
+    channel_tx: mpsc::Sender<Response>,
+) -> anyhow::Result<()> {
     info!("Repairing {} blocks ({} to {})", to - fr + 1, fr, to);
     let mut client = Client::connect(&conn_str, NoTls).unwrap();
 
@@ -231,12 +331,41 @@ fn start(conn_str: String, fr: i32, to: i32, rx: mpsc::Receiver<Message>) -> any
     prepare(&mut tx, fr - 1);
     tx.commit().unwrap();
 
-    for h in fr..to + 1 {
-        let mut tx = client.transaction()?;
+    // Counter to log exact number of repaired heights.
+    let mut processed_heights_counter = 0;
 
-        if let Ok(Message::Abort) = rx.try_recv() {
-            break;
+    for h in fr..to + 1 {
+        // Check for incoming messages
+        match channel_rx.try_recv() {
+            // Abort repair session
+            Ok(Message::Abort) => {
+                info!("Repair session received abort signal");
+                break;
+            }
+            // Pause repair session and wait for next message
+            Ok(Message::Pause) => {
+                info!("Repair session received pause signal");
+                match wait_for_message(&channel_rx) {
+                    Message::Abort => break,
+                    Message::Pause => {
+                        warn!("Repair sessions received pause signal while already paused");
+                        channel_tx.send(Response::Paused).unwrap();
+                    }
+                    Message::Resume => {
+                        info!("Repair session received resume signal");
+                        channel_tx.send(Response::Resumed).unwrap();
+                    }
+                };
+            }
+            // Should not happen
+            Ok(Message::Resume) => {
+                warn!("Repair sessions received resume signal while already running")
+            }
+            // No messages, continue repair session
+            Err(_) => (),
         }
+
+        let mut tx = client.transaction()?;
 
         // Advance state of work tables to current height
         step(&mut tx, h);
@@ -247,11 +376,14 @@ fn start(conn_str: String, fr: i32, to: i32, rx: mpsc::Receiver<Message>) -> any
 
         // Commit as we progress
         tx.commit().unwrap();
+        processed_heights_counter += 1;
     }
 
     cleanup(&mut client);
 
+    assert_eq!(processed_heights_counter, to + 1 - fr);
     info!("Done repairing heights {} to {}", fr, to);
+
     Ok(())
 }
 
@@ -271,4 +403,13 @@ fn cleanup(client: &mut Client) {
     client
         .execute("drop schema if exists repair cascade;", &[])
         .unwrap();
+}
+
+fn wait_for_message(rx: &mpsc::Receiver<Message>) -> Message {
+    loop {
+        thread::sleep(time::Duration::from_secs(1));
+        if let Ok(msg) = rx.try_recv() {
+            return msg;
+        };
+    }
 }
