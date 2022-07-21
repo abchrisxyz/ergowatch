@@ -153,10 +153,15 @@ pub mod coingecko {
     use log::warn;
 
     pub fn sync(session: &mut Session) {
+        let repairing = session.db.is_repairing();
         if coingecko_needs_syncing(session) {
-            session.db.pause_repairs();
+            if repairing {
+                session.db.pause_repairs();
+            }
             sync_coingecko(session);
-            session.db.resume_repairs();
+            if repairing {
+                session.db.resume_repairs();
+            }
         }
     }
 

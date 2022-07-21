@@ -233,6 +233,11 @@ impl DB {
         self.repair_event = Some(e);
     }
 
+    /// Returns true if a repair event is running
+    pub fn is_repairing(&self) -> bool {
+        self.repair_event.is_some()
+    }
+
     /// Returns true if a repair event is running and set to process given height.
     pub fn is_repairing_height(&self, height: i32) -> bool {
         if let Some(e) = &self.repair_event {
