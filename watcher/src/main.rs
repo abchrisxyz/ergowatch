@@ -12,9 +12,6 @@ use session::Session;
 fn main() -> Result<(), &'static str> {
     let mut session = Session::new()?;
 
-    // Init DB cache
-    session.db.load_cache();
-
     // Bootstrap if needed
     sync::bootstrap::run(&mut session).unwrap();
 

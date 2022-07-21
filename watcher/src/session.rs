@@ -65,7 +65,7 @@ impl Session {
         };
         let coingecko = CoingeckoService::new(cfg.coingecko.url, cfg.coingecko.interval);
         let node = node::Node::new(cfg.node.url);
-        let db = db::DB::new(
+        let mut db = db::DB::new(
             &cfg.database.host,
             cfg.database.port,
             &cfg.database.name,
@@ -104,6 +104,9 @@ impl Session {
 
         // Check db version and migrations if allowed
         db.check_migrations(cli.allow_migrations).unwrap();
+
+        // Init DB cache
+        db.load_cache();
 
         Ok(Session {
             coingecko,
