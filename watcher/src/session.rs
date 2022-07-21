@@ -82,7 +82,6 @@ impl Session {
                 return Err("Failed connecting to database");
             }
         };
-        // let db_constraints_status = db.constraints_status().unwrap();
         let db_has_constraints = db.has_constraints().unwrap();
         let db_core_head = db.get_head().unwrap();
 
