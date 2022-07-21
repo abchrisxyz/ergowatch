@@ -23,8 +23,8 @@ def coingecko_get_range():
     """
     Dummy market_chart range for ERG/USD.
     """
-    fr = int(bottle.request.query.fr) * 1000
-    to = int(bottle.request.query.to) * 1000
+    fr = int(bottle.request.query.get("from")) * 1000
+    to = int(bottle.request.query.get("to")) * 1000
     now = int(datetime.datetime.now().timestamp() * 1000)
 
     res = {

@@ -136,7 +136,7 @@ class TestCoinGeckoApi:
         return mock_api
 
     def test_range(self, api):
-        r = requests.get(f"{api.url}/coingecko?fr=100&to=200")
+        r = requests.get(f"{api.url}/coingecko?from=100&to=200")
         assert r.status_code == 200
         data = r.json()
         assert len(data) == 3
