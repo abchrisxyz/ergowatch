@@ -46,7 +46,12 @@ impl DB {
         unspent::include_block(&mut tx, block)?;
         balances::include_block(&mut tx, block)?;
         cexs::include_block(&mut tx, block, &mut self.cache.cexs)?;
-        metrics::include_block(&mut tx, block, &mut self.cache.metrics)?;
+        metrics::include_block(
+            &mut tx,
+            block,
+            &mut self.cache.metrics,
+            &self.cache.coingecko,
+        )?;
 
         tx.commit()?;
 
@@ -113,7 +118,7 @@ impl DB {
     }
 
     pub fn last_coingecko_timestamp(&self) -> u64 {
-        self.cache.coingecko.last_timestamp
+        self.cache.coingecko.last_datapoint.timestamp
     }
 
     /// Add `timeseries` data to db
@@ -142,11 +147,12 @@ impl DB {
             "Creating DB instance with host: {}, port: {}, name: {}, user: {}, pass: *...*",
             host, port, name, user
         );
+        let conn_str = format!(
+            "host={} port={} dbname={} user={} password={}",
+            host, port, name, user, pass
+        );
         DB {
-            conn_str: format!(
-                "host={} port={} dbname={} user={} password={}",
-                host, port, name, user, pass
-            ),
+            conn_str,
             bootstrapping_work_mem_kb,
             repair_event: None,
             cache: Cache::new(),

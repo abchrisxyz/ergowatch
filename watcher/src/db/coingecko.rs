@@ -22,33 +22,55 @@ pub(super) fn include_timeseries(
     }
     // Update cache
     if let Some(price) = timeseries.last() {
-        cache.last_timestamp = price.timestamp_ms;
+        cache.last_datapoint.timestamp = price.timestamp_ms;
     }
     Ok(())
 }
 
 #[derive(Debug)]
 pub struct Cache {
-    /// Timestamp of last fetched price point
-    pub(super) last_timestamp: u64,
+    /// Last datapoint fetched from CoinGecko
+    pub(super) last_datapoint: DataPoint,
+}
+
+#[derive(Debug)]
+pub(super) struct DataPoint {
+    pub timestamp: u64,
+    pub value: f64,
+}
+
+impl DataPoint {
+    fn new() -> Self {
+        Self {
+            timestamp: GENESIS_TIMESTAMP - 1,
+            value: 0f64,
+        }
+    }
 }
 
 impl Cache {
     pub fn new() -> Self {
         Self {
-            last_timestamp: GENESIS_TIMESTAMP,
+            last_datapoint: DataPoint::new(),
         }
     }
-
     pub fn load(client: &mut Client) -> Self {
         let row = client
-            .query_one("select max(timestamp) from cgo.ergusd;", &[])
+            .query_opt(
+                "select timestamp, value from cgo.ergusd order by 1 desc limit 1;",
+                &[],
+            )
             .unwrap();
-        let timestamp: Option<i64> = row.get(0);
-        Cache {
-            last_timestamp: match timestamp {
-                Some(i) => i as u64,
-                None => GENESIS_TIMESTAMP,
+        Self {
+            last_datapoint: match row {
+                Some(row) => {
+                    let t: i64 = row.get(0);
+                    DataPoint {
+                        timestamp: t as u64,
+                        value: row.get(1),
+                    }
+                }
+                None => DataPoint::new(),
             },
         }
     }

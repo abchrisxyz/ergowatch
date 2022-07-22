@@ -2,9 +2,10 @@
 //!
 //! Process blocks into metrics over time.
 mod cexs;
+mod ergusd;
 pub mod utxos;
+use crate::db::coingecko::Cache as CoinGeckoCache;
 use crate::parsing::BlockData;
-use log::debug;
 use postgres::Client;
 use postgres::Transaction;
 
@@ -12,9 +13,17 @@ pub(super) fn include_block(
     tx: &mut Transaction,
     block: &BlockData,
     cache: &mut Cache,
+    cgo_cache: &CoinGeckoCache,
 ) -> anyhow::Result<()> {
+    ergusd::include(tx, block, &mut cache.ergusd, cgo_cache);
     utxos::include(tx, block, cache);
     cexs::include(tx, block);
+
+    if ergusd::pending_update(&cache.ergusd, cgo_cache) {
+        // Update ergusd values
+        ergusd::update_provisional_values(tx, &mut cache.ergusd)
+        // TODO: Update dependents (none yet)
+    }
     Ok(())
 }
 
@@ -23,12 +32,14 @@ pub(super) fn rollback_block(
     block: &BlockData,
     cache: &mut Cache,
 ) -> anyhow::Result<()> {
-    utxos::rollback(tx, block, cache);
     cexs::rollback(tx, block);
+    utxos::rollback(tx, block, cache);
+    ergusd::rollback(tx, block, &mut cache.ergusd);
     Ok(())
 }
 
 pub(super) fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
+    ergusd::bootstrap(tx)?;
     utxos::bootstrap(tx)?;
     cexs::bootstrap(tx)?;
     Ok(())
@@ -36,28 +47,23 @@ pub(super) fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
 
 #[derive(Debug)]
 pub struct Cache {
+    pub ergusd: ergusd::Cache,
     pub utxos: i64,
 }
 
 impl Cache {
     pub fn new() -> Self {
-        Self { utxos: 0 }
+        Self {
+            ergusd: ergusd::Cache::new(),
+            utxos: 0,
+        }
     }
 
     pub fn load(client: &mut Client) -> Self {
-        debug!("Loading metrics cache");
-        let any_metrics: bool = client
-            .query_one("select exists (select height from mtr.utxos);", &[])
-            .unwrap()
-            .get(0);
-        if !any_metrics {
-            return Cache::new();
+        Self {
+            ergusd: ergusd::Cache::load(client),
+            utxos: utxos::get_utxo_count(client),
         }
-        let utxos: i64 = client
-            .query_one(utxos::SELECT_LAST_SNAPSHOT_VALUE, &[])
-            .unwrap()
-            .get(0);
-        Cache { utxos: utxos }
     }
 }
 

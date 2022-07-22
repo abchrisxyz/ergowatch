@@ -191,6 +191,14 @@ alter table cex.supply add check (deposit >= 0);
 -------------------------------------------------------------------------------
 -- Metrics
 -------------------------------------------------------------------------------
+-- ERG/USD
+alter table mtr.ergusd add primary key(height);
+alter table mtr.ergusd alter column height set not null;
+alter table mtr.ergusd alter column value set not null;
+alter table mtr.ergusd_provisional add primary key(height);
+alter table mtr.ergusd_provisional alter column height set not null;
+update mtr._log set ergusd_constraints_set = TRUE;
+
 -- CEX's
 alter table mtr.cex_supply add primary key (height);
 alter table mtr.cex_supply alter column height set not null;

@@ -1,6 +1,7 @@
 use super::Cache;
 use crate::parsing::BlockData;
 use log::info;
+use postgres::Client;
 use postgres::Transaction;
 
 pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &mut Cache) {
@@ -96,6 +97,15 @@ fn extract_utxo_diff(block: &BlockData) -> i64 {
             .iter()
             .map(|tx| tx.input_box_ids.len())
             .sum::<usize>() as i64
+}
+
+/// Current utxo count
+pub fn get_utxo_count(client: &mut Client) -> i64 {
+    let row = client.query_opt(SELECT_LAST_SNAPSHOT_VALUE, &[]).unwrap();
+    match row {
+        Some(row) => row.get(0),
+        None => 0,
+    }
 }
 
 #[cfg(test)]

@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (1, 12);
+insert into ew.revision (major, minor) values (1, 13);
 
 
 -------------------------------------------------------------------------------
@@ -120,7 +120,7 @@ create table usp.boxes (
 ------------------------------------------------------------------------------- 
 create schema bal;
 
--- U can't touch this too-do-do-do
+-- Internal usage
 create table bal._log (
 	singleton int primary key default 1,
 	constraints_set bool not null default FALSE,
@@ -367,6 +367,35 @@ create table cgo.ergusd (
 -- Metrics
 ------------------------------------------------------------------------------- 
 create schema mtr;
+
+-- Internal usage
+create table mtr._log (
+	singleton int primary key default 1,
+	ergusd_constraints_set bool not null default FALSE,
+	ergusd_bootstrapped bool not null default FALSE,
+	check(singleton = 1)
+);
+insert into mtr._log(singleton) values (1);
+
+-- ERG/USD value used at each height.
+-- Most values will be interpolated from cgo.ergusd.
+-- Last couple of values will be latest available from cgo.ergusd
+-- while waiting for next datapoint to be available. Such heights are
+-- recorded in mtr.ergusd_provisional (see below) so they can be adjusted
+-- when possible.
+-- This takes care of possible Coingecko outages and ensures consistency
+-- across different watcher instances.
+create table mtr.ergusd (
+	height int,
+	value double precision
+);
+
+-- Height for which no ERG/USD could be interpolated yet and for which
+-- the latest available value is used instead.
+create table mtr.ergusd_provisional (
+	height int
+);
+
 
 -- Supply across all cex's, at each height.
 create table mtr.cex_supply (

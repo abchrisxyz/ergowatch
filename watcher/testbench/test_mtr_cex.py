@@ -336,8 +336,6 @@ def assert_supply(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
         """
     )
     rows = cur.fetchall()
-    for row in rows:
-        print(row)
     if bootstrapped:
         assert len(rows) == 6
         assert rows[0] == (s.parent_height + 0, 0, 0)
