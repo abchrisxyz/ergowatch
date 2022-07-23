@@ -24,6 +24,7 @@ alter table core.headers alter column vote2 set not null;
 alter table core.headers alter column vote3 set not null;
 alter table core.headers add constraint headers_unique_id unique(id);
 alter table core.headers add constraint headers_unique_parent_id unique(parent_id);
+create index on core.headers using brin(timestamp);
 
 alter table core.transactions add primary key (id);
 alter table core.transactions alter column id set not null;
