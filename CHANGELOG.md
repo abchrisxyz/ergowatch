@@ -2,6 +2,10 @@
 
 ## v0.5.0 - UNRELEASED
 
+### New features
+
+[Issue 55](https://github.com/abchrisxyz/ergowatch/issues/55) - Added height <--> timestamp conversion utils
+
 
 ## v0.4.0 - 2022-07-08
 

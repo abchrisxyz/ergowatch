@@ -14,6 +14,7 @@ try:
     from api.routes.metrics import metrics_router
     from api.routes.exchanges import exchanges_router
     from api.routes.lists import lists_router
+    from api.routes.utils import utils_router
 except ImportError:
     # When running pytest
     from .api.routes.addresses import addresses_router
@@ -25,6 +26,7 @@ except ImportError:
     from .api.routes.metrics import metrics_router
     from .api.routes.exchanges import exchanges_router
     from .api.routes.lists import lists_router
+    from .api.routes.utils import utils_router
 
 root_path = "/api/v0"
 description = f"""
@@ -80,6 +82,10 @@ tags_metadata = [
         "name": "tokens",
         "description": "Token specific data",
     },
+    {
+        "name": "utils",
+        "description": "Sometimes helpful",
+    },
 ]
 
 app = FastAPI(
@@ -120,4 +126,5 @@ app.include_router(lists_router, prefix="/lists", tags=["lists"])
 app.include_router(metrics_router, prefix="/metrics", tags=["metrics"])
 app.include_router(p2pk_router, prefix="/p2pk", tags=["p2pk"])
 app.include_router(tokens_router, prefix="/tokens", tags=["tokens"])
+app.include_router(utils_router, prefix="/utils", tags=["utils"])
 app.include_router(ranking_router, prefix="/ranking", tags=["misc"])
