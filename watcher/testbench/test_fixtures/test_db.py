@@ -614,15 +614,15 @@ class TestRev0DB:
         assert (600_001, scenario.id("tx-b1"), 999, scenario.address("pub2")) in rows
 
     def test_bal_erg(self, cur, scenario):
-        cur.execute("select value, address from bal.erg order by 2;")
+        cur.execute("select value, address from bal.erg order by 1;")
         rows = cur.fetchall()
         assert len(rows) == 5
         assert rows == [
             (1, scenario.address("fees")),
-            (950, scenario.address("base")),
             (50, scenario.address("con1")),
-            (1000, scenario.address("con2")),
+            (950, scenario.address("base")),
             (999, scenario.address("pub2")),
+            (1000, scenario.address("con2")),
         ]
 
     def test_bal_tokens_diffs(self, cur, scenario):
