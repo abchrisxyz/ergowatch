@@ -11,12 +11,6 @@ from fixtures.db import temp_db_rev0_class_scoped
 from fixtures.db import unconstrained_db_class_scoped
 from utils import run_watcher
 from utils import assert_pk
-from utils import assert_fk
-from utils import assert_unique
-from utils import assert_column_not_null
-from utils import assert_index
-from utils import assert_column_ge
-from utils import assert_column_le
 
 ORDER = 14
 
