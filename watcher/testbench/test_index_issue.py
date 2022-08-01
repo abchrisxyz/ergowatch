@@ -12,16 +12,16 @@ def test_this_should_work(temp_db_class_scoped):
     with pg.connect(temp_db_class_scoped) as conn:
         with conn.cursor() as cur:
             # cur.execute(
-            #     "alter table bal.tokens_diffs drop constraint tokens_diffs_pkey;"
+            #     "alter table adr.tokens_diffs drop constraint tokens_diffs_pkey;"
             # )
 
             cur.execute(
-                "create index on bal.tokens_diffs (address, token_id, height, tx_id);"
+                "create index on adr.tokens_diffs (address, token_id, height, tx_id);"
             )
 
             cur.execute(
                 f"""
-                insert into bal.tokens_diffs (address, token_id, height, tx_id, value) values
+                insert into adr.tokens_diffs (address, token_id, height, tx_id, value) values
                     ('{long_address}', '{token_id}', 100, '{tx_id}', 1000);
                 """
             )

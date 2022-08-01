@@ -231,47 +231,22 @@ def _test_db_state(conn: pg.Connection, s: Scenario):
 
 def assert_db_constraints(conn: pg.Connection):
     # Erg bal
-    assert_pk(conn, "bal", "erg", ["address_id"])
-    assert_column_not_null(conn, "bal", "erg", "address_id")
-    assert_column_not_null(conn, "bal", "erg", "value")
-    assert_column_ge(conn, "bal", "erg", "value", 0)
-    assert_index(conn, "bal", "erg", "erg_value_idx")
-
+    assert_pk(conn, "adr", "erg", ["address_id"])    assert_column_not_null(conn, "adr", "erg", "address_id")    assert_column_not_null(conn, "adr", "erg", "value")    assert_column_ge(conn, "adr", "erg", "value", 0)    assert_index(conn, "adr", "erg", "erg_value_idx")
     # Erg diffs
-    assert_pk(conn, "bal", "erg_diffs", ["address_id", "height", "tx_id"])
-    assert_column_not_null(conn, "bal", "erg_diffs", "address_id")
-    assert_column_not_null(conn, "bal", "erg_diffs", "height")
-    assert_column_not_null(conn, "bal", "erg_diffs", "tx_id")
-    assert_column_not_null(conn, "bal", "erg_diffs", "value")
-    assert_index(conn, "bal", "erg_diffs", "erg_diffs_height_idx")
-
+    assert_pk(conn, "adr", "erg_diffs", ["address_id", "height", "tx_id"])    assert_column_not_null(conn, "adr", "erg_diffs", "address_id")    assert_column_not_null(conn, "adr", "erg_diffs", "height")    assert_column_not_null(conn, "adr", "erg_diffs", "tx_id")    assert_column_not_null(conn, "adr", "erg_diffs", "value")    assert_index(conn, "adr", "erg_diffs", "erg_diffs_height_idx")
     # Tokens bal
-    assert_pk(conn, "bal", "tokens", ["address_id", "token_id"])
-    assert_column_not_null(conn, "bal", "tokens", "address_id")
-    assert_column_not_null(conn, "bal", "tokens", "token_id")
-    assert_column_not_null(conn, "bal", "tokens", "value")
-    assert_column_ge(conn, "bal", "tokens", "value", 0)
-    assert_index(conn, "bal", "tokens", "tokens_value_idx")
-
+    assert_pk(conn, "adr", "tokens", ["address_id", "token_id"])    assert_column_not_null(conn, "adr", "tokens", "address_id")    assert_column_not_null(conn, "adr", "tokens", "token_id")    assert_column_not_null(conn, "adr", "tokens", "value")    assert_column_ge(conn, "adr", "tokens", "value", 0)    assert_index(conn, "adr", "tokens", "tokens_value_idx")
     # Tokens diffs
     assert_pk(
-        conn, "bal", "tokens_diffs", ["address_id", "token_id", "height", "tx_id"]
-    )
-    assert_column_not_null(conn, "bal", "tokens_diffs", "address_id")
-    assert_column_not_null(conn, "bal", "tokens_diffs", "token_id")
-    assert_column_not_null(conn, "bal", "tokens_diffs", "height")
-    assert_column_not_null(conn, "bal", "tokens_diffs", "tx_id")
-    assert_column_not_null(conn, "bal", "tokens_diffs", "value")
-    assert_index(conn, "bal", "tokens_diffs", "tokens_diffs_height_idx")
-
+        conn, "adr", "tokens_diffs", ["address_id", "token_id", "height", "tx_id"]    )
+    assert_column_not_null(conn, "adr", "tokens_diffs", "address_id")    assert_column_not_null(conn, "adr", "tokens_diffs", "token_id")    assert_column_not_null(conn, "adr", "tokens_diffs", "height")    assert_column_not_null(conn, "adr", "tokens_diffs", "tx_id")    assert_column_not_null(conn, "adr", "tokens_diffs", "value")    assert_index(conn, "adr", "tokens_diffs", "tokens_diffs_height_idx")
 
 def assert_erg_balances(cur: pg.Cursor, s: Scenario):
     cur.execute(
         """
         select a.address
             , b.value
-        from bal.erg b
-        join core.addresses a on a.id = b.address_id
+        from adr.erg b        join core.addresses a on a.id = b.address_id
         order by 1;
         """
     )
@@ -292,8 +267,7 @@ def assert_erg_diffs(cur: pg.Cursor, s: Scenario):
             , d.tx_id
             , a.address
             , d.value
-        from bal.erg_diffs d
-        join core.addresses a on a.id = d.address_id
+        from adr.erg_diffs d        join core.addresses a on a.id = d.address_id
         order by 1, 2, 4;
         """
     )
@@ -327,8 +301,7 @@ def assert_tokens_balances(cur: pg.Cursor, s: Scenario):
         select a.address
             , b.token_id
             , b.value
-            from bal.tokens b
-            join core.addresses a on a.id = b.address_id
+            from adr.tokens b            join core.addresses a on a.id = b.address_id
             order by 1, 2;
         """
     )
@@ -347,8 +320,7 @@ def assert_tokens_diffs(cur: pg.Cursor, s: Scenario):
             , a.address
             , d.token_id
             , d.value
-        from bal.tokens_diffs d
-        join core.addresses a on a.id = d.address_id
+        from adr.tokens_diffs d        join core.addresses a on a.id = d.address_id
         order by 1, 2, 3;
         """
     )

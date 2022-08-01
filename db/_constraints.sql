@@ -119,37 +119,37 @@ alter table usp.boxes alter column box_id set not null;
 
 
 -------------------------------------------------------------------------------
--- Balances
+-- Address properties
 -------------------------------------------------------------------------------
-alter table bal.erg add primary key(address_id);
-alter table bal.erg alter column address_id set not null;
-alter table bal.erg alter column value set not null;
-alter table bal.erg add check (value >= 0);
-create index on bal.erg(value);
+alter table adr.erg add primary key(address_id);
+alter table adr.erg alter column address_id set not null;
+alter table adr.erg alter column value set not null;
+alter table adr.erg add check (value >= 0);
+create index on adr.erg(value);
 
-alter table bal.erg_diffs add primary key(address_id, height, tx_id);
-alter table bal.erg_diffs alter column address_id set not null;
-alter table bal.erg_diffs alter column height set not null;
-alter table bal.erg_diffs alter column tx_id set not null;
-alter table bal.erg_diffs alter column value set not null;
-create index on bal.erg_diffs(height);
+alter table adr.erg_diffs add primary key(address_id, height, tx_id);
+alter table adr.erg_diffs alter column address_id set not null;
+alter table adr.erg_diffs alter column height set not null;
+alter table adr.erg_diffs alter column tx_id set not null;
+alter table adr.erg_diffs alter column value set not null;
+create index on adr.erg_diffs(height);
 
-alter table bal.tokens add primary key(address_id, token_id);
-alter table bal.tokens alter column address_id set not null;
-alter table bal.tokens alter column token_id set not null;
-alter table bal.tokens alter column value set not null;
-alter table bal.tokens add check (value >= 0);
-create index on bal.tokens(value);
+alter table adr.tokens add primary key(address_id, token_id);
+alter table adr.tokens alter column address_id set not null;
+alter table adr.tokens alter column token_id set not null;
+alter table adr.tokens alter column value set not null;
+alter table adr.tokens add check (value >= 0);
+create index on adr.tokens(value);
 
-alter table bal.tokens_diffs add primary key(address_id, token_id, height, tx_id);
-alter table bal.tokens_diffs alter column address_id set not null;
-alter table bal.tokens_diffs alter column token_id set not null;
-alter table bal.tokens_diffs alter column height set not null;
-alter table bal.tokens_diffs alter column tx_id set not null;
-alter table bal.tokens_diffs alter column value set not null;
-create index on bal.tokens_diffs(height);
+alter table adr.tokens_diffs add primary key(address_id, token_id, height, tx_id);
+alter table adr.tokens_diffs alter column address_id set not null;
+alter table adr.tokens_diffs alter column token_id set not null;
+alter table adr.tokens_diffs alter column height set not null;
+alter table adr.tokens_diffs alter column tx_id set not null;
+alter table adr.tokens_diffs alter column value set not null;
+create index on adr.tokens_diffs(height);
 
-update bal._log set constraints_set = TRUE;
+update adr._log set constraints_set = TRUE;
 
 
 -------------------------------------------------------------------------------

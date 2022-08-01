@@ -37,7 +37,7 @@ async def p2pk_address_rank(
             select rank() over (order by b.value desc)
                 , a.address
                 , b.value
-            from bal.erg b
+            from adr.erg b
             join core.addresses a on a.id = b.address_id
             where a.address like '9%'
                 and length(a.address) = 51

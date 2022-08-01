@@ -93,14 +93,14 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
                     , dif.value
                     , cas.address_id as main_address_id
                 from cex.addresses cas
-                join bal.erg_diffs dif on dif.address_id = cas.address_id
+                join adr.erg_diffs dif on dif.address_id = cas.address_id
                 where cas.type = 'main'
                     and dif.height = _height
                     and dif.value > 0
             ), deposit_addresses as (
                 select dif.address_id
                     , txs.cex_id 
-                from bal.erg_diffs dif
+                from adr.erg_diffs dif
                 join to_main_txs txs on txs.tx_id = dif.tx_id
                 -- be aware of known addresses
                 left join cex.addresses cas
@@ -139,7 +139,7 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
                 , _height
                 , min(dif.height)
             from deposit_addresses das
-            join bal.erg_diffs dif on dif.address_id = das.address_id
+            join adr.erg_diffs dif on dif.address_id = das.address_id
             where dif.height <= _height
             group by 1, 2;
         $$
@@ -259,7 +259,7 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
                 , coalesce(sum(d.value) filter (where c.type = 'main'), 0) as main
                 , coalesce(sum(d.value) filter (where c.type = 'deposit'), 0) as deposit
             from cex.addresses c
-            join bal.erg_diffs d on d.address_id = c.address_id
+            join adr.erg_diffs d on d.address_id = c.address_id
             group by 1, 2 having (
                 sum(d.value) filter (where c.type = 'main') <> 0
                 or

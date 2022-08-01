@@ -154,14 +154,14 @@ fn spot_deposit_candidates(tx: &mut Transaction, height: i32) {
                     , dif.value
                     , cas.address_id as main_address_id
                 from cex.addresses cas
-                join bal.erg_diffs dif on dif.address_id = cas.address_id
+                join adr.erg_diffs dif on dif.address_id = cas.address_id
                 where cas.type = 'main'
                     and dif.height = $1
                     and dif.value > 0
             )
             select dif.address_id
                 , txs.cex_id 
-            from bal.erg_diffs dif
+            from adr.erg_diffs dif
             join to_main_txs txs on txs.tx_id = dif.tx_id
             -- be aware of known addresses for each cex
             left join cex.addresses cas
@@ -225,7 +225,7 @@ fn insert_new_deposit_addresses(tx: &mut Transaction, height: i32) -> Option<i32
     tx.query_one(
         "
         select min(dif.height)
-        from bal.erg_diffs dif
+        from adr.erg_diffs dif
         join _cex_deposit_candidates can
             on can.address_id = dif.address_id;",
         &[],
@@ -371,7 +371,7 @@ fn update_processing_log_for_conflict(tx: &mut Transaction, address_id: i64) {
                     and type = 'deposit'
             )
             select min(dif.height)
-            from bal.erg_diffs dif
+            from adr.erg_diffs dif
             join other_addresses_spotted_at_same_height ads
                 on ads.address_id = dif.address_id;
             ",
@@ -400,7 +400,7 @@ fn rollback_update_processing_log_for_conflict(tx: &mut Transaction, spot_height
                 where spot_height = $1
             )
             select min(dif.height)
-            from bal.erg_diffs dif
+            from adr.erg_diffs dif
             join addresses_spotted_at_height ads
                 on ads.address_id = dif.address_id;
             ",

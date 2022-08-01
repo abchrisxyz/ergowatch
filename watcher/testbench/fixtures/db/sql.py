@@ -344,7 +344,7 @@ def generate_bootstrap_sql(scenario: Scenario) -> str:
     # TODO: generate_bootstrap_sql_bal_tokens (works fine for now because no case has tokens initially)
     # Bal bootstrap flag
     sql += """
-        update bal._log set bootstrapped = TRUE;
+        update adr._log set bootstrapped = TRUE;
     """
     sql += generate_bootstrap_sql_cex(header, outputs)
     sql += generate_bootstrap_sql_mtr(header, outputs)
@@ -364,28 +364,25 @@ def generate_bootstrap_sql_bal_erg(header: Header, outputs: List[Output]) -> str
     """
     Bootstrap sql for erg balance tables
 
-    Watcher checks latest height in bal.erg_diffs to determine if bootstrapping
+    Watcher checks latest height in adr.erg_diffs to determine if bootstrapping
     is needed and if so, from which height. Here, we set it to same height as core tables
     meaning no bootstrap is needed.
     """
     qry_diffs = dedent(
         """
-        insert into bal.erg_diffs (address_id, height, tx_id, value)
-        values ('{}', {}, '{}', {});\n
+        insert into adr.erg_diffs (address_id, height, tx_id, value)        values ('{}', {}, '{}', {});\n
     """
     )
 
-    qry_bal = dedent(
+    qry_adr = dedent(
         """
-        insert into bal.erg(address_id, value)
-        values ('{}', {});\n
+        insert into adr.erg(address_id, value)        values ('{}', {});\n
     """
     )
     return "".join(
         [
             qry_diffs.format(box.address_id, header.height, box.tx_id, box.value)
-            + qry_bal.format(box.address_id, box.value)
-            for box in outputs
+            + qry_adr.format(box.address_id, box.value)            for box in outputs
         ]
     )
 

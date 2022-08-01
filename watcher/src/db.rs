@@ -1,4 +1,4 @@
-pub mod balances;
+pub mod addresses;
 pub mod cexs;
 pub mod coingecko;
 pub mod core;
@@ -44,7 +44,7 @@ impl DB {
 
         core::include_block(&mut tx, block)?;
         unspent::include_block(&mut tx, block)?;
-        balances::include_block(&mut tx, block)?;
+        addresses::include_block(&mut tx, block)?;
         cexs::include_block(&mut tx, block, &mut self.cache.cexs)?;
         metrics::include_block(
             &mut tx,
@@ -65,7 +65,7 @@ impl DB {
 
         metrics::rollback_block(&mut tx, block, &mut self.cache.metrics)?;
         cexs::rollback_block(&mut tx, block, &mut self.cache.cexs)?;
-        balances::rollback_block(&mut tx, block)?;
+        addresses::rollback_block(&mut tx, block)?;
         unspent::rollback_block(&mut tx, block)?;
         core::rollback_block(&mut tx, block)?;
 
@@ -106,7 +106,7 @@ impl DB {
         let mut client = Client::connect(&self.conn_str, NoTls)?;
 
         run(&self, &unspent::bootstrap)?;
-        balances::bootstrap(&mut client)?;
+        addresses::bootstrap(&mut client)?;
         run(&self, &cexs::bootstrap)?;
         run(&self, &metrics::bootstrap)?;
 

@@ -28,14 +28,12 @@ def client():
     sql = f"""
         {ADDR_SQL}
         
-        insert into bal.erg (address_id, value) values
-        ({ADDR['addr1']}, 4000),
+        insert into adr.erg (address_id, value) values        ({ADDR['addr1']}, 4000),
         ({ADDR['addr2']}, 2000),
         ({ADDR['addr3']}, 1000),
         ({ADDR['addr4']}, 5000);
 
-        insert into bal.tokens (address_id, token_id, value) values
-        ({ADDR['addr1']}, '{TOKEN_A}', 400),
+        insert into adr.tokens (address_id, token_id, value) values        ({ADDR['addr1']}, '{TOKEN_A}', 400),
         ({ADDR['addr1']}, '{TOKEN_B}', 800),
         ({ADDR['addr2']}, '{TOKEN_A}', 200),
         ({ADDR['addr3']}, '{TOKEN_A}', 100),

@@ -38,7 +38,7 @@ async def rich_list(
         query = f"""
             select a.address
                 , b.value as balance
-            from bal.erg b
+            from adr.erg b
             join core.addresses a on a.id = b.address_id 
             where a.address <> '2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU'
             order by b.value desc
@@ -49,7 +49,7 @@ async def rich_list(
         query = """
             select a.address
                 , b.value as balance
-            from bal.tokens b
+            from adr.tokens b
             join core.addresses a on a.id = b.address_id
             where b.token_id = $2
             order by b.value desc

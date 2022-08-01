@@ -28,14 +28,14 @@ async def get_contract_address_count(
     """
     query = """
         select count(*) as cnt
-        from bal.erg b
+        from adr.erg b
         join core.addresses a on a.id = b.address_id
         where (a.address not like '9%' or length(a.address) <> 51)
     """
     args = []
     if token_id is not None:
         args.append(token_id)
-        query = query.replace("bal.erg", "bal.tokens")
+        query = query.replace("adr.erg", "adr.tokens")
         query += f" and token_id = $1"
     if bal_ge is not None:
         args.append(bal_ge)
@@ -61,7 +61,7 @@ async def supply_in_contracts(
     """
     query = """
         select sum(b.value) as value
-        from bal.erg b
+        from adr.erg b
         join core.addresses a on a.id = b.address_id
         where a.address <> '2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU' 
             and a.address <> '4L1ktFSzm3SH1UioDuUf5hyaraHird4D2dEACwQ1qHGjSKtA6KaNvSzRCZXZGf9jkfNAEC1SrYaZmCuvb2BKiXk5zW9xuvrXFT7FdNe2KqbymiZvo5UQLAm5jQY8ZBRhTZ4AFtZa1UF5nd4aofwPiL7YkJuyiL5hDHMZL1ZnyL746tHmRYMjAhCgE7d698dRhkdSeVy'
@@ -70,7 +70,7 @@ async def supply_in_contracts(
     args = []
     if token_id is not None:
         args.append(token_id)
-        query = query.replace("bal.erg", "bal.tokens")
+        query = query.replace("adr.erg", "adr.tokens")
         query += f" and token_id = $1"
 
     async with request.app.state.db.acquire() as conn:

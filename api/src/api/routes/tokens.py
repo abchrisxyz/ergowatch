@@ -66,7 +66,7 @@ async def token_supply(
             select array[sum(b.value)
                 , sum(b.value) filter (where a.address not like '9%' or length(a.address) <> 51)
             ] as total_and_contracts
-            from bal.tokens b
+            from adr.tokens b
             join core.addresses a on a.id = b.address_id
             where b.token_id = $1
         ) 

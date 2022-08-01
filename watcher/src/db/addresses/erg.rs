@@ -21,11 +21,11 @@ pub(super) const UPDATE_BALANCES: &str = "
     with new_diffs as (
         select address_id
             , sum(value) as value
-        from bal.erg_diffs
+        from adr.erg_diffs
         where height = $1
         group by 1
     )
-    update bal.erg b
+    update adr.erg b
     set value = b.value + d.value
     from new_diffs d
     where d.address_id = b.address_id;";
@@ -35,19 +35,19 @@ pub(super) const INSERT_BALANCES: &str = "
     with new_addresses as (
         select d.address_id
             , sum(d.value) as value
-        from bal.erg_diffs d
-        left join bal.erg b on b.address_id = d.address_id
+        from adr.erg_diffs d
+        left join adr.erg b on b.address_id = d.address_id
         where d.height = $1
             and b.address_id is null
         group by 1
     )
-    insert into bal.erg(address_id, value)
+    insert into adr.erg(address_id, value)
     select address_id
         , value
     from new_addresses;";
 
 pub(super) const DELETE_ZERO_BALANCES: &str = "
-    delete from bal.erg
+    delete from adr.erg
     where value = 0;";
 
 // Undo balance updates
@@ -55,11 +55,11 @@ const ROLLBACK_BALANCE_UPDATES: &str = "
     with new_diffs as (
         select address_id
             , sum(value) as value
-        from bal.erg_diffs
+        from adr.erg_diffs
         where height = $1
         group by 1
     )
-    update bal.erg b
+    update adr.erg b
     set value = b.value - d.value
     from new_diffs d
     where d.address_id = b.address_id;";
@@ -68,24 +68,24 @@ const ROLLBACK_DELETE_ZERO_BALANCES: &str = "
     with deleted_addresses as (
         select d.address_id
             , sum(d.value) as value
-        from bal.erg_diffs d
-        left join bal.erg b on b.address_id = d.address_id
+        from adr.erg_diffs d
+        left join adr.erg b on b.address_id = d.address_id
         where d.height = $1
             and b.address_id is null
         group by 1
     )
-    insert into bal.erg(address_id, value)
+    insert into adr.erg(address_id, value)
     select address_id
         , 0 -- actual value will be set by update rollback
     from deleted_addresses;";
 
 pub fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
-        "alter table bal.erg add primary key(address_id);",
-        "alter table bal.erg alter column address_id set not null;",
-        "alter table bal.erg alter column value set not null;",
-        "alter table bal.erg add check (value >= 0);",
-        "create index on bal.erg(value);",
+        "alter table adr.erg add primary key(address_id);",
+        "alter table adr.erg alter column address_id set not null;",
+        "alter table adr.erg alter column value set not null;",
+        "alter table adr.erg add check (value >= 0);",
+        "create index on adr.erg(value);",
     ];
 
     for statement in statements {
@@ -96,7 +96,7 @@ pub fn set_constraints(tx: &mut Transaction) {
 pub mod replay {
     use postgres::Transaction;
 
-    /// Create an instance of the bal.erg table as it was at `height`.
+    /// Create an instance of the adr.erg table as it was at `height`.
     ///
     /// New table is created as repair.bal_erg.
     pub fn prepare(tx: &mut Transaction, height: i32) {
@@ -105,7 +105,7 @@ pub mod replay {
             create table repair.bal_erg as
                 select address_id
                     , sum(value) as value
-                from bal.erg_diffs
+                from adr.erg_diffs
                 where height <= $1
                 group by 1 having sum(value) > 0;
             ",
@@ -135,7 +135,7 @@ pub mod replay {
             with new_diffs as (
                 select address_id
                 , sum(value) as value
-                from bal.erg_diffs
+                from adr.erg_diffs
                 where height = $1
                 group by 1
             )
@@ -152,7 +152,7 @@ pub mod replay {
             "with new_addresses as (
             select d.address_id
                 , sum(d.value) as value
-            from bal.erg_diffs d
+            from adr.erg_diffs d
             left join repair.bal_erg b on b.address_id = d.address_id
             where d.height = $1
                 and b.address_id is null

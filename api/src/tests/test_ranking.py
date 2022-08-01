@@ -31,8 +31,7 @@ def client():
     sql = f"""
         {ADDR_SQL}
 
-        insert into bal.erg (address_id, value) values
-        ({ADDR['9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       5000000),
+        insert into adr.erg (address_id, value) values        ({ADDR['9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       5000000),
         ({ADDR['9addr2axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       4000000),
         ({ADDR['9addr2bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       4000000),
         ({ADDR['9addr4xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       3000000),

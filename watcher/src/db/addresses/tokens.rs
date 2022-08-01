@@ -22,11 +22,11 @@ pub(super) const UPDATE_BALANCES: &str = "
         select address_id
             , token_id
             , sum(value) as value
-        from bal.tokens_diffs
+        from adr.tokens_diffs
         where height = $1
         group by 1, 2
     )
-    update bal.tokens b
+    update adr.tokens b
     set value = b.value + d.value
     from new_diffs d
     where d.address_id = b.address_id
@@ -38,22 +38,22 @@ pub(super) const INSERT_BALANCES: &str = "
         select d.address_id
             , d.token_id
             , sum(d.value) as value
-        from bal.tokens_diffs d
-        left join bal.tokens b
+        from adr.tokens_diffs d
+        left join adr.tokens b
             on b.address_id = d.address_id
             and b.token_id = d.token_id
         where d.height = $1
             and b.address_id is null
         group by 1, 2
     )
-    insert into bal.tokens(address_id, token_id, value)
+    insert into adr.tokens(address_id, token_id, value)
     select address_id
         , token_id
         , value
     from new_addresses;";
 
 pub(super) const DELETE_ZERO_BALANCES: &str = "
-    delete from bal.tokens
+    delete from adr.tokens
     where value = 0;";
 
 // Undo balance updates
@@ -62,11 +62,11 @@ const ROLLBACK_BALANCE_UPDATES: &str = "
         select address_id
             , token_id
             , sum(value) as value
-        from bal.tokens_diffs
+        from adr.tokens_diffs
         where height = $1
         group by 1, 2
     )
-    update bal.tokens b
+    update adr.tokens b
     set value = b.value - d.value
     from new_diffs d
     where d.address_id = b.address_id
@@ -77,15 +77,15 @@ const ROLLBACK_DELETE_ZERO_BALANCES: &str = "
         select d.address_id
             , d.token_id
             , sum(d.value) as value
-        from bal.tokens_diffs d
-        left join bal.tokens b
+        from adr.tokens_diffs d
+        left join adr.tokens b
             on b.address_id = d.address_id
             and b.token_id = d.token_id
         where d.height = $1
             and b.address_id is null
         group by 1, 2
     )
-    insert into bal.tokens(address_id, token_id, value)
+    insert into adr.tokens(address_id, token_id, value)
     select address_id
         , token_id
         , 0 -- actual value will be set by update rollback
@@ -93,12 +93,12 @@ const ROLLBACK_DELETE_ZERO_BALANCES: &str = "
 
 pub fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
-        "alter table bal.tokens add primary key(address_id, token_id);",
-        "alter table bal.tokens alter column address_id set not null;",
-        "alter table bal.tokens alter column token_id set not null;",
-        "alter table bal.tokens alter column value set not null;",
-        "alter table bal.tokens add check (value >= 0);",
-        "create index on bal.tokens(value);",
+        "alter table adr.tokens add primary key(address_id, token_id);",
+        "alter table adr.tokens alter column address_id set not null;",
+        "alter table adr.tokens alter column token_id set not null;",
+        "alter table adr.tokens alter column value set not null;",
+        "alter table adr.tokens add check (value >= 0);",
+        "create index on adr.tokens(value);",
     ];
 
     for statement in statements {

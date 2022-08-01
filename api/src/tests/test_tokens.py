@@ -46,16 +46,14 @@ def client():
         insert into core.tokens (id, box_id, emission_amount, name, description, decimals, standard) values
         ('{TOKEN_B}', 'box-2', 800, 'token_b', 'description of token b', 2, 'EIP-4');
 
-        insert into bal.tokens_diffs (address_id, token_id, height, tx_id, value) values
-        ({ADDR['addr1']}, '{TOKEN_A}', 10, 'tx_1',   900),
+        insert into adr.tokens_diffs (address_id, token_id, height, tx_id, value) values        ({ADDR['addr1']}, '{TOKEN_A}', 10, 'tx_1',   900),
         ({ADDR['addr1']}, '{TOKEN_B}', 10, 'tx_2',   800),
         ({ADDR['addr1']}, '{TOKEN_A}', 20, 'tx_2',  -200),
         ({ADDR['addr2']}, '{TOKEN_A}', 20, 'tx_2',   150),
         ({ADDR['addr1']}, '{TOKEN_A}', 30, 'tx_3',  -300),
         ({ADDR[P2PK]}, '{TOKEN_A}', 30, 'tx_3',   300);
 
-        insert into bal.tokens (address_id, token_id, value) values
-        ({ADDR['addr1']}, '{TOKEN_A}', 400),
+        insert into adr.tokens (address_id, token_id, value) values        ({ADDR['addr1']}, '{TOKEN_A}', 400),
         ({ADDR['addr1']}, '{TOKEN_B}', 800),
         ({ADDR['addr2']}, '{TOKEN_A}', 150),
         ({ADDR[P2PK]}, '{TOKEN_A}', 300);

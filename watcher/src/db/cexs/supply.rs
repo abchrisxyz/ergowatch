@@ -18,13 +18,13 @@ use postgres::Transaction;
 
     S_k(h-1) is known from the previous block and cached.
     D_k is the sum of balance diffs linked to known deposit addresses
-    at height h (table bal.erg_diffs).
+    at height h (table adr.erg_diffs).
     S_n(h) is the sum of balances linked to new deposit addresses (table
     erg.bal).
 
     Advantages of this method are:
-        - bal.erg_diffs table only needs to be read for current h
-        - bal.erg table only needs to be read for new addresses (if any)
+        - adr.erg_diffs table only needs to be read for current h
+        - adr.erg table only needs to be read for new addresses (if any)
         - doesn't require a join on all deposit addresses
         - latest value based on all available data (known deposit addresses)
 
@@ -137,7 +137,7 @@ fn get_supply_diffs(tx: &mut Transaction, height: i32) -> Vec<SupplyDiff> {
                     , coalesce(sum(d.value) filter (where a.type = 'main'), 0)::bigint as main
                     , coalesce(sum(d.value) filter (where a.type = 'deposit'), 0)::bigint as deposit
                 from cex.addresses a
-                join bal.erg_diffs d
+                join adr.erg_diffs d
                     on d.address_id = a.address_id
                 where d.height = $1
                     -- exclude addresses discoverd in current block
@@ -149,7 +149,7 @@ fn get_supply_diffs(tx: &mut Transaction, height: i32) -> Vec<SupplyDiff> {
                 select a.cex_id
                     , sum(b.value) as deposit
                 from cex.addresses a
-                join bal.erg b on b.address_id = a.address_id
+                join adr.erg b on b.address_id = a.address_id
                 where a.type = 'deposit'
                     and a.spot_height = $1
                 group by 1
@@ -190,7 +190,7 @@ mod repair {
                     , coalesce(sum(d.value) filter (where a.type = 'main'), 0)::bigint as main
                     , coalesce(sum(d.value) filter (where a.type = 'deposit'), 0)::bigint as deposit
                 from cex.addresses a
-                join bal.erg_diffs d
+                join adr.erg_diffs d
                     on d.address_id = a.address_id
                 where d.height = $1
                 group by 1

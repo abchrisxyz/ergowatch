@@ -150,7 +150,7 @@ class TestPopulatedDB:
             select d.height
                 , d.value
                 , a.address
-            from bal.erg_diffs d
+            from adr.erg_diffs d
             left join core.addresses a on a.id = d.address_id;
             """
         )
@@ -169,7 +169,7 @@ class TestPopulatedDB:
             """
             select b.value
                 , a.address
-            from bal.erg b
+            from adr.erg b
             left join core.addresses a on a.id = b.address_id;
             """
         )
@@ -191,7 +191,7 @@ class TestPopulatedDB:
                 , d.tx_id
                 , d.value
                 , a.address
-            from bal.tokens_diffs d
+            from adr.tokens_diffs d
             join core.addresses a on a.id = d.address_id;
             """
         )
@@ -204,7 +204,7 @@ class TestPopulatedDB:
             select b.value
                 , b.token_id
                 , a.address
-            from bal.tokens b
+            from adr.tokens b
             join core.addresses a on a.id = b.address_id
             order by 2;
             """

@@ -35,14 +35,14 @@ async def address_balance(
     args = [address]
     query = """
         select value
-        from bal.erg
+        from adr.erg
         where address_id = core.address_id($1);
     """
     if token_id is not None:
         args.append(token_id)
         query = """
             select value
-            from bal.tokens
+            from adr.tokens
             where address_id = core.address_id($1)
                 and token_id = $2;
         """
@@ -63,14 +63,14 @@ async def address_balance_at_height(
     opt_args = []
     query = """
         select sum(value) as value
-        from bal.erg_diffs
+        from adr.erg_diffs
         where address_id = core.address_id($1) and height <= $2
     """
     if token_id is not None:
         opt_args = [token_id]
         query = """
             select sum(value) as value
-            from bal.tokens_diffs
+            from adr.tokens_diffs
             where address_id = core.address_id($1)
                 and height <= $2
                 and token_id = $3
@@ -93,7 +93,7 @@ async def address_balance_at_timestamp(
     opt_args = []
     query = """
         select sum(d.value) as value
-        from bal.erg_diffs d
+        from adr.erg_diffs d
         join core.headers h on h.height = d.height
         where d.address_id = core.address_id($1) and h.timestamp <= $2
     """
@@ -101,7 +101,7 @@ async def address_balance_at_timestamp(
         opt_args = [token_id]
         query = """
             select sum(value) as value
-            from bal.tokens_diffs d
+            from adr.tokens_diffs d
             join core.headers h on h.height = d.height
             where address_id = core.address_id($1)
                 and h.timestamp <= $2
@@ -135,7 +135,7 @@ async def address_balance_history(
         select d.height
             {', h.timestamp' if timestamps else ''}
             , sum(d.value) over (order by d.height) as balance
-        from bal.{'erg' if token_id is None else 'tokens'}_diffs d
+        from adr.{'erg' if token_id is None else 'tokens'}_diffs d
         join core.headers h on h.height = d.height
         where d.address_id = core.address_id($1)
             {'' if token_id is None else 'and token_id = $4'}

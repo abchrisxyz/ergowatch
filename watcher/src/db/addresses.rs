@@ -1,6 +1,6 @@
-//! # balances
+//! # Address properties
 //!
-//! Process blocks into balance tables data.
+//! Process blocks into address properties tables data.
 
 pub(super) mod erg;
 pub(super) mod erg_diffs;
@@ -108,7 +108,7 @@ pub(super) fn bootstrap(client: &mut Client) -> anyhow::Result<()> {
     }
 
     client
-        .execute("update bal._log set bootstrapped = TRUE;", &[])
+        .execute("update adr._log set bootstrapped = TRUE;", &[])
         .unwrap();
 
     Ok(())
@@ -116,14 +116,14 @@ pub(super) fn bootstrap(client: &mut Client) -> anyhow::Result<()> {
 
 fn is_bootstrapped(client: &mut Client) -> bool {
     let row = client
-        .query_one("select bootstrapped from bal._log;", &[])
+        .query_one("select bootstrapped from adr._log;", &[])
         .unwrap();
     row.get(0)
 }
 
 fn constraints_are_set(client: &mut Client) -> bool {
     let row = client
-        .query_one("select constraints_set from bal._log;", &[])
+        .query_one("select constraints_set from adr._log;", &[])
         .unwrap();
     row.get(0)
 }
@@ -132,7 +132,7 @@ fn constraints_are_set(client: &mut Client) -> bool {
 fn get_bal_height(client: &mut Client) -> Option<i32> {
     // All tables are progressed in sync, so enough to probe only one.
     let row = client
-        .query_one("select max(height) from bal.erg_diffs;", &[])
+        .query_one("select max(height) from adr.erg_diffs;", &[])
         .unwrap();
     row.get(0)
 }
@@ -142,7 +142,7 @@ fn set_constraints(tx: &mut Transaction) {
     erg_diffs::set_constraints(tx);
     tokens::set_constraints(tx);
     tokens_diffs::set_constraints(tx);
-    tx.execute("update bal._log set constraints_set = TRUE;", &[])
+    tx.execute("update adr._log set constraints_set = TRUE;", &[])
         .unwrap();
 }
 

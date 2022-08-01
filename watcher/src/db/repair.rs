@@ -26,7 +26,7 @@
    accounting for supply on exchanges.
 */
 use super::DB;
-use crate::db::balances;
+use crate::db::addresses;
 use crate::db::cexs;
 use crate::db::metrics;
 use log::debug;
@@ -398,12 +398,12 @@ fn start(
 
 /// Create work tables for repair session.
 fn prepare(tx: &mut Transaction, at_height: i32) {
-    balances::replay::prepare(tx, at_height);
+    addresses::replay::prepare(tx, at_height);
 }
 
 /// Create work tables for repair session.
 fn step(tx: &mut Transaction, next_height: i32) {
-    balances::replay::step(tx, next_height);
+    addresses::replay::step(tx, next_height);
 }
 
 /// Cleanup

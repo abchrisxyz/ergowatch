@@ -8,7 +8,7 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
 
 pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
     tx.execute(
-        "delete from bal.erg_diffs where height = $1;",
+        "delete from adr.erg_diffs where height = $1;",
         &[&block.height],
     )
     .unwrap();
@@ -37,7 +37,7 @@ pub const INSERT_DIFFS_FOR_HEIGHT: &str = "
         join core.outputs op on op.tx_id = tx.id
         group by 1, 2, 3
     )
-    insert into bal.erg_diffs (address_id, height, tx_id, value)
+    insert into adr.erg_diffs (address_id, height, tx_id, value)
     select coalesce(i.address_id, o.address_id) as address_id
         , coalesce(i.height, o.height) as height
         , coalesce(i.tx_id, o.tx_id) as tx_id
@@ -50,12 +50,12 @@ pub const INSERT_DIFFS_FOR_HEIGHT: &str = "
 
 pub fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
-        "alter table bal.erg_diffs add primary key(address_id, height, tx_id);",
-        "alter table bal.erg_diffs alter column address_id set not null;",
-        "alter table bal.erg_diffs alter column height set not null;",
-        "alter table bal.erg_diffs alter column tx_id set not null;",
-        "alter table bal.erg_diffs alter column value set not null;",
-        "create index on bal.erg_diffs(height);",
+        "alter table adr.erg_diffs add primary key(address_id, height, tx_id);",
+        "alter table adr.erg_diffs alter column address_id set not null;",
+        "alter table adr.erg_diffs alter column height set not null;",
+        "alter table adr.erg_diffs alter column tx_id set not null;",
+        "alter table adr.erg_diffs alter column value set not null;",
+        "create index on adr.erg_diffs(height);",
     ];
 
     for statement in statements {

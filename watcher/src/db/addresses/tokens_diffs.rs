@@ -8,7 +8,7 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
 
 pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
     tx.execute(
-        "delete from bal.tokens_diffs where height = $1;",
+        "delete from adr.tokens_diffs where height = $1;",
         &[&block.height],
     )
     .unwrap();
@@ -47,7 +47,7 @@ with inputs as (
     join core.box_assets ba on ba.box_id = op.box_id
     group by 1, 2, 3, 4
 )
-insert into bal.tokens_diffs (address_id, token_id, height, tx_id, value)
+insert into adr.tokens_diffs (address_id, token_id, height, tx_id, value)
 select coalesce(i.address_id, o.address_id) as address_id
     , coalesce(i.token_id, o.token_id ) as token_id
     , coalesce(i.height, o.height) as height
@@ -62,13 +62,13 @@ group by 1, 2, 3, 4 having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0))
 
 pub fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
-        "alter table bal.tokens_diffs add primary key(address_id, token_id, height, tx_id);",
-        "alter table bal.tokens_diffs alter column address_id set not null;",
-        "alter table bal.tokens_diffs alter column token_id set not null;",
-        "alter table bal.tokens_diffs alter column height set not null;",
-        "alter table bal.tokens_diffs alter column tx_id set not null;",
-        "alter table bal.tokens_diffs alter column value set not null;",
-        "create index on bal.tokens_diffs(height);",
+        "alter table adr.tokens_diffs add primary key(address_id, token_id, height, tx_id);",
+        "alter table adr.tokens_diffs alter column address_id set not null;",
+        "alter table adr.tokens_diffs alter column token_id set not null;",
+        "alter table adr.tokens_diffs alter column height set not null;",
+        "alter table adr.tokens_diffs alter column tx_id set not null;",
+        "alter table adr.tokens_diffs alter column value set not null;",
+        "create index on adr.tokens_diffs(height);",
     ];
 
     for statement in statements {

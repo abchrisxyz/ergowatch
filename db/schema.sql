@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (2, 14);
+insert into ew.revision (major, minor) values (2, 15);
 
 
 -------------------------------------------------------------------------------
@@ -134,27 +134,27 @@ create table usp.boxes (
 
 
 -------------------------------------------------------------------------------
--- Balances
+-- Address properties
 ------------------------------------------------------------------------------- 
-create schema bal;
+create schema adr;
 
 -- Internal usage
-create table bal._log (
+create table adr._log (
 	singleton int primary key default 1,
 	constraints_set bool not null default FALSE,
 	bootstrapped bool not null default FALSE,
 	check(singleton = 1)
 );
-insert into bal._log(singleton) values (1);
+insert into adr._log(singleton) values (1);
 
 -- Running ERG balances
-create table bal.erg (
+create table adr.erg (
 	address_id bigint,
 	value bigint
 );
 
 -- Changes in ERG balances
-create table bal.erg_diffs (
+create table adr.erg_diffs (
 	address_id bigint,
 	height int,
 	tx_id text,
@@ -162,14 +162,14 @@ create table bal.erg_diffs (
 );
 
 -- Running token balances
-create table bal.tokens (
+create table adr.tokens (
 	address_id bigint,
 	token_id text,
 	value bigint
 );
 
 -- Changes in token balances
-create table bal.tokens_diffs (
+create table adr.tokens_diffs (
 	address_id bigint,
 	token_id text,
 	height int,
