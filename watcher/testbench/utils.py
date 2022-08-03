@@ -153,6 +153,8 @@ def assert_column_ge(
 ):
     """Assert check(column >= x) constraint is set"""
     with conn.cursor() as cur:
+        cur.execute(f"select count(*) from {schema}.{table};")
+        assert cur.fetchone()[0] > 0
         with pytest.raises(pg.errors.CheckViolation):
             cur.execute(f"update {schema}.{table} set {column} = {value - 1};")
         # Roll back to prevent psycopg.errors.InFailedSqlTransaction in subsequent call
@@ -164,6 +166,8 @@ def assert_column_le(
 ):
     """Assert check(column <= x) constraint is set"""
     with conn.cursor() as cur:
+        cur.execute(f"select count(*) from {schema}.{table};")
+        assert cur.fetchone()[0] > 0
         with pytest.raises(pg.errors.CheckViolation):
             cur.execute(f"update {schema}.{table} set {column} = {value + 1};")
         # Roll back to prevent psycopg.errors.InFailedSqlTransaction in subsequent call
