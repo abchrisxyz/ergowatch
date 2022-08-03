@@ -175,13 +175,11 @@ class TestPopulatedDB:
         )
         rows = cur.fetchall()
         assert len(rows) == 5
-        assert rows == [
-            (1000, scenario.address("base")),
-            (1000, scenario.address("con2")),
-            (1000, scenario.address("pub1")),
-            (1000, scenario.address("pub9")),
-            (1000, "dummy-token-minting-address"),
-        ]
+        assert (1000, scenario.address("base")) in rows
+        assert (1000, scenario.address("con2")) in rows
+        assert (1000, scenario.address("pub1")) in rows
+        assert (1000, scenario.address("pub9")) in rows
+        assert (1000, "dummy-token-minting-address") in rows
 
     def test_bal_tokens_diffs(self, cur, scenario):
         cur.execute(

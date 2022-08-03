@@ -7,7 +7,9 @@ from fixtures.scenario.genesis import GENESIS_ID
 from fixtures.config import temp_cfg
 from fixtures.db import bootstrap_db
 from fixtures.db import temp_db_class_scoped
+from fixtures.db import temp_db_rev0_class_scoped
 from fixtures.db import unconstrained_db_class_scoped
+from fixtures.db import fill_rev0_db
 
 from test_mtr_cex import SCENARIO_DESCRIPTION
 from utils import run_watcher
@@ -30,8 +32,9 @@ SCENARIO_DESCRIPTION = """
     block-x - fork of block b to be ignored/rolled back:
         con1-box1   50
         >
-        con9-box1   30
+        con9-box1    3
         pub9-box1   20 (con1-box1: 3000)
+        pub1-box0   27
     //------------------------------------------------------
 
     block-b-a
@@ -59,6 +62,12 @@ SCENARIO_DESCRIPTION = """
         >
         pub2-box2    2 (con1-box1: 400)
         pub1-box3    7 (con1-box1: 1600)
+
+    block-d
+        base-box2 950
+        >
+        base-box3 900
+        con2-box2  50
     """
 
 
@@ -197,7 +206,7 @@ class TestGenesis:
     Start with empty, unconstrained db.
     """
 
-    scenario = Scenario(SCENARIO_DESCRIPTION, 0, 1234560000000)
+    scenario = Scenario(SCENARIO_DESCRIPTION, 0, Scenario.GENESIS_TIMESTAMP + 100_000)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, unconstrained_db_class_scoped):
@@ -220,18 +229,58 @@ class TestGenesis:
         _test_db_state(synced_db, self.scenario)
 
 
+@pytest.mark.skip("Not implemented")
+@pytest.mark.order(ORDER)
+class TestMigrations:
+    """
+    Aplly migration to synced db
+    """
+
+    scenario = Scenario(SCENARIO_DESCRIPTION, 599_999, 1234560000000, main_only=True)
+
+    @pytest.fixture(scope="class")
+    def synced_db(self, temp_cfg, temp_db_rev0_class_scoped):
+        """
+        Run watcher with mock api and return cursor to test db.
+        """
+        with MockApi():
+            api = ApiUtil()
+            api.set_blocks(self.scenario.blocks)
+
+            # Prepare db
+            with pg.connect(temp_db_rev0_class_scoped) as conn:
+                fill_rev0_db(conn, self.scenario)
+
+            # Run
+            cp = run_watcher(temp_cfg, allow_migrations=True)
+            assert cp.returncode == 0
+            assert "Applying migration 1" in cp.stdout.decode()
+            assert "Applying migration 2" in cp.stdout.decode()
+
+            with pg.connect(temp_db_rev0_class_scoped) as conn:
+                yield conn
+
+    def test_db_state(self, synced_db: pg.Connection):
+        _test_db_state(synced_db, self.scenario)
+
+
 def _test_db_state(conn: pg.Connection, s: Scenario):
     assert_db_constraints(conn)
     with conn.cursor() as cur:
         assert_erg_balances(cur, s)
         assert_erg_diffs(cur, s)
+        assert_erg_mean_age_timestamps(cur, s)
         assert_tokens_diffs(cur, s)
         assert_tokens_balances(cur, s)
 
 
 def assert_db_constraints(conn: pg.Connection):
     # Erg bal
-    assert_pk(conn, "adr", "erg", ["address_id"])    assert_column_not_null(conn, "adr", "erg", "address_id")    assert_column_not_null(conn, "adr", "erg", "value")    assert_column_ge(conn, "adr", "erg", "value", 0)    assert_index(conn, "adr", "erg", "erg_value_idx")
+    assert_pk(conn, "adr", "erg", ["address_id"])    assert_column_not_null(conn, "adr", "erg", "address_id")    assert_column_not_null(conn, "adr", "erg", "value")
+    assert_column_not_null(conn, "adr", "erg", "mean_age_timestamp")
+    assert_column_ge(conn, "adr", "erg", "value", 0)
+    assert_index(conn, "adr", "erg", "erg_value_idx")
+
     # Erg diffs
     assert_pk(conn, "adr", "erg_diffs", ["address_id", "height", "tx_id"])    assert_column_not_null(conn, "adr", "erg_diffs", "address_id")    assert_column_not_null(conn, "adr", "erg_diffs", "height")    assert_column_not_null(conn, "adr", "erg_diffs", "tx_id")    assert_column_not_null(conn, "adr", "erg_diffs", "value")    assert_index(conn, "adr", "erg_diffs", "erg_diffs_height_idx")
     # Tokens bal
@@ -252,9 +301,9 @@ def assert_erg_balances(cur: pg.Cursor, s: Scenario):
     )
     rows = cur.fetchall()
     assert len(rows) == 5
-    assert rows[0] == (s.address("base"), 950)
+    assert rows[0] == (s.address("base"), 900)
     assert rows[1] == (s.address("con1"), 1)
-    assert rows[2] == (s.address("con2"), 40)
+    assert rows[2] == (s.address("con2"), 90)
     assert rows[3] == (s.address("pub1"), 7)
     assert rows[4] == (s.address("pub2"), 2)
 
@@ -272,7 +321,7 @@ def assert_erg_diffs(cur: pg.Cursor, s: Scenario):
         """
     )
     rows = cur.fetchall()
-    assert len(rows) == 13
+    assert len(rows) == 15
 
     bootstrap_tx_id = GENESIS_ID if s.parent_height == 0 else "bootstrap-tx"
     assert rows[0] == (h + 0, bootstrap_tx_id, s.address("base"), 1000)
@@ -293,6 +342,31 @@ def assert_erg_diffs(cur: pg.Cursor, s: Scenario):
 
     assert rows[11] == (h + 3, s.id("tx-c3"), s.address("pub2"), -1)
     assert rows[12] == (h + 3, s.id("tx-c3"), s.address("pub1"), 1)
+
+    assert rows[13] == (h + 4, s.id("tx-d1"), s.address("base"), -50)
+    assert rows[14] == (h + 4, s.id("tx-d1"), s.address("con2"), 50)
+
+
+def assert_erg_mean_age_timestamps(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        """
+        select a.address
+            , b.mean_age_timestamp
+        from adr.erg b
+        join core.addresses a on a.id = b.address_id
+        order by 1;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 5
+    assert rows[0] == (s.address("base"), s.parent_ts)
+    assert rows[1] == (s.address("con1"), s.parent_ts + 300_000)
+    assert rows[2] == (
+        s.address("con2"),
+        int(40 / 90.0 * (s.parent_ts + 200_000) + 50 / 90.0 * (s.parent_ts + 400_000)),
+    )
+    assert rows[3] == (s.address("pub1"), s.parent_ts + 200_000)
+    assert rows[4] == (s.address("pub2"), s.parent_ts + 300_000)
 
 
 def assert_tokens_balances(cur: pg.Cursor, s: Scenario):

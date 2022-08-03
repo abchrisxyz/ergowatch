@@ -376,13 +376,19 @@ def generate_bootstrap_sql_bal_erg(header: Header, outputs: List[Output]) -> str
 
     qry_adr = dedent(
         """
-        insert into adr.erg(address_id, value)        values ('{}', {});\n
+        insert into adr.erg(address_id, value, mean_age_timestamp)            select d.address_id                , sum(d.value)                , sum(d.value * h.timestamp) / sum(d.value)
+            from adr.erg_diffs d
+            join core.headers h on h.height = d.height
+            group by 1
+        ;\n
     """
     )
     return "".join(
         [
-            qry_diffs.format(box.address_id, header.height, box.tx_id, box.value)
-            + qry_adr.format(box.address_id, box.value)            for box in outputs
+            qry_diffs.format(box.address_id, header.height, box.tx_id, box.value)            for box in outputs
+        ]
+        + [
+            qry_adr,
         ]
     )
 

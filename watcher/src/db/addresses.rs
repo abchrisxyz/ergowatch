@@ -34,7 +34,7 @@ pub(super) fn bootstrap(client: &mut Client) -> anyhow::Result<()> {
     if is_bootstrapped(client) {
         return Ok(());
     }
-    info!("Bootstrapping balances");
+    info!("Bootstrapping address properties");
 
     if !constraints_are_set(client) {
         // Bootstrapping relies on indexes, so constraints are set now.
@@ -43,38 +43,38 @@ pub(super) fn bootstrap(client: &mut Client) -> anyhow::Result<()> {
         tx.commit()?;
     }
 
-    // Retrieve height range to be bootstrapped
-    let row = client.query_one(
-        "
-        select min(height) as min_height
-            , max(height) as max_height
-        from core.headers h
-        ;",
-        &[],
-    )?;
-    let first_height = match get_bal_height(client) {
-        Some(h) => {
-            let first_core_h: i32 = row.get("min_height");
-            std::cmp::max(first_core_h, h + 1)
-        }
-        None => row.get("min_height"),
+    // Retrieve height and timestamps to process
+    let sync_height = match get_sync_height(client) {
+        Some(h) => h,
+        None => -1,
     };
-    let last_height: i32 = row.get("max_height");
+    let blocks: Vec<(i32, i64)> = client
+        .query(
+            "
+            select height, timestamp
+            from core.headers
+            where height > $1;",
+            &[&sync_height],
+        )
+        .unwrap()
+        .iter()
+        .map(|r| (r.get(0), r.get(1)))
+        .collect();
 
     // Bootstrapping will be performed in batches of 1000
     let batch_size = 1000;
-    let heights: Vec<_> = (first_height..last_height + 1).collect();
-    let batches = heights.chunks(batch_size);
+    let batches = blocks.chunks(batch_size);
     let nb_batches = batches.len();
-    for (ibatch, batch_heights) in batches.enumerate() {
+
+    for (ibatch, batch_blocks) in batches.enumerate() {
         let timer = Instant::now();
         let mut tx = client.transaction()?;
 
         // Prepare statements
         let stmt_erg_diffs_insert =
             tx.prepare_typed(erg_diffs::INSERT_DIFFS_FOR_HEIGHT, &[Type::INT4])?;
-        let stmt_erg_update = tx.prepare_typed(erg::UPDATE_BALANCES, &[Type::INT4])?;
-        let stmt_erg_insert = tx.prepare_typed(erg::INSERT_BALANCES, &[Type::INT4])?;
+        let stmt_erg_update = tx.prepare_typed(erg::UPDATE_BALANCES, &[Type::INT4, Type::INT8])?;
+        let stmt_erg_insert = tx.prepare_typed(erg::INSERT_BALANCES, &[Type::INT4, Type::INT8])?;
         let stmt_erg_delete = tx.prepare_typed(erg::DELETE_ZERO_BALANCES, &[])?;
         let stmt_tokens_diffs_insert =
             tx.prepare_typed(tokens_diffs::INSERT_DIFFS_FOR_HEIGHT, &[Type::INT4])?;
@@ -82,18 +82,20 @@ pub(super) fn bootstrap(client: &mut Client) -> anyhow::Result<()> {
         let stmt_tokens_insert = tx.prepare_typed(tokens::INSERT_BALANCES, &[Type::INT4])?;
         let stmt_tokens_delete = tx.prepare_typed(tokens::DELETE_ZERO_BALANCES, &[])?;
 
-        for h in batch_heights {
+        for (height, timestamp) in batch_blocks {
             // Diffs go first
-            tx.execute(&stmt_erg_diffs_insert, &[&h]).unwrap();
+            tx.execute(&stmt_erg_diffs_insert, &[&height]).unwrap();
             // then balances
-            tx.execute(&stmt_erg_update, &[&h]).unwrap();
-            tx.execute(&stmt_erg_insert, &[&h]).unwrap();
+            tx.execute(&stmt_erg_update, &[&height, &timestamp])
+                .unwrap();
+            tx.execute(&stmt_erg_insert, &[&height, &timestamp])
+                .unwrap();
             tx.execute(&stmt_erg_delete, &[]).unwrap();
             // Same for tokens, diffs first
-            tx.execute(&stmt_tokens_diffs_insert, &[&h]).unwrap();
+            tx.execute(&stmt_tokens_diffs_insert, &[&height]).unwrap();
             // then balances
-            tx.execute(&stmt_tokens_update, &[&h]).unwrap();
-            tx.execute(&stmt_tokens_insert, &[&h]).unwrap();
+            tx.execute(&stmt_tokens_update, &[&height]).unwrap();
+            tx.execute(&stmt_tokens_insert, &[&height]).unwrap();
             tx.execute(&stmt_tokens_delete, &[]).unwrap();
         }
 
@@ -129,7 +131,7 @@ fn constraints_are_set(client: &mut Client) -> bool {
 }
 
 /// Get sync height of balance tables.
-fn get_bal_height(client: &mut Client) -> Option<i32> {
+fn get_sync_height(client: &mut Client) -> Option<i32> {
     // All tables are progressed in sync, so enough to probe only one.
     let row = client
         .query_one("select max(height) from adr.erg_diffs;", &[])

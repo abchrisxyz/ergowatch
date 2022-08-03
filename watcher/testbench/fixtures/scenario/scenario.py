@@ -18,6 +18,7 @@ class Scenario:
 
     DT = TIMESTAMP_INTERVAL
     DEFAULT_DIFFICULTY = DEFAULT_DIFFICULTY
+    GENESIS_TIMESTAMP = GENSIS_TIMESTAMP
 
     def __init__(
         self,

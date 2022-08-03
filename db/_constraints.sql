@@ -124,6 +124,7 @@ alter table usp.boxes alter column box_id set not null;
 alter table adr.erg add primary key(address_id);
 alter table adr.erg alter column address_id set not null;
 alter table adr.erg alter column value set not null;
+alter table adr.erg alter mean_age_timestamp set not null;
 alter table adr.erg add check (value >= 0);
 create index on adr.erg(value);
 

@@ -150,7 +150,8 @@ insert into adr._log(singleton) values (1);
 -- Running ERG balances
 create table adr.erg (
 	address_id bigint,
-	value bigint
+	value bigint,
+	mean_age_timestamp bigint
 );
 
 -- Changes in ERG balances
