@@ -1,5 +1,5 @@
 /*****************************************************************************
-	This is a snapshot of the db schema that shipped with v0.4, prior to any
+	This is a snapshot of the db schema that shipped with v0.5, prior to any
 	migrations.	It's sole purpose is to test db migrations.
 *****************************************************************************/
 -------------------------------------------------------------------------------
@@ -12,7 +12,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (1, 0);
+insert into ew.revision (major, minor) values (2, 0);
 
 create table ew.constraints (
 	singleton int primary key default 1,
@@ -26,6 +26,11 @@ insert into ew.constraints (singleton) values (1);
 -- Core
 ------------------------------------------------------------------------------- 
 create schema core;
+
+create table core.addresses (
+	id bigint,
+	address text
+);
 
 create table core.headers (
 	height int,
@@ -50,7 +55,7 @@ create table core.outputs (
 	tx_id text,
 	header_id text,
 	creation_height int,
-	address text,
+	address_id bigint,
 	index int,
 	value bigint,
 	size integer -- box size in bytes
@@ -143,13 +148,13 @@ insert into bal._log(singleton) values (1);
 
 -- Running ERG balances
 create table bal.erg (
-	address text,
+	address_id bigint,
 	value bigint
 );
 
 -- Changes in ERG balances
 create table bal.erg_diffs (
-	address text,
+	address_id bigint,
 	height int,
 	tx_id text,
 	value bigint
@@ -157,14 +162,14 @@ create table bal.erg_diffs (
 
 -- Running token balances
 create table bal.tokens (
-	address text,
+	address_id bigint,
 	token_id text,
 	value bigint
 );
 
 -- Changes in token balances
 create table bal.tokens_diffs (
-	address text,
+	address_id bigint,
 	token_id text,
 	height int,
 	tx_id text,

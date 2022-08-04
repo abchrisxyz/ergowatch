@@ -8,13 +8,27 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (1, 14);
+insert into ew.revision (major, minor) values (2, 14);
 
 
 -------------------------------------------------------------------------------
 -- Core
 ------------------------------------------------------------------------------- 
 create schema core;
+
+create table core.addresses (
+	id bigint,
+	address text
+);
+
+create function core.address_id(_address text) returns bigint as '
+	select id
+	from core.addresses
+	where md5(address) = md5($1)
+		and address = $1;'
+    language sql
+    immutable
+    returns null on null input;
 
 create table core.headers (
 	height int,
@@ -39,7 +53,7 @@ create table core.outputs (
 	tx_id text,
 	header_id text,
 	creation_height int,
-	address text,
+	address_id bigint,
 	index int,
 	value bigint,
 	size integer -- box size in bytes
@@ -131,13 +145,13 @@ insert into bal._log(singleton) values (1);
 
 -- Running ERG balances
 create table bal.erg (
-	address text,
+	address_id bigint,
 	value bigint
 );
 
 -- Changes in ERG balances
 create table bal.erg_diffs (
-	address text,
+	address_id bigint,
 	height int,
 	tx_id text,
 	value bigint
@@ -145,14 +159,14 @@ create table bal.erg_diffs (
 
 -- Running token balances
 create table bal.tokens (
-	address text,
+	address_id bigint,
 	token_id text,
 	value bigint
 );
 
 -- Changes in token balances
 create table bal.tokens_diffs (
-	address text,
+	address_id bigint,
 	token_id text,
 	height int,
 	tx_id text,
@@ -205,7 +219,7 @@ create table cex.addresses_ignored (
 	The PK of cex.addresses is the address. An address can therefore
 	be linked to a single CEX only.
 	However, we can't exclude the possibility of running into addresses
-	linked to more than one CEX. When an known address is linked to
+	linked to more than one CEX. When a known address is linked to
 	a second CEX, it will get removed from cex.addresses and stored
 	here for reference.
  */

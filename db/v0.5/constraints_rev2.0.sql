@@ -6,6 +6,12 @@
 -------------------------------------------------------------------------------
 -- Core
 ------------------------------------------------------------------------------- 
+alter table core.addresses add primary key (id);
+alter table core.addresses alter column id set not null;
+alter table core.addresses alter column address set not null;
+create index on core.addresses (md5(address));
+alter table core.addresses add exclude using hash (address with=);
+
 alter table core.headers add primary key (height);
 alter table core.headers alter column id set not null;
 alter table core.headers alter column parent_id set not null;
@@ -26,7 +32,7 @@ create index on core.transactions(height);
 alter table core.outputs add primary key (box_id);
 alter table core.outputs alter column tx_id set not null;
 alter table core.outputs alter column header_id set not null;
-alter table core.outputs alter column address set not null;
+alter table core.outputs alter column address_id set not null;
 alter table core.outputs alter column size set not null;
 alter table core.outputs add foreign key (tx_id)
 	references core.transactions (id)
@@ -34,9 +40,10 @@ alter table core.outputs add foreign key (tx_id)
 alter table core.outputs add foreign key (header_id)
 	references core.headers (id)
 	on delete cascade;
+alter table core.outputs add foreign key (address_id) references core.addresses (id);
 create index on core.outputs(tx_id);
 create index on core.outputs(header_id);
-create index on core.outputs(address);
+create index on core.outputs(address_id);
 create index on core.outputs(index);
 
 alter table core.inputs add primary key (box_id);
@@ -104,18 +111,22 @@ alter table usp.boxes add primary key (box_id);
 -------------------------------------------------------------------------------
 -- Balances
 -------------------------------------------------------------------------------
-alter table bal.erg add primary key(address);
+alter table bal.erg add primary key(address_id);
+alter table bal.erg alter column address_id set not null;
 alter table bal.erg add check (value >= 0);
 create index on bal.erg(value);
 
-alter table bal.erg_diffs add primary key(address, height, tx_id);
+alter table bal.erg_diffs add primary key(address_id, height, tx_id);
+alter table bal.erg alter column address_id set not null;
 create index on bal.erg_diffs(height);
 
-alter table bal.tokens add primary key(address, token_id);
+alter table bal.tokens add primary key(address_id, token_id);
+alter table bal.tokens alter column address_id set not null;
 alter table bal.tokens add check (value >= 0);
 create index on bal.tokens(value);
 
-alter table bal.tokens_diffs add primary key(address, token_id, height, tx_id);
+alter table bal.tokens_diffs add primary key(address_id, token_id, height, tx_id);
+alter table bal.tokens_diffs alter column address_id set not null;
 create index on bal.tokens_diffs(height);
 
 update bal._log set constraints_set = TRUE;

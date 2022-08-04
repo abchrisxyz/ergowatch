@@ -17,7 +17,7 @@ mod mig_012;
 mod mig_013;
 mod mig_014;
 
-const CURRENT_REVISION_MAJOR: i32 = 1;
+const CURRENT_REVISION_MAJOR: i32 = 2;
 const CURRENT_REVISION_MINOR: i32 = 14;
 
 struct Revision {
