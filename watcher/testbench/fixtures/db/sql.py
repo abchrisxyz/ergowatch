@@ -46,9 +46,16 @@ class Transaction:
 
 
 @dataclass
+class Address:
+    id: int
+    address: str
+
+
+@dataclass
 class Output:
     box_id: int
     address: str
+    address_id: int
     index: int
     header_id: str
     creation_height: int
@@ -146,6 +153,7 @@ def generate_rev0_sql(scenario: Scenario) -> str:
     registers = extract_registers(scenario.blocks)
     sys_params = extract_system_parameters(scenario.blocks)
     unhandled_ext_fields = extract_unhandled_extension_fields(scenario.blocks)
+    addresses = extract_addresses(outputs)
 
     sql = ""
     # Core tables
@@ -153,6 +161,8 @@ def generate_rev0_sql(scenario: Scenario) -> str:
         sql += format_header_sql(header)
     for tx in transactions:
         sql += format_transaction_sql(tx)
+    for address in addresses:
+        sql += format_address_sql(address)
     for box in outputs:
         sql += format_output_sql(box)
     for box in inputs:
@@ -187,7 +197,7 @@ def generate_rev0_sql(scenario: Scenario) -> str:
         ), inputs as (
             select tx.height
                 , tx.id as tx_id
-                , op.address
+                , op.address_id
                 , sum(op.value) as value
             from transactions tx
             join core.inputs ip on ip.tx_id = tx.id
@@ -196,20 +206,20 @@ def generate_rev0_sql(scenario: Scenario) -> str:
         ), outputs as (
             select tx.height
                 , tx.id as tx_id
-                , op.address
+                , op.address_id
                 , sum(op.value) as value
             from transactions tx
             join core.outputs op on op.tx_id = tx.id
             group by 1, 2, 3
         )
-        insert into bal.erg_diffs (address, height, tx_id, value)
-        select coalesce(i.address, o.address) as address
+        insert into bal.erg_diffs (address_id, height, tx_id, value)
+        select coalesce(i.address_id, o.address_id) as address_id
             , coalesce(i.height, o.height) as height
             , coalesce(i.tx_id, o.tx_id) as tx_id
             , sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) as value
         from inputs i
         full outer join outputs o
-            on o.address = i.address
+            on o.address_id = i.address_id
             and o.tx_id = i.tx_id
         group by 1, 2, 3 having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) <> 0
         order by 2, 3;
@@ -217,8 +227,8 @@ def generate_rev0_sql(scenario: Scenario) -> str:
 
     # ERG balances
     sql += """
-        insert into bal.erg(address, value)
-        select address,
+        insert into bal.erg(address_id, value)
+        select address_id,
             sum(value)
         from bal.erg_diffs
         group by 1 having sum(value) <> 0
@@ -234,7 +244,7 @@ def generate_rev0_sql(scenario: Scenario) -> str:
             )
             select tx.height
                 , tx.id as tx_id
-                , op.address
+                , op.address_id
                 , ba.token_id
                 , sum(ba.amount) as value
             from transactions tx
@@ -249,7 +259,7 @@ def generate_rev0_sql(scenario: Scenario) -> str:
             )
             select tx.height
                 , tx.id as tx_id
-                , op.address
+                , op.address_id
                 , ba.token_id
                 , sum(ba.amount) as value
             from transactions tx
@@ -257,15 +267,15 @@ def generate_rev0_sql(scenario: Scenario) -> str:
             join core.box_assets ba on ba.box_id = op.box_id
             group by 1, 2, 3, 4
         )
-        insert into bal.tokens_diffs (address, token_id, height, tx_id, value)
-        select coalesce(i.address, o.address) as address
+        insert into bal.tokens_diffs (address_id, token_id, height, tx_id, value)
+        select coalesce(i.address_id, o.address_id) as address
             , coalesce(i.token_id, o.token_id ) as token_id
             , coalesce(i.height, o.height) as height
             , coalesce(i.tx_id, o.tx_id) as tx_id
             , sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) as value
         from inputs i
         full outer join outputs o
-            on o.address = i.address
+            on o.address_id = i.address_id
             and o.tx_id = i.tx_id
             and o.token_id = i.token_id
         group by 1, 2, 3, 4 having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) <> 0;
@@ -273,8 +283,8 @@ def generate_rev0_sql(scenario: Scenario) -> str:
 
     # Token balances
     sql += """
-        insert into bal.tokens(address, token_id, value)
-        select address,
+        insert into bal.tokens(address_id, token_id, value)
+        select address_id,
             token_id,
             sum(value)
         from bal.tokens_diffs
@@ -314,11 +324,14 @@ def generate_bootstrap_sql(scenario: Scenario) -> str:
     tx = extract_existing_transaction(scenario.blocks)
     outputs = extract_existing_outputs(scenario)
     tokens = extract_existing_tokens(scenario.blocks)
+    addresses = extract_addresses(outputs)
 
     sql = ""
     # Core tables
     sql += format_header_sql(header)
     sql += format_transaction_sql(tx)
+    for address in addresses:
+        sql += format_address_sql(address)
     for box in outputs:
         sql += format_output_sql(box)
     for token in tokens:
@@ -356,21 +369,21 @@ def generate_bootstrap_sql_bal_erg(header: Header, outputs: List[Output]) -> str
     """
     qry_diffs = dedent(
         """
-        insert into bal.erg_diffs (address, height, tx_id, value)
+        insert into bal.erg_diffs (address_id, height, tx_id, value)
         values ('{}', {}, '{}', {});\n
     """
     )
 
     qry_bal = dedent(
         """
-        insert into bal.erg(address, value)
+        insert into bal.erg(address_id, value)
         values ('{}', {});\n
     """
     )
     return "".join(
         [
-            qry_diffs.format(box.address, header.height, box.tx_id, box.value)
-            + qry_bal.format(box.address, box.value)
+            qry_diffs.format(box.address_id, header.height, box.tx_id, box.value)
+            + qry_bal.format(box.address_id, box.value)
             for box in outputs
         ]
     )
@@ -492,37 +505,47 @@ def extract_transactions(blocks: List[Dict]) -> Header:
 
 def extract_existing_outputs(scenario: Scenario) -> List[Output]:
     """
-    Any boxes referenced in transaction data-(inputs) and tokens
+    Any boxes referenced in transaction data-(inputs) and tokens.
     """
     header = extract_existing_header(scenario.blocks)
     created_outputs = set()
     outputs = []
     index = 0
+    address_ids = {}
+    last_address_id = 0
     for block in scenario.blocks:
         for tx in block["blockTransactions"]["transactions"]:
             for box in tx["inputs"]:
                 if box["boxId"] not in created_outputs:
-                    outputs.append(
-                        Output(
-                            box_id=box["boxId"],
-                            address=scenario.address(box["boxId"]),
-                            header_id=header.id,
-                            creation_height=header.height,
-                            index=index,
-                        )
+                    address = scenario.address(box["boxId"])
+                    if address not in address_ids:
+                        last_address_id += 1
+                        address_ids[address] = last_address_id
+                    output = Output(
+                        box_id=box["boxId"],
+                        address=address,
+                        address_id=address_ids[address],
+                        header_id=header.id,
+                        creation_height=header.height,
+                        index=index,
                     )
+                    outputs.append(output)
                     index += 1
             for box in tx["dataInputs"]:
                 if box["boxId"] not in created_outputs:
-                    outputs.append(
-                        Output(
-                            box_id=box["boxId"],
-                            address="dummy-data-input-box-address",
-                            header_id=header.id,
-                            creation_height=header.height,
-                            index=index,
-                        )
+                    address = "dummy-data-input-box-address"
+                    if address not in address_ids:
+                        last_address_id += 1
+                        address_ids[address] = last_address_id
+                    output = Output(
+                        box_id=box["boxId"],
+                        address=address,
+                        address_id=address_ids[address],
+                        header_id=header.id,
+                        creation_height=header.height,
+                        index=index,
                     )
+                    outputs.append(output)
                     index = +1
             for output in tx["outputs"]:
                 created_outputs.add(output["boxId"])
@@ -532,36 +555,65 @@ def extract_existing_outputs(scenario: Scenario) -> List[Output]:
     tokens = extract_existing_tokens(scenario.blocks)
     for token in tokens:
         index = len(outputs)
-        outputs.append(
-            Output(
-                box_id=token.box_id,
-                address=f"dummy-token-minting-address",
-                header_id=header.id,
-                creation_height=header.height,
-                index=index,
-            )
+        address = "dummy-token-minting-address"
+        if address not in address_ids:
+            last_address_id += 1
+            address_ids[address] = last_address_id
+        output = Output(
+            box_id=token.box_id,
+            address=address,
+            address_id=address_ids[address],
+            header_id=header.id,
+            creation_height=header.height,
+            index=index,
         )
+        outputs.append(output)
     return outputs
 
 
 def extract_outputs(scenario: Scenario) -> List[Output]:
     """
-    All output boxes
+    All output boxes.
+
+    Returns list of outputs and address to address_id map.
     """
-    return extract_existing_outputs(scenario) + [
-        Output(
-            box_id=box["boxId"],
-            address=scenario.address(box["boxId"]),
-            index=idx,
-            header_id=b["header"]["id"],
-            creation_height=box["creationHeight"],
-            tx_id=tx["id"],
-            value=box["value"],
-        )
-        for b in scenario.blocks
-        for tx in b["blockTransactions"]["transactions"]
-        for idx, box in enumerate(tx["outputs"])
-    ]
+    outputs = extract_existing_outputs(scenario)
+    address_ids = {b.address: b.address_id for b in outputs}
+    last_address_id = max(address_ids.values())
+
+    for b in scenario.blocks:
+        for tx in b["blockTransactions"]["transactions"]:
+            for idx, box in enumerate(tx["outputs"]):
+                address = scenario.address(box["boxId"])
+                if address not in address_ids:
+                    last_address_id += 1
+                    address_ids[address] = last_address_id
+                output = Output(
+                    box_id=box["boxId"],
+                    address=address,
+                    address_id=address_ids[address],
+                    index=idx,
+                    header_id=b["header"]["id"],
+                    creation_height=box["creationHeight"],
+                    tx_id=tx["id"],
+                    value=box["value"],
+                )
+                outputs.append(output)
+    return outputs
+
+
+def extract_addresses(outputs: List[Output]) -> List[Address]:
+    """
+    Extract unique addresses from collection of outputs.
+    """
+    addresses = []
+    known_ids = set()
+    for box in outputs:
+        if box.address_id in known_ids:
+            continue
+        addresses.append(Address(id=box.address_id, address=box.address))
+        known_ids.add(box.address_id)
+    return addresses
 
 
 def extract_inputs(blocks: List[Dict]) -> List[Input]:
@@ -772,16 +824,28 @@ def format_transaction_sql(tx: Transaction):
     )
 
 
+def format_address_sql(a: List):
+    return dedent(
+        f"""
+        insert into core.addresses (id, address)
+        values (
+            '{a.id}',
+            '{a.address}'
+        );
+    """
+    )
+
+
 def format_output_sql(box: Output):
     return dedent(
         f"""
-        insert into core.outputs(box_id, tx_id, header_id, creation_height, address, index, value, size)
+        insert into core.outputs(box_id, tx_id, header_id, creation_height, address_id, index, value, size)
         values (
             '{box.box_id}',
             '{box.tx_id}',
             '{box.header_id}',
             {box.creation_height},
-            '{box.address}',
+            {box.address_id},
             {box.index},
             {box.value},
             {box.size}

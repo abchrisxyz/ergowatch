@@ -20,12 +20,12 @@ CONSTRAINTS_PATH = (
 
 # Initial schema (to test migrations)
 SCHEMA_PATH_REV0 = (
-    Path(__file__).parent.parent.absolute() / Path("../../../db/v0.4/schema_rev1.0.sql")
+    Path(__file__).parent.parent.absolute() / Path("../../../db/v0.5/schema_rev2.0.sql")
 ).absolute()
 
 CONSTRAINTS_PATH_REV0 = (
     Path(__file__).parent.parent.absolute()
-    / Path("../../../db/v0.4/constraints_rev1.0.sql")
+    / Path("../../../db/v0.5/constraints_rev2.0.sql")
 ).absolute()
 
 

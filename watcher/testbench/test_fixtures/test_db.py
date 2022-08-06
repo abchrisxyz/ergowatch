@@ -136,7 +136,15 @@ class TestPopulatedDB:
 
     def test_db_state_bal(self, cur, scenario):
         # Erg diffs
-        cur.execute("select height, value, address from bal.erg_diffs;")
+        cur.execute(
+            """
+            select d.height
+                , d.value
+                , a.address
+            from bal.erg_diffs d
+            left join core.addresses a on a.id = d.address_id;
+            """
+        )
         rows = cur.fetchall()
         assert len(rows) == 5
         assert rows == [
@@ -148,7 +156,14 @@ class TestPopulatedDB:
         ]
 
         # Erg balances
-        cur.execute("select value, address from bal.erg;")
+        cur.execute(
+            """
+            select b.value
+                , a.address
+            from bal.erg b
+            left join core.addresses a on a.id = b.address_id;
+            """
+        )
         rows = cur.fetchall()
         assert len(rows) == 5
         assert rows == [
@@ -200,192 +215,6 @@ class TestRev0DB:
         return Scenario(desc, 599_999, 1234560100000, main_only=True)
 
     @pytest.fixture(scope="class")
-    def blocks(self):
-        """
-        block a:
-            base-box1 1000 --> base-box2  950
-                               con1-box1   50
-
-            con2-box1 1000 --> con2-box2 1000 (con2-box1 50)
-            pub1-box1 1000     pub1-box2  999
-                               fees-box1    1
-
-        ----------------fork-----------------
-        block x:
-            base-box1 1000 --> base-box2  950
-                               con1-box1   50
-        -------------------------------------
-
-        block b:
-            pub1-box2  999 --> pub2-box1  999
-        """
-        con1 = AC.get("con1")
-        con2 = AC.get("con2")
-        pub1 = AC.get("pub1")
-        pub2 = AC.get("pub2")
-
-        tx_a1 = {
-            "id": "tx-a1",
-            "inputs": [
-                {
-                    "boxId": "base-box1",
-                }
-            ],
-            "dataInputs": [],
-            "outputs": [
-                {
-                    "boxId": "base-box2",
-                    "value": 950,
-                    "ergoTree": AC.coinbase.ergo_tree,
-                    "assets": [],
-                    "creationHeight": 600000,
-                    "additionalRegisters": {},
-                    "transactionId": "tx-a1",
-                    "index": 0,
-                },
-                {
-                    "boxId": "con1-box1",
-                    "value": 50,
-                    "ergoTree": con1.ergo_tree,
-                    "assets": [],
-                    "creationHeight": 600000,
-                    "additionalRegisters": {},
-                    "transactionId": "tx-a1",
-                    "index": 1,
-                },
-            ],
-            "size": 344,
-        }
-
-        tx_a2 = {
-            "id": "tx-a2",
-            "inputs": [
-                {
-                    "boxId": "con2-box1",
-                },
-                {
-                    "boxId": "pub1-box1",
-                },
-            ],
-            "dataInputs": [],
-            "outputs": [
-                {
-                    "boxId": "con2-box2",
-                    "value": 1000,
-                    "ergoTree": con2.ergo_tree,
-                    "assets": [
-                        {
-                            "tokenId": "con2-box1",
-                            "amount": 50,
-                        }
-                    ],
-                    "creationHeight": 599998,
-                    "additionalRegisters": {
-                        "R4": "0703553448c194fdd843c87d080f5e8ed983f5bb2807b13b45a9683bba8c7bfb5ae8",
-                        "R5": "0e2098479c7d306cccbd653301102762d79515fa04c6f6b35056aaf2bd77a7299bb8",
-                        "R6": "05a4c3edd9998877",
-                    },
-                    "transactionId": "tx-a2",
-                    "index": 0,
-                },
-                {
-                    "boxId": "pub1-box2",
-                    "value": 999,
-                    "ergoTree": pub1.ergo_tree,
-                    "assets": [],
-                    "creationHeight": 599998,
-                    "additionalRegisters": {},
-                    "transactionId": "tx-a2",
-                    "index": 1,
-                },
-                {
-                    "boxId": "fees-box1",
-                    "value": 1,
-                    "ergoTree": AC.fees.ergo_tree,
-                    "assets": [],
-                    "creationHeight": 599998,
-                    "additionalRegisters": {},
-                    "transactionId": "tx-a2",
-                    "index": 2,
-                },
-            ],
-            "size": 674,
-        }
-
-        tx_b1 = {
-            "id": "tx-b1",
-            "inputs": [
-                {
-                    "boxId": "pub1-box2",
-                }
-            ],
-            "dataInputs": [],
-            "outputs": [
-                {
-                    "boxId": "pub2-box1",
-                    "value": 999,
-                    "ergoTree": pub2.ergo_tree,
-                    "assets": [],
-                    "creationHeight": 600001,
-                    "additionalRegisters": {},
-                    "transactionId": "tx-b1",
-                    "index": 0,
-                }
-            ],
-            "size": 100,
-        }
-
-        block_a = {
-            "header": {
-                "votes": "000000",
-                "timestamp": 1234560100000,
-                "height": 600000,
-                "id": "block-a",
-                "parentId": "parent-of-block-a",
-            },
-            "blockTransactions": {
-                "headerId": "block-a",
-                "transactions": [tx_a1, tx_a2],
-                "blockVersion": 2,
-                "size": 1155,
-            },
-        }
-
-        block_x = {
-            "header": {
-                "votes": "000000",
-                "timestamp": 1234560100000,
-                "height": 600000,
-                "id": "block-x",
-                "parentId": "parent-of-block-a",
-            },
-            "blockTransactions": {
-                "headerId": "block-a",
-                "transactions": [tx_a1],
-                "blockVersion": 2,
-                "size": 1155,
-            },
-        }
-
-        block_b = {
-            "header": {
-                "votes": "000000",
-                "timestamp": 1234560200000,
-                "height": 600001,
-                "id": "block-b",
-                "parentId": "block-a",
-            },
-            "blockTransactions": {
-                "headerId": "block-b",
-                "transactions": [tx_b1],
-                "blockVersion": 2,
-                "size": 1155,
-            },
-        }
-
-        return [block_a, block_x, block_b]
-
-    @pytest.fixture(scope="class")
     def cur(self, temp_db_rev0_class_scoped, scenario):
         with pg.connect(temp_db_rev0_class_scoped) as conn:
             fill_rev0_db(conn, scenario)
@@ -417,14 +246,16 @@ class TestRev0DB:
     def test_core_outputs(self, cur, scenario):
         cur.execute(
             """
-            select header_id
-                , creation_height
-                , tx_id
-                , index
-                , box_id
-                , value
-                , address
-            from core.outputs order by creation_height, tx_id, index;
+            select o.header_id
+                , o.creation_height
+                , o.tx_id
+                , o.index
+                , o.box_id
+                , o.value
+                , a.address
+            from core.outputs o
+            left join core.addresses a on a.id = o.address_id
+            order by creation_height, tx_id, index;
             """
         )
         rows = cur.fetchall()
@@ -600,7 +431,16 @@ class TestRev0DB:
         assert scenario.id("pub2-box1") in box_ids
 
     def test_bal_erg_diffs(self, cur, scenario):
-        cur.execute("select height, tx_id, value, address from bal.erg_diffs;")
+        cur.execute(
+            """
+            select d.height
+                , d.tx_id
+                , d.value
+                , a.address
+            from bal.erg_diffs d
+            left join core.addresses a on a.id = d.address_id;
+            """
+        )
         rows = cur.fetchall()
         assert len(rows) == 9
         assert (599_999, BOOTSTRAP_TX_ID, 1000, scenario.address("base")) in rows
@@ -614,7 +454,15 @@ class TestRev0DB:
         assert (600_001, scenario.id("tx-b1"), 999, scenario.address("pub2")) in rows
 
     def test_bal_erg(self, cur, scenario):
-        cur.execute("select value, address from bal.erg order by 1;")
+        cur.execute(
+            """
+            select b.value
+                , a.address
+            from bal.erg b
+            left join core.addresses a on a.id = b.address_id
+            order by 1;
+            """
+        )
         rows = cur.fetchall()
         assert len(rows) == 5
         assert rows == [
@@ -627,7 +475,15 @@ class TestRev0DB:
 
     def test_bal_tokens_diffs(self, cur, scenario):
         cur.execute(
-            "select height, token_id, tx_id, value, address from bal.tokens_diffs;"
+            """
+            select height
+                , token_id
+                , tx_id
+                , value
+                , address
+            from bal.tokens_diffs d
+            left join core.addresses a on a.id = d.address_id;
+            """
         )
         rows = cur.fetchall()
         assert len(rows) == 1
@@ -642,7 +498,16 @@ class TestRev0DB:
         ]
 
     def test_bal_tokens(self, cur, scenario):
-        cur.execute("select value, token_id, address from bal.tokens order by 2;")
+        cur.execute(
+            """
+            select b.value
+                , b.token_id
+                , a.address
+            from bal.tokens b
+            left join core.addresses a on a.id = b.address_id
+            order by 2;
+            """
+        )
         rows = cur.fetchall()
         assert len(rows) == 1
         assert rows == [
@@ -716,6 +581,7 @@ class TestHelpers:
         assert box.box_id == scenario.id("base-box1")
         assert box.header_id == genesis_header_id
         assert box.creation_height == 599_999
+        assert box.address_id == 1
         assert box.address == scenario.address("base-box1")
         assert box.index == 0
         assert box.value == 1000
@@ -724,6 +590,7 @@ class TestHelpers:
         assert box.box_id == scenario.id("con2-box1")
         assert box.header_id == genesis_header_id
         assert box.creation_height == 599_999
+        assert box.address_id == 2
         assert box.address == scenario.address("con2-box1")
         assert box.index == 1
         assert box.value == 1000
@@ -732,6 +599,7 @@ class TestHelpers:
         assert box.box_id == scenario.id("pub1-box1")
         assert box.header_id == genesis_header_id
         assert box.creation_height == 599_999
+        assert box.address_id == 3
         assert box.address == scenario.address("pub1-box1")
         assert box.index == 2
         assert box.value == 1000
@@ -740,6 +608,7 @@ class TestHelpers:
         assert box.box_id == scenario.id("pub9-box1")
         assert box.header_id == genesis_header_id
         assert box.creation_height == 599_999
+        assert box.address_id == 4
         assert box.address == "dummy-data-input-box-address"
         assert box.index == 3
         assert box.value == 1000
@@ -748,6 +617,7 @@ class TestHelpers:
         assert box.box_id == "dummy-token-box-id-1"
         assert box.header_id == genesis_header_id
         assert box.creation_height == 599_999
+        assert box.address_id == 5
         assert box.address == "dummy-token-minting-address"
         assert box.index == 4
         assert box.value == 1000
