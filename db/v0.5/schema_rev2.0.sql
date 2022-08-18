@@ -29,7 +29,8 @@ create schema core;
 
 create table core.addresses (
 	id bigint,
-	address text
+	address text,
+	spot_height int
 );
 
 create table core.headers (

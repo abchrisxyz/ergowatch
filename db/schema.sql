@@ -18,7 +18,8 @@ create schema core;
 
 create table core.addresses (
 	id bigint,
-	address text
+	address text,
+	spot_height int
 );
 
 create function core.address_id(_address text) returns bigint as '
