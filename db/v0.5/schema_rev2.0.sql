@@ -32,6 +32,14 @@ create table core.addresses (
 	address text,
 	spot_height int
 );
+create function core.address_id(_address text) returns bigint as '
+	select id
+	from core.addresses
+	where md5(address) = md5($1)
+		and address = $1;'
+    language sql
+    immutable
+    returns null on null input;
 
 create table core.headers (
 	height int,
