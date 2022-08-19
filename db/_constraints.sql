@@ -162,21 +162,23 @@ alter table cex.cexs alter column name set not null;
 alter table cex.cexs add constraint cexs_unique_text_id unique (text_id);
 alter table cex.cexs add constraint cexs_unique_name unique (name);
 
-alter table cex.addresses add primary key (address);
-alter table cex.addresses alter column address set not null;
+alter table cex.addresses add primary key (address_id);
+alter table cex.addresses alter column address_id set not null;
 alter table cex.addresses alter column cex_id set not null;
 alter table cex.addresses alter column type set not null;
+alter table cex.addresses add foreign key (address_id)
+	references core.addresses (id);
 alter table cex.addresses add foreign key (cex_id)
 	references cex.cexs (id);
 create index on cex.addresses(cex_id);
 create index on cex.addresses(type);
 create index on cex.addresses(spot_height);
 
-alter table cex.addresses_ignored add primary key (address);
-alter table cex.addresses_ignored alter column address set not null;
+alter table cex.addresses_ignored add primary key (address_id);
+alter table cex.addresses_ignored alter column address_id set not null;
 
-alter table cex.addresses_conflicts add primary key (address);
-alter table cex.addresses_conflicts alter column address set not null;
+alter table cex.addresses_conflicts add primary key (address_id);
+alter table cex.addresses_conflicts alter column address_id set not null;
 alter table cex.addresses_conflicts alter column first_cex_id set not null;
 alter table cex.addresses_conflicts alter column type set not null;
 alter table cex.addresses_conflicts add foreign key (first_cex_id)

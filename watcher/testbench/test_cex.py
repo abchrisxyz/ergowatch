@@ -1,3 +1,4 @@
+from os import sync
 import pytest
 import psycopg as pg
 
@@ -315,7 +316,9 @@ def _test_db_state(conn: pg.Connection, s: Scenario, bootstrapped=False):
     assert_db_constraints(conn)
     with conn.cursor() as cur:
         assert_cex_ids(cur)
-        assert_main_addresses(cur)
+        assert_main_addresses_list(cur)
+        assert_ignored_addresses_list(cur)
+        assert_main_addresses(cur, s)
         assert_deposit_addresses(cur)
         assert_addresses_conflicts(cur, s)
         assert_processing_log(cur, s, bootstrapped)
@@ -330,20 +333,21 @@ def assert_db_constraints(conn: pg.Connection):
     assert_column_not_null(conn, "cex", "cexs", "name")
     assert_unique(conn, "cex", "cexs", ["name"])
     # cex.addresses
-    assert_pk(conn, "cex", "addresses", ["address"])
+    assert_pk(conn, "cex", "addresses", ["address_id"])
+    assert_fk(conn, "cex", "addresses", "addresses_address_id_fkey")
     assert_fk(conn, "cex", "addresses", "addresses_cex_id_fkey")
-    assert_column_not_null(conn, "cex", "addresses", "address")
+    assert_column_not_null(conn, "cex", "addresses", "address_id")
     assert_column_not_null(conn, "cex", "addresses", "cex_id")
     assert_column_not_null(conn, "cex", "addresses", "type")
     assert_index(conn, "cex", "addresses", "addresses_cex_id_idx")
     assert_index(conn, "cex", "addresses", "addresses_type_idx")
     assert_index(conn, "cex", "addresses", "addresses_spot_height_idx")
     # cex.addresses_ignored
-    assert_pk(conn, "cex", "addresses_ignored", ["address"])
-    assert_column_not_null(conn, "cex", "addresses_ignored", "address")
+    assert_pk(conn, "cex", "addresses_ignored", ["address_id"])
+    assert_column_not_null(conn, "cex", "addresses_ignored", "address_id")
     # cex.addresses_conflicts
-    assert_pk(conn, "cex", "addresses_conflicts", ["address"])
-    assert_column_not_null(conn, "cex", "addresses_conflicts", "address")
+    assert_pk(conn, "cex", "addresses_conflicts", ["address_id"])
+    assert_column_not_null(conn, "cex", "addresses_conflicts", "address_id")
     assert_column_not_null(conn, "cex", "addresses_conflicts", "first_cex_id")
     assert_column_not_null(conn, "cex", "addresses_conflicts", "type")
     assert_fk(
@@ -387,13 +391,12 @@ def assert_cex_ids(cur: pg.Cursor):
     ]
 
 
-def assert_main_addresses(cur: pg.Cursor):
+def assert_main_addresses_list(cur: pg.Cursor):
     cur.execute(
         """
         select cex_id
             , address
-        from cex.addresses
-        where type = 'main'
+        from cex.main_addresses_list
         order by 1, 2;
         """
     )
@@ -416,14 +419,49 @@ def assert_main_addresses(cur: pg.Cursor):
     assert (4, "9eg2Rz3tGogzLaVZhG1ycPj1dJtN4Jn8ySa2mnVLJyVJryb13QB") in rows
 
 
+def assert_ignored_addresses_list(cur: pg.Cursor):
+    cur.execute(
+        """
+        select address
+        from cex.ignored_addresses_list;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 4
+    assert ("9hxFS2RkmL5Fv5DRZGwZCbsbjTU1R75Luc2t5hkUcR1x3jWzre4",) in rows
+    assert ("9gNYeyfRFUipiWZ3JR1ayDMoeh28E6J7aDQosb7yrzsuGSDqzCC",) in rows
+    assert ("9i2oKu3bbHDksfiZjbhAgSAWW7iZecUS78SDaB46Fpt2DpUNe6M",) in rows
+    assert ("9iHCMtd2gAPoYGhWadjruygKwNKRoeQGq1xjS2Fkm5bT197YFdR",) in rows
+
+
+def assert_main_addresses(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        """
+        select c.cex_id
+            , a.address
+            , c.spot_height
+        from cex.addresses c
+        join core.addresses a on a.id = c.address_id
+        where c.type = 'main'
+        order by 1, 2;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 3
+    assert (1, s.address("cex1"), s.parent_height + 2) in rows
+    assert (2, s.address("cex2"), s.parent_height + 4) in rows
+    assert (3, s.address("cex3"), s.parent_height + 5) in rows
+
+
 def assert_deposit_addresses(cur: pg.Cursor):
     pub1 = AC.get("pub1")
     pub2 = AC.get("pub2")
     cur.execute(
         """
-        select cex_id
-            , address
-        from cex.addresses
+        select c.cex_id
+            , a.address
+        from cex.addresses c
+        join core.addresses a on a.id = c.address_id
         where type = 'deposit'
         order by 1, 2;
         """
@@ -440,12 +478,13 @@ def assert_addresses_conflicts(cur: pg.Cursor, s: Scenario):
     pub9 = AC.get("pub9")
     cur.execute(
         """
-        select address
-            , first_cex_id
-            , type
-            , spot_height
-            , conflict_spot_height
-        from cex.addresses_conflicts
+        select a.address
+            , c.first_cex_id
+            , c.type
+            , c.spot_height
+            , c.conflict_spot_height
+        from cex.addresses_conflicts c
+        join core.addresses a on a.id = c.address_id
         order by spot_height;
         """
     )

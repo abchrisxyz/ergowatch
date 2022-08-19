@@ -19,17 +19,24 @@ pub(super) fn apply(tx: &mut Transaction) -> anyhow::Result<()> {
         ;",
         "create type cex.t_address_type as enum ('main', 'deposit');",
         "create table cex.addresses (
-            address text,
+            address_id bigint,
             cex_id integer,
             type cex.t_address_type,
             spot_height int
         );",
         "create table cex.addresses_ignored (
+            address_id bigint
+        );",
+        "create table cex.main_addresses_list (
+            address text,
+            cex_id integer
+        );",
+        "create table cex.ignored_addresses_list (
             address text
         );",
         "create table cex.addresses_conflicts (
             -- Same columns as cex.address
-            address text,
+            address_id bigint,
             first_cex_id integer,
             type cex.t_address_type,
             spot_height integer,
@@ -54,18 +61,18 @@ pub(super) fn apply(tx: &mut Transaction) -> anyhow::Result<()> {
             main bigint,
             deposit bigint
         );",
-        "insert into cex.addresses (cex_id, type, address) values
-            (1, 'main', '9fowPvQ2GXdmhD2bN54EL9dRnio3kBQGyrD3fkbHwuTXD6z1wBU'),
-            (1, 'main', '9fPiW45mZwoTxSwTLLXaZcdekqi72emebENmScyTGsjryzrntUe'),
-            (2, 'main', '9iKFBBrryPhBYVGDKHuZQW7SuLfuTdUJtTPzecbQ5pQQzD4VykC'),
-            (2, 'main', '9gQYrh6yubA4z55u4TtsacKnaEteBEdnY4W2r5BLcFZXcQoQDcq'),
-            (2, 'main', '9enQZco9hPuqaHvR7EpPRWvYbkDYoWu3NK7pQk8VFwgVnv5taQE'),
-            (3, 'main', '9hU5VUSUAmhEsTehBKDGFaFQSJx574UPoCquKBq59Ushv5XYgAu'),
-            (3, 'main', '9i8Mci4ufn8iBQhzohh4V3XM3PjiJbxuDG1hctouwV4fjW5vBi3'),
-            (3, 'main', '9guZaxPoe4jecHi6ZxtMotKUL4AzpomFf3xqXsFSuTyZoLbmUBr'),
-            (3, 'main', '9iNt6wfxSc3DSaBVp22E7g993dwKUCvbGdHoEjxF8SRqj35oXvT'),
-            (4, 'main', '9eg2Rz3tGogzLaVZhG1ycPj1dJtN4Jn8ySa2mnVLJyVJryb13QB');",
-        "insert into cex.addresses_ignored (address) values
+        "insert into cex.main_addresses_list (cex_id, address) values
+            (1, '9fowPvQ2GXdmhD2bN54EL9dRnio3kBQGyrD3fkbHwuTXD6z1wBU'),
+            (1, '9fPiW45mZwoTxSwTLLXaZcdekqi72emebENmScyTGsjryzrntUe'),
+            (2, '9iKFBBrryPhBYVGDKHuZQW7SuLfuTdUJtTPzecbQ5pQQzD4VykC'),
+            (2, '9gQYrh6yubA4z55u4TtsacKnaEteBEdnY4W2r5BLcFZXcQoQDcq'),
+            (2, '9enQZco9hPuqaHvR7EpPRWvYbkDYoWu3NK7pQk8VFwgVnv5taQE'),
+            (3, '9hU5VUSUAmhEsTehBKDGFaFQSJx574UPoCquKBq59Ushv5XYgAu'),
+            (3, '9i8Mci4ufn8iBQhzohh4V3XM3PjiJbxuDG1hctouwV4fjW5vBi3'),
+            (3, '9guZaxPoe4jecHi6ZxtMotKUL4AzpomFf3xqXsFSuTyZoLbmUBr'),
+            (3, '9iNt6wfxSc3DSaBVp22E7g993dwKUCvbGdHoEjxF8SRqj35oXvT'),
+            (4, '9eg2Rz3tGogzLaVZhG1ycPj1dJtN4Jn8ySa2mnVLJyVJryb13QB');",
+        "insert into cex.ignored_addresses_list (address) values
             ('9hxFS2RkmL5Fv5DRZGwZCbsbjTU1R75Luc2t5hkUcR1x3jWzre4'),
             ('9gNYeyfRFUipiWZ3JR1ayDMoeh28E6J7aDQosb7yrzsuGSDqzCC'),
             ('9i2oKu3bbHDksfiZjbhAgSAWW7iZecUS78SDaB46Fpt2DpUNe6M'),

@@ -199,7 +199,7 @@ insert into cex.cexs (id, name, text_id) values
 create type cex.t_address_type as enum ('main', 'deposit');
 
 create table cex.addresses (
-	address text,
+	address_id bigint,
 	cex_id integer,
 	type cex.t_address_type,
 	spot_height int
@@ -216,11 +216,32 @@ create table cex.addresses (
 	addresses to ignore is small.
  */
 create table cex.addresses_ignored (
+	address_id bigint
+);
+
+/*
+	List of known main addresses to be populated manually.
+
+	Corresponding address id's will be added to cex.addresses
+	automatically once available. 
+*/
+create table cex.main_addresses_list (
+	address text,
+	cex_id integer
+);
+
+/*
+	List of ignored addresses to be populated manually.
+
+	Corresponding address id's will be added to cex.addresses_ignored
+	automatically once available. 
+*/
+create table cex.ignored_addresses_list (
 	address text
 );
 
 /* 
-	The PK of cex.addresses is the address. An address can therefore
+	The PK of cex.addresses is the address id. An address can therefore
 	be linked to a single CEX only.
 	However, we can't exclude the possibility of running into addresses
 	linked to more than one CEX. When a known address is linked to
@@ -229,7 +250,7 @@ create table cex.addresses_ignored (
  */
 create table cex.addresses_conflicts (
 	-- Same columns as cex.address
-	address text,
+	address_id bigint,
 	first_cex_id integer,
 	type cex.t_address_type,
 	spot_height integer,
@@ -287,25 +308,24 @@ create table cex.supply (
 	deposit bigint
 );
 
-
 -- Known main addresses
-insert into cex.addresses (cex_id, type, address) values
+insert into cex.main_addresses_list (cex_id, address) values
 	-- Coinex
-	(1, 'main', '9fowPvQ2GXdmhD2bN54EL9dRnio3kBQGyrD3fkbHwuTXD6z1wBU'),
-	(1, 'main', '9fPiW45mZwoTxSwTLLXaZcdekqi72emebENmScyTGsjryzrntUe'),
+	(1, '9fowPvQ2GXdmhD2bN54EL9dRnio3kBQGyrD3fkbHwuTXD6z1wBU'),
+	(1, '9fPiW45mZwoTxSwTLLXaZcdekqi72emebENmScyTGsjryzrntUe'),
 			
 	-- Gate - confirmed
-	(2, 'main', '9iKFBBrryPhBYVGDKHuZQW7SuLfuTdUJtTPzecbQ5pQQzD4VykC'),
+	(2, '9iKFBBrryPhBYVGDKHuZQW7SuLfuTdUJtTPzecbQ5pQQzD4VykC'),
 	-- Gate - unconfirmed
 	--
 	-- Has had up to 900k, sends only to 9iKFBB, received from 2800+
 	-- addresses all created in/after 10/2020.
-	(2, 'main', '9gQYrh6yubA4z55u4TtsacKnaEteBEdnY4W2r5BLcFZXcQoQDcq'),
+	(2, '9gQYrh6yubA4z55u4TtsacKnaEteBEdnY4W2r5BLcFZXcQoQDcq'),
 	--
 	-- Sends only to 9iKFBB, received from 219 addresses all created
 	-- in/after 01/2021.
 	-- Receives from 9i7134 (see below).
-	(2, 'main', '9enQZco9hPuqaHvR7EpPRWvYbkDYoWu3NK7pQk8VFwgVnv5taQE'),
+	(2, '9enQZco9hPuqaHvR7EpPRWvYbkDYoWu3NK7pQk8VFwgVnv5taQE'),
 	--
 	-- Addresses below used to be thought of as Gate addresses because
 	-- of the large volume passing through them and reaching 9enQZc.
@@ -314,25 +334,25 @@ insert into cex.addresses (cex_id, type, address) values
 	-- 9i7134 sends to 200+ addresses, nothing to 9iKFBB, receives from
 	-- 1880 addresses - some created in 10/2019, so 9i7134 likely not a
 	-- Gate address and therefore excluding upstream ones as well.
-	-- (2, 'main', '9i7134eY3zUotQyS8nBeZDJ3SWbTPn117nCJYi977FBn9AaxhZY'),
-	-- (2, 'main', '9gmb745thQTyoGGWxSr9hNmvipivgVbQGA6EJnBucs3nwi9yqoc'),
-	-- (2, 'main', '9fJzuyVaRLM9Q3RZVzkau1GJVP9TDiW8GRL5p25VZ8VNXurDpaw'),
-	-- (2, 'main', '9i1ETULiCnGMtppDAvrcYujhxX18km3ge9ZEDMnZPN6LFQbttRF'),
-	-- (2, 'main', '9gck4LwHJK3XV2wXdYdN5S9Fe4RcFrkaqs4WU5aeiKuodJyW7qq'),
-	-- (2, 'main', '9gv4qw7RtQyt3khtnQNxp7r7yuUazWWyTGfo7duqGj9hMtZxKP1'),
+	-- (2, '9i7134eY3zUotQyS8nBeZDJ3SWbTPn117nCJYi977FBn9AaxhZY'),
+	-- (2, '9gmb745thQTyoGGWxSr9hNmvipivgVbQGA6EJnBucs3nwi9yqoc'),
+	-- (2, '9fJzuyVaRLM9Q3RZVzkau1GJVP9TDiW8GRL5p25VZ8VNXurDpaw'),
+	-- (2, '9i1ETULiCnGMtppDAvrcYujhxX18km3ge9ZEDMnZPN6LFQbttRF'),
+	-- (2, '9gck4LwHJK3XV2wXdYdN5S9Fe4RcFrkaqs4WU5aeiKuodJyW7qq'),
+	-- (2, '9gv4qw7RtQyt3khtnQNxp7r7yuUazWWyTGfo7duqGj9hMtZxKP1'),
 	-- created 10/2019, but listing in 10/2020
-	-- (2, 'main', '9exS2B892HTiDkqhcWnj1nzsbYmVn7ameVb1d2jagUWTqaLxfTX'),
+	-- (2, '9exS2B892HTiDkqhcWnj1nzsbYmVn7ameVb1d2jagUWTqaLxfTX'),
 
 	-- KuCoin
-	(3, 'main', '9hU5VUSUAmhEsTehBKDGFaFQSJx574UPoCquKBq59Ushv5XYgAu'),
-	(3, 'main', '9i8Mci4ufn8iBQhzohh4V3XM3PjiJbxuDG1hctouwV4fjW5vBi3'),
-	(3, 'main', '9guZaxPoe4jecHi6ZxtMotKUL4AzpomFf3xqXsFSuTyZoLbmUBr'),
-	(3, 'main', '9iNt6wfxSc3DSaBVp22E7g993dwKUCvbGdHoEjxF8SRqj35oXvT'),
+	(3, '9hU5VUSUAmhEsTehBKDGFaFQSJx574UPoCquKBq59Ushv5XYgAu'),
+	(3, '9i8Mci4ufn8iBQhzohh4V3XM3PjiJbxuDG1hctouwV4fjW5vBi3'),
+	(3, '9guZaxPoe4jecHi6ZxtMotKUL4AzpomFf3xqXsFSuTyZoLbmUBr'),
+	(3, '9iNt6wfxSc3DSaBVp22E7g993dwKUCvbGdHoEjxF8SRqj35oXvT'),
 	
 	-- ProBit https://discord.com/channels/668903786361651200/896711052736233482/964541753162096680
-	(4, 'main', '9eg2Rz3tGogzLaVZhG1ycPj1dJtN4Jn8ySa2mnVLJyVJryb13QB');
+	(4, '9eg2Rz3tGogzLaVZhG1ycPj1dJtN4Jn8ySa2mnVLJyVJryb13QB');
 
-insert into cex.addresses_ignored (address) values
+insert into cex.ignored_addresses_list (address) values
 	-- Flagged as Gate deposit address.
 	-- Active since July 2019.
 	-- Received 2.6M+ direct from treasury.
