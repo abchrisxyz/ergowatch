@@ -32,6 +32,10 @@ create table core.addresses (
 	address text,
 	spot_height int
 );
+-- These are needed to add new addresses, so declaring here and not in constraints.sql.
+create index on core.addresses (md5(address));
+alter table core.addresses add exclude using hash (address with=);
+
 create function core.address_id(_address text) returns bigint as '
 	select id
 	from core.addresses

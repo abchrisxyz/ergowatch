@@ -9,8 +9,11 @@
 alter table core.addresses add primary key (id);
 alter table core.addresses alter column id set not null;
 alter table core.addresses alter column address set not null;
-create index on core.addresses (md5(address));
-alter table core.addresses add exclude using hash (address with=);
+alter table core.addresses alter column spot_height set not null;
+create index on core.addresses using brin(spot_height);
+--  Already declared in schema.sql:
+-- create index on core.addresses (md5(address));
+-- alter table core.addresses add exclude using hash (address with=);
 
 alter table core.headers add primary key (height);
 alter table core.headers alter column id set not null;
