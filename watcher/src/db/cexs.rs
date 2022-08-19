@@ -59,11 +59,10 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
     // Declare main addresses
     tx.execute(
         "
-        insert into cex.addresses (address_id, cex_id, type, spot_height)
+        insert into cex.addresses (address_id, cex_id, type)
         select adr.id
             , lst.cex_id
             , 'main'
-            , adr.spot_height
         from cex.main_addresses_list lst
         join core.addresses adr on adr.address = lst.address
         order by 1;

@@ -72,11 +72,10 @@ fn declare_main_addresses(tx: &mut Transaction, cache: &mut Cache, height: i32) 
     let n_mod = tx
         .execute(
             "
-            insert into cex.addresses(address_id, cex_id, type, spot_height)
+            insert into cex.addresses(address_id, cex_id, type)
                 select adr.id
                     , lst.cex_id
                     , 'main'
-                    , $1
                 from cex.main_addresses_list lst
                 -- TODO: check if joining on md5 is faster
                 join core.addresses adr on adr.address = lst.address
@@ -291,7 +290,7 @@ fn resolve_cex_conflict(tx: &mut Transaction, address_id: i64) {
 
 /// Delete deposit address spotted at given height
 fn delete_deposit_addresses_at_height(tx: &mut Transaction, height: i32) {
-    // Explicitly exclude main addresses as they have a spot_height too
+    // Explicitly exclude main addresses, even though they have no spot_height
     tx.execute(
         "delete from cex.addresses where spot_height = $1 and type <> 'main';",
         &[&height],

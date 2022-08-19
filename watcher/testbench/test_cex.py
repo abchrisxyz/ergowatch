@@ -448,9 +448,9 @@ def assert_main_addresses(cur: pg.Cursor, s: Scenario):
     )
     rows = cur.fetchall()
     assert len(rows) == 3
-    assert (1, s.address("cex1"), s.parent_height + 2) in rows
-    assert (2, s.address("cex2"), s.parent_height + 4) in rows
-    assert (3, s.address("cex3"), s.parent_height + 5) in rows
+    assert (1, s.address("cex1"), None) in rows
+    assert (2, s.address("cex2"), None) in rows
+    assert (3, s.address("cex3"), None) in rows
 
 
 def assert_deposit_addresses(cur: pg.Cursor):
