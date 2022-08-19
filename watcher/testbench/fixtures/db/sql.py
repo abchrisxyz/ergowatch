@@ -49,6 +49,7 @@ class Transaction:
 class Address:
     id: int
     address: str
+    spot_height: int
 
 
 @dataclass
@@ -533,7 +534,8 @@ def extract_existing_outputs(scenario: Scenario) -> List[Output]:
                     index += 1
             for box in tx["dataInputs"]:
                 if box["boxId"] not in created_outputs:
-                    address = "dummy-data-input-box-address"
+                    # address = "dummy-data-input-box-address"
+                    address = scenario.address(box["boxId"])
                     if address not in address_ids:
                         last_address_id += 1
                         address_ids[address] = last_address_id
@@ -611,7 +613,13 @@ def extract_addresses(outputs: List[Output]) -> List[Address]:
     for box in outputs:
         if box.address_id in known_ids:
             continue
-        addresses.append(Address(id=box.address_id, address=box.address))
+        addresses.append(
+            Address(
+                id=box.address_id,
+                address=box.address,
+                spot_height=box.creation_height,
+            )
+        )
         known_ids.add(box.address_id)
     return addresses
 
@@ -827,10 +835,11 @@ def format_transaction_sql(tx: Transaction):
 def format_address_sql(a: List):
     return dedent(
         f"""
-        insert into core.addresses (id, address)
+        insert into core.addresses (id, address, spot_height)
         values (
             '{a.id}',
-            '{a.address}'
+            '{a.address}',
+            '{a.spot_height}'
         );
     """
     )

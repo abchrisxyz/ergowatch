@@ -89,6 +89,16 @@ class TestPopulatedDB:
         assert len(rows) == 1
         assert rows[0] == (599_999, "bootstrap-tx")
 
+        # Addresses
+        cur.execute("select id, address, spot_height from core.addresses order by 1;")
+        rows = cur.fetchall()
+        assert len(rows) == 5
+        assert rows[0] == (1, scenario.address("base-box1"), 599_999)
+        assert rows[1] == (2, scenario.address("con2-box1"), 599_999)
+        assert rows[2] == (3, scenario.address("pub1-box1"), 599_999)
+        assert rows[3] == (4, scenario.address("pub9-box1"), 599_999)
+        assert rows[4] == (5, "dummy-token-minting-address", 599_999)
+
         # 5 pre-existing outputs
         cur.execute("select creation_height, value, box_id from core.outputs;")
         rows = cur.fetchall()
@@ -151,7 +161,7 @@ class TestPopulatedDB:
             (599_999, 1000, scenario.address("base")),
             (599_999, 1000, scenario.address("con2")),
             (599_999, 1000, scenario.address("pub1")),
-            (599_999, 1000, "dummy-data-input-box-address"),
+            (599_999, 1000, scenario.address("pub9")),
             (599_999, 1000, "dummy-token-minting-address"),
         ]
 
@@ -170,7 +180,7 @@ class TestPopulatedDB:
             (1000, scenario.address("base")),
             (1000, scenario.address("con2")),
             (1000, scenario.address("pub1")),
-            (1000, "dummy-data-input-box-address"),
+            (1000, scenario.address("pub9")),
             (1000, "dummy-token-minting-address"),
         ]
 
@@ -242,6 +252,25 @@ class TestRev0DB:
         assert rows[1] == (600_000, scenario.id("tx-a1"))
         assert rows[2] == (600_000, scenario.id("tx-a2"))
         assert rows[3] == (600_001, scenario.id("tx-b1"))
+
+    def test_core_addresses(self, cur, scenario):
+        cur.execute(
+            """
+            select id
+                , address
+                , spot_height
+            from core.addresses
+            order by 1;
+            """
+        )
+        rows = cur.fetchall()
+        assert len(rows) == 6
+        assert rows[0] == (1, scenario.address("base"), 599_999)
+        assert rows[1] == (2, scenario.address("con2"), 599_999)
+        assert rows[2] == (3, scenario.address("pub1"), 599_999)
+        assert rows[3] == (4, scenario.address("con1"), 600_000)
+        assert rows[4] == (5, scenario.address("fees"), 600_000)
+        assert rows[5] == (6, scenario.address("pub2"), 600_001)
 
     def test_core_outputs(self, cur, scenario):
         cur.execute(
@@ -609,7 +638,7 @@ class TestHelpers:
         assert box.header_id == genesis_header_id
         assert box.creation_height == 599_999
         assert box.address_id == 4
-        assert box.address == "dummy-data-input-box-address"
+        assert box.address == scenario.address("pub9-box1")
         assert box.index == 3
         assert box.value == 1000
 
