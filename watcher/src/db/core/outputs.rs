@@ -2,18 +2,24 @@ use crate::parsing::BlockData;
 use postgres::types::Type;
 use postgres::Transaction;
 
+/*
+    - cache latest address id
+    - insert new adresses into core.addresses
+    - cache id's of addresses in current block only
+*/
+
 const INSERT_OUTPUT: &str = "
     insert into core.outputs (
         box_id,
         tx_id,
         header_id,
         creation_height,
-        address,
+        address_id,
         index,
         value,
         size
     )
-    values ($1, $2, $3, $4, $5, $6, $7, $8);";
+    values ($1, $2, $3, $4, core.address_id($5), $6, $7, $8);";
 
 pub(super) struct Output<'a> {
     pub box_id: &'a str,
@@ -103,7 +109,7 @@ pub(super) fn set_constraints(tx: &mut Transaction) {
         "alter table core.outputs alter column tx_id set not null;",
         "alter table core.outputs alter column header_id set not null;",
         "alter table core.outputs alter column creation_height set not null;",
-        "alter table core.outputs alter column address set not null;",
+        "alter table core.outputs alter column address_id set not null;",
         "alter table core.outputs alter column index set not null;",
         "alter table core.outputs alter column value set not null;",
         "alter table core.outputs alter column size set not null;",
@@ -113,7 +119,7 @@ pub(super) fn set_constraints(tx: &mut Transaction) {
             references core.headers (id) on delete cascade;",
         "create index on core.outputs(tx_id);",
         "create index on core.outputs(header_id);",
-        "create index on core.outputs(address);",
+        "create index on core.outputs(address_id);",
         "create index on core.outputs(index);",
     ];
 

@@ -45,6 +45,7 @@ pub fn include_genesis_boxes(
 
     // Outputs and registers
     let outputs = boxes.iter().map(|b| Output::from_node_output(b)).collect();
+    super::addresses::include_genesis_boxes(tx, &outputs);
     super::outputs::include_genesis_boxes(tx, &outputs, GENESIS_HEADER_ID, GENESIS_TX_ID);
     super::additional_registers::include_genesis_boxes(tx, &outputs);
 }

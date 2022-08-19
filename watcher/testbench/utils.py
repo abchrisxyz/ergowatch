@@ -111,6 +111,28 @@ def assert_fk(conn: pg.Connection, schema: str, table: str, constraint_name: str
         assert cur.fetchone()[0]
 
 
+def assert_excl(conn: pg.Connection, schema: str, table: str, constraint_name: str):
+    """Assert exclusion constraints exists"""
+    # https://dba.stackexchange.com/questions/214863/how-to-list-all-constraints-of-a-table-in-postgresql
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            select exists (
+                select con.*
+                from pg_catalog.pg_constraint con
+                    inner join pg_catalog.pg_class rel
+                            on rel.oid = con.conrelid
+                    inner join pg_catalog.pg_namespace nsp
+                            on nsp.oid = connamespace
+                where nsp.nspname = '{schema}'
+                    and rel.relname = '{table}'
+                    and con.conname = '{constraint_name}'
+            );
+            """
+        )
+        assert cur.fetchone()[0]
+
+
 def assert_unique(conn: pg.Connection, schema: str, table: str, columns: List[str]):
     """Assert foreign key exists"""
     constraint_name = f"{table}_unique_{'_'.join(columns)}"
@@ -200,6 +222,23 @@ def assert_index(conn: pg.Connection, schema: str, table: str, index_name: str):
                 order by
                     t.relname,
                     i.relname
+            );
+        """
+        )
+        assert cur.fetchone()[0]
+
+
+def assert_index_def(conn: pg.Connection, schema: str, table: str, index_def: str):
+    """Assert index definition exists for table"""
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            select exists(
+                select *
+                from pg_indexes
+                where schemaname = '{schema}'
+                    and tablename = '{table}'
+                    and indexdef = '{index_def}'
             );
         """
         )

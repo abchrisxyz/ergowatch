@@ -12,9 +12,11 @@ from fixtures.scenario import Scenario
 from utils import run_watcher
 from utils import assert_pk
 from utils import assert_fk
+from utils import assert_excl
 from utils import assert_unique
 from utils import assert_column_not_null
 from utils import assert_index
+from utils import assert_index_def
 from utils import assert_column_ge
 from utils import assert_column_le
 
@@ -438,6 +440,7 @@ def _test_db_state(conn: pg.Connection, s: Scenario):
     with conn.cursor() as cur:
         assert_headers(cur, s)
         assert_transactions(cur, s)
+        assert_addresses(cur, s)
         assert_inputs(cur, s)
         assert_data_inputs(cur, s)
         assert_outputs(cur, s)
@@ -471,13 +474,33 @@ def assert_db_constraints(conn: pg.Connection):
     assert_fk(conn, "core", "transactions", "transactions_header_id_fkey")
     assert_index(conn, "core", "transactions", "transactions_height_idx")
 
+    # Addresses
+    assert_pk(conn, "core", "addresses", ["id"])
+    assert_excl(conn, "core", "addresses", "addresses_address_excl")
+    assert_column_not_null(conn, "core", "addresses", "id")
+    assert_column_not_null(conn, "core", "addresses", "address")
+    assert_column_not_null(conn, "core", "addresses", "spot_height")
+    assert_index_def(
+        conn,
+        "core",
+        "addresses",
+        "CREATE INDEX addresses_md5_idx ON core.addresses USING btree (md5(address))",
+    )
+    assert_index_def(
+        conn,
+        "core",
+        "addresses",
+        "CREATE INDEX addresses_spot_height_idx ON core.addresses USING brin (spot_height)",
+    )
+    ...
+
     # Outputs
     assert_pk(conn, "core", "outputs", ["box_id"])
     assert_column_not_null(conn, "core", "outputs", "box_id")
     assert_column_not_null(conn, "core", "outputs", "tx_id")
     assert_column_not_null(conn, "core", "outputs", "header_id")
     assert_column_not_null(conn, "core", "outputs", "creation_height")
-    assert_column_not_null(conn, "core", "outputs", "address")
+    assert_column_not_null(conn, "core", "outputs", "address_id")
     assert_column_not_null(conn, "core", "outputs", "index")
     assert_column_not_null(conn, "core", "outputs", "value")
     assert_column_not_null(conn, "core", "outputs", "size")
@@ -485,7 +508,7 @@ def assert_db_constraints(conn: pg.Connection):
     assert_fk(conn, "core", "outputs", "outputs_header_id_fkey")
     assert_index(conn, "core", "outputs", "outputs_tx_id_idx")
     assert_index(conn, "core", "outputs", "outputs_header_id_idx")
-    assert_index(conn, "core", "outputs", "outputs_address_idx")
+    assert_index(conn, "core", "outputs", "outputs_address_id_idx")
     assert_index(conn, "core", "outputs", "outputs_index_idx")
 
     # Inputs
@@ -622,6 +645,26 @@ def assert_transactions(cur: pg.Cursor, s: Scenario):
     assert rows[4] == (s.parent_height + 3, "block-c", 1, s.id("tx-c2"))
 
 
+def assert_addresses(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        """
+        select id
+            , address
+            , spot_height
+        from core.addresses
+        order by 1;
+    """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 6
+    assert rows[0] == (1, s.address("base"), s.parent_height + 0)
+    assert rows[1] == (2, s.address("con1"), s.parent_height + 1)
+    assert rows[2] == (3, s.address("con2"), s.parent_height + 2)
+    assert rows[3] == (4, s.address("pub1"), s.parent_height + 2)
+    assert rows[4] == (5, s.address("pub2"), s.parent_height + 3)
+    assert rows[5] == (6, s.address("fees"), s.parent_height + 3)
+
+
 def assert_inputs(cur: pg.Cursor, s: Scenario):
     # 4 inputs
     cur.execute(
@@ -650,14 +693,15 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
     cur.execute(
         """
         select creation_height
-            , header_id
-            , tx_id
-            , index
-            , box_id
-            , value
-            , address
-            , size is not null and size >= 63 and size <= 268
-        from core.outputs
+            , o.header_id
+            , o.tx_id
+            , o.index
+            , o.box_id
+            , o.value
+            , a.address
+            , o.size is not null and o.size >= 63 and o.size <= 268
+        from core.outputs o
+        join core.addresses a on a.id = o.address_id
         order by creation_height, tx_id, index;
     """
     )
