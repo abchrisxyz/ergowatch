@@ -22,7 +22,7 @@ pub const INSERT_DIFFS_FOR_HEIGHT: &str = "
     ), inputs as (
         select tx.height
             , tx.id as tx_id
-            , op.address
+            , op.address_id
             , sum(op.value) as value
         from transactions tx
         join core.inputs ip on ip.tx_id = tx.id
@@ -31,27 +31,27 @@ pub const INSERT_DIFFS_FOR_HEIGHT: &str = "
     ), outputs as (
         select tx.height
             , tx.id as tx_id
-            , op.address
+            , op.address_id
             , sum(op.value) as value
         from transactions tx
         join core.outputs op on op.tx_id = tx.id
         group by 1, 2, 3
     )
-    insert into bal.erg_diffs (address, height, tx_id, value)
-    select coalesce(i.address, o.address) as address
+    insert into bal.erg_diffs (address_id, height, tx_id, value)
+    select coalesce(i.address_id, o.address_id) as address_id
         , coalesce(i.height, o.height) as height
         , coalesce(i.tx_id, o.tx_id) as tx_id
         , sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) as value
     from inputs i
     full outer join outputs o
-        on o.address = i.address
+        on o.address_id = i.address_id
         and o.tx_id = i.tx_id
     group by 1, 2, 3 having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) <> 0;";
 
 pub fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
-        "alter table bal.erg_diffs add primary key(address, height, tx_id);",
-        "alter table bal.erg_diffs alter column address set not null;",
+        "alter table bal.erg_diffs add primary key(address_id, height, tx_id);",
+        "alter table bal.erg_diffs alter column address_id set not null;",
         "alter table bal.erg_diffs alter column height set not null;",
         "alter table bal.erg_diffs alter column tx_id set not null;",
         "alter table bal.erg_diffs alter column value set not null;",

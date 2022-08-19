@@ -19,7 +19,7 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
 // Updates balances for known addresses
 pub(super) const UPDATE_BALANCES: &str = "
     with new_diffs as (
-        select address
+        select address_id
             , token_id
             , sum(value) as value
         from bal.tokens_diffs
@@ -29,25 +29,25 @@ pub(super) const UPDATE_BALANCES: &str = "
     update bal.tokens b
     set value = b.value + d.value
     from new_diffs d
-    where d.address = b.address
+    where d.address_id = b.address_id
         and d.token_id = b.token_id;";
 
 // Inserts balances for new addresses
 pub(super) const INSERT_BALANCES: &str = "
     with new_addresses as (
-        select d.address
+        select d.address_id
             , d.token_id
             , sum(d.value) as value
         from bal.tokens_diffs d
         left join bal.tokens b
-            on b.address = d.address
+            on b.address_id = d.address_id
             and b.token_id = d.token_id
         where d.height = $1
-            and b.address is null
+            and b.address_id is null
         group by 1, 2
     )
-    insert into bal.tokens(address, token_id, value)
-    select address
+    insert into bal.tokens(address_id, token_id, value)
+    select address_id
         , token_id
         , value
     from new_addresses;";
@@ -59,7 +59,7 @@ pub(super) const DELETE_ZERO_BALANCES: &str = "
 // Undo balance updates
 const ROLLBACK_BALANCE_UPDATES: &str = "
     with new_diffs as (
-        select address
+        select address_id
             , token_id
             , sum(value) as value
         from bal.tokens_diffs
@@ -69,32 +69,32 @@ const ROLLBACK_BALANCE_UPDATES: &str = "
     update bal.tokens b
     set value = b.value - d.value
     from new_diffs d
-    where d.address = b.address
+    where d.address_id = b.address_id
         and d.token_id = b.token_id;";
 
 const ROLLBACK_DELETE_ZERO_BALANCES: &str = "
     with deleted_addresses as (
-        select d.address
+        select d.address_id
             , d.token_id
             , sum(d.value) as value
         from bal.tokens_diffs d
         left join bal.tokens b
-            on b.address = d.address
+            on b.address_id = d.address_id
             and b.token_id = d.token_id
         where d.height = $1
-            and b.address is null
+            and b.address_id is null
         group by 1, 2
     )
-    insert into bal.tokens(address, token_id, value)
-    select address
+    insert into bal.tokens(address_id, token_id, value)
+    select address_id
         , token_id
         , 0 -- actual value will be set by update rollback
     from deleted_addresses;";
 
 pub fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
-        "alter table bal.tokens add primary key(address, token_id);",
-        "alter table bal.tokens alter column address set not null;",
+        "alter table bal.tokens add primary key(address_id, token_id);",
+        "alter table bal.tokens alter column address_id set not null;",
         "alter table bal.tokens alter column token_id set not null;",
         "alter table bal.tokens alter column value set not null;",
         "alter table bal.tokens add check (value >= 0);",

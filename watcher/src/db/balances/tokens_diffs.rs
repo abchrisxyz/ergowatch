@@ -23,7 +23,7 @@ with inputs as (
     )
     select tx.height
         , tx.id as tx_id
-        , op.address
+        , op.address_id
         , ba.token_id
         , sum(ba.amount) as value
     from transactions tx
@@ -39,7 +39,7 @@ with inputs as (
     )
     select tx.height
         , tx.id as tx_id
-        , op.address
+        , op.address_id
         , ba.token_id
         , sum(ba.amount) as value
     from transactions tx
@@ -47,23 +47,23 @@ with inputs as (
     join core.box_assets ba on ba.box_id = op.box_id
     group by 1, 2, 3, 4
 )
-insert into bal.tokens_diffs (address, token_id, height, tx_id, value)
-select coalesce(i.address, o.address) as address
+insert into bal.tokens_diffs (address_id, token_id, height, tx_id, value)
+select coalesce(i.address_id, o.address_id) as address_id
     , coalesce(i.token_id, o.token_id ) as token_id
     , coalesce(i.height, o.height) as height
     , coalesce(i.tx_id, o.tx_id) as tx_id
     , sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) as value
 from inputs i
 full outer join outputs o
-    on o.address = i.address
+    on o.address_id = i.address_id
     and o.tx_id = i.tx_id
     and o.token_id = i.token_id
 group by 1, 2, 3, 4 having sum(coalesce(o.value, 0)) - sum(coalesce(i.value, 0)) <> 0;";
 
 pub fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
-        "alter table bal.tokens_diffs add primary key(address, token_id, height, tx_id);",
-        "alter table bal.tokens_diffs alter column address set not null;",
+        "alter table bal.tokens_diffs add primary key(address_id, token_id, height, tx_id);",
+        "alter table bal.tokens_diffs alter column address_id set not null;",
         "alter table bal.tokens_diffs alter column token_id set not null;",
         "alter table bal.tokens_diffs alter column height set not null;",
         "alter table bal.tokens_diffs alter column tx_id set not null;",

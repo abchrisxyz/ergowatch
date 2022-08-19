@@ -19,7 +19,7 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
 // Updates balances for known addresses
 pub(super) const UPDATE_BALANCES: &str = "
     with new_diffs as (
-        select address
+        select address_id
             , sum(value) as value
         from bal.erg_diffs
         where height = $1
@@ -28,21 +28,21 @@ pub(super) const UPDATE_BALANCES: &str = "
     update bal.erg b
     set value = b.value + d.value
     from new_diffs d
-    where d.address = b.address;";
+    where d.address_id = b.address_id;";
 
 // Inserts balances for new addresses
 pub(super) const INSERT_BALANCES: &str = "
     with new_addresses as (
-        select d.address
+        select d.address_id
             , sum(d.value) as value
         from bal.erg_diffs d
-        left join bal.erg b on b.address = d.address
+        left join bal.erg b on b.address_id = d.address_id
         where d.height = $1
-            and b.address is null
+            and b.address_id is null
         group by 1
     )
-    insert into bal.erg(address, value)
-    select address
+    insert into bal.erg(address_id, value)
+    select address_id
         , value
     from new_addresses;";
 
@@ -53,7 +53,7 @@ pub(super) const DELETE_ZERO_BALANCES: &str = "
 // Undo balance updates
 const ROLLBACK_BALANCE_UPDATES: &str = "
     with new_diffs as (
-        select address
+        select address_id
             , sum(value) as value
         from bal.erg_diffs
         where height = $1
@@ -62,27 +62,27 @@ const ROLLBACK_BALANCE_UPDATES: &str = "
     update bal.erg b
     set value = b.value - d.value
     from new_diffs d
-    where d.address = b.address;";
+    where d.address_id = b.address_id;";
 
 const ROLLBACK_DELETE_ZERO_BALANCES: &str = "
     with deleted_addresses as (
-        select d.address
+        select d.address_id
             , sum(d.value) as value
         from bal.erg_diffs d
-        left join bal.erg b on b.address = d.address
+        left join bal.erg b on b.address_id = d.address_id
         where d.height = $1
-            and b.address is null
+            and b.address_id is null
         group by 1
     )
-    insert into bal.erg(address, value)
-    select address
+    insert into bal.erg(address_id, value)
+    select address_id
         , 0 -- actual value will be set by update rollback
     from deleted_addresses;";
 
 pub fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
-        "alter table bal.erg add primary key(address);",
-        "alter table bal.erg alter column address set not null;",
+        "alter table bal.erg add primary key(address_id);",
+        "alter table bal.erg alter column address_id set not null;",
         "alter table bal.erg alter column value set not null;",
         "alter table bal.erg add check (value >= 0);",
         "create index on bal.erg(value);",
@@ -103,7 +103,7 @@ pub mod replay {
         tx.execute(
             "
             create table repair.bal_erg as
-                select address
+                select address_id
                     , sum(value) as value
                 from bal.erg_diffs
                 where height <= $1
@@ -114,8 +114,11 @@ pub mod replay {
         .unwrap();
 
         // Same constraints as synced table
-        tx.execute("alter table repair.bal_erg add primary key (address);", &[])
-            .unwrap();
+        tx.execute(
+            "alter table repair.bal_erg add primary key (address_id);",
+            &[],
+        )
+        .unwrap();
         tx.execute("alter table repair.bal_erg add check (value >= 0);", &[])
             .unwrap();
         tx.execute("create index on repair.bal_erg(value);", &[])
@@ -130,7 +133,7 @@ pub mod replay {
         tx.execute(
             "
             with new_diffs as (
-                select address
+                select address_id
                 , sum(value) as value
                 from bal.erg_diffs
                 where height = $1
@@ -139,7 +142,7 @@ pub mod replay {
             update repair.bal_erg b
             set value = b.value + d.value
             from new_diffs d
-            where d.address = b.address;",
+            where d.address_id = b.address_id;",
             &[&height],
         )
         .unwrap();
@@ -147,16 +150,16 @@ pub mod replay {
         // Insert new addresses
         tx.execute(
             "with new_addresses as (
-            select d.address
+            select d.address_id
                 , sum(d.value) as value
             from bal.erg_diffs d
-            left join repair.bal_erg b on b.address = d.address
+            left join repair.bal_erg b on b.address_id = d.address_id
             where d.height = $1
-                and b.address is null
+                and b.address_id is null
             group by 1
         )
-        insert into repair.bal_erg (address, value)
-        select address
+        insert into repair.bal_erg (address_id, value)
+        select address_id
             , value
         from new_addresses;",
             &[&height],
