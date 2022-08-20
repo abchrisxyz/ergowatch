@@ -36,21 +36,23 @@ async def rich_list(
     """
     if token_id is None:
         query = f"""
-            select address
-                , value as balance
-            from bal.erg
-            where address <> '2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU'
-            order by value desc
+            select a.address
+                , b.value as balance
+            from bal.erg b
+            join core.addresses a on a.id = b.address_id 
+            where a.address <> '2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU'
+            order by b.value desc
             limit $1;
         """
         args = [limit]
     else:
         query = """
-            select address
-                , value as balance
-            from bal.tokens
-            where token_id = $2
-            order by value desc
+            select a.address
+                , b.value as balance
+            from bal.tokens b
+            join core.addresses a on a.id = b.address_id
+            where b.token_id = $2
+            order by b.value desc
             limit $1;  
         """
         args = [limit, token_id]

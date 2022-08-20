@@ -9,22 +9,37 @@ TOKEN_A = "tokenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 TOKEN_B = "tokenbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 TOKEN_X = "validxtokenxidxofxnonxexistingxtokenxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
+ADDR = {
+    "addr1": 1,
+    "addr2": 2,
+    "addr3": 3,
+    "addr4": 4,
+}
+
+ADDR_SQL = (
+    "insert into core.addresses (id, address, spot_height) values "
+    + ",".join([f"({i+1}, '{addr}', 1)" for i, addr in enumerate(ADDR)])
+    + ";"
+)
+
 
 @pytest.fixture(scope="module")
 def client():
     sql = f"""
-        insert into bal.erg (address, value) values
-        ('addr1', 4000),
-        ('addr2', 2000),
-        ('addr3', 1000),
-        ('addr4', 5000);
+        {ADDR_SQL}
+        
+        insert into bal.erg (address_id, value) values
+        ({ADDR['addr1']}, 4000),
+        ({ADDR['addr2']}, 2000),
+        ({ADDR['addr3']}, 1000),
+        ({ADDR['addr4']}, 5000);
 
-        insert into bal.tokens (address, token_id, value) values
-        ('addr1', '{TOKEN_A}', 400),
-        ('addr1', '{TOKEN_B}', 800),
-        ('addr2', '{TOKEN_A}', 200),
-        ('addr3', '{TOKEN_A}', 100),
-        ('addr4', '{TOKEN_A}', 500);
+        insert into bal.tokens (address_id, token_id, value) values
+        ({ADDR['addr1']}, '{TOKEN_A}', 400),
+        ({ADDR['addr1']}, '{TOKEN_B}', 800),
+        ({ADDR['addr2']}, '{TOKEN_A}', 200),
+        ({ADDR['addr3']}, '{TOKEN_A}', 100),
+        ({ADDR['addr4']}, '{TOKEN_A}', 500);
     """
     with MockDB(sql=sql) as _:
         with TestClient(app) as client:

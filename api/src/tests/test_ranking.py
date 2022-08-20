@@ -5,22 +5,44 @@ from fastapi.testclient import TestClient
 from ..main import app
 from .db import MockDB
 
+ADDR = {
+    "9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 1,
+    "9addr2axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 2,
+    "9addr2bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 3,
+    "9addr4xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 4,
+    "9addr5axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 5,
+    "9addr5bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 6,
+    "9addr7xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 7,
+    "1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 8,
+    "9contract2xshorterthan51chars": 9,
+    "9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx": 10,
+    "4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 11,
+}
+
+ADDR_SQL = (
+    "insert into core.addresses (id, address, spot_height) values "
+    + ",".join([f"({i+1}, '{addr}', 1)" for i, addr in enumerate(ADDR)])
+    + ";"
+)
+
 
 @pytest.fixture(scope="module")
 def client():
-    sql = """
-        insert into bal.erg (address, value) values
-        ('9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',       5000000),
-        ('9addr2axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',       4000000),
-        ('9addr2bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',       4000000),
-        ('9addr4xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',       3000000),
-        ('9addr5axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',       2000000),
-        ('9addr5bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',       2000000),
-        ('9addr7xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',       1000000),
-        ('1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',   10000000000),
-        ('9contract2xshorterthan51chars',                         20000000000),
-        ('9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx', 30000000000),
-        ('4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',      4000000);
+    sql = f"""
+        {ADDR_SQL}
+
+        insert into bal.erg (address_id, value) values
+        ({ADDR['9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       5000000),
+        ({ADDR['9addr2axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       4000000),
+        ({ADDR['9addr2bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       4000000),
+        ({ADDR['9addr4xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       3000000),
+        ({ADDR['9addr5axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       2000000),
+        ({ADDR['9addr5bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       2000000),
+        ({ADDR['9addr7xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       1000000),
+        ({ADDR['1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},   10000000000),
+        ({ADDR['9contract2xshorterthan51chars']},                         20000000000),
+        ({ADDR['9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx']}, 30000000000),
+        ({ADDR['4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},      4000000);
     """
     with MockDB(sql=sql) as db_name:
         with TestClient(app) as client:

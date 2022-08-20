@@ -11,33 +11,54 @@ TOKEN_A = "tokenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 TOKEN_B = "tokenbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 TOKEN_X = "validxtokenxidxofxnonxexistingxtokenxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
+ADDR = {
+    "9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 1,
+    "9addr2xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 2,
+    "9addr3xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 3,
+    "9addr3bisxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 4,
+    "9addr4xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 5,
+    "9addr5xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 6,
+    "1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 7,
+    "9contract2xshorterthan51chars": 8,
+    "9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx": 9,
+    "4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 10,
+}
+
+ADDR_SQL = (
+    "insert into core.addresses (id, address, spot_height) values "
+    + ",".join([f"({i+1}, '{addr}', 1)" for i, addr in enumerate(ADDR)])
+    + ";"
+)
+
 
 @pytest.fixture(scope="module")
 def client():
     sql = f"""
-        insert into bal.erg (address, value) values
-        ('9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',   1000000),
-        ('9addr2xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',   2000000),
-        ('9addr3xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',   3000000),
-        ('9addr4xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',   4000000),
-        ('9addr5xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',   5000000),
-        ('1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',   1000000),
-        ('9contract2xshorterthan51chars',                         2000000),
-        ('9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx', 3000000),
-        ('4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',  4000000);
+        {ADDR_SQL}
+        
+        insert into bal.erg (address_id, value) values
+        ({ADDR['9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},   1000000),
+        ({ADDR['9addr2xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},   2000000),
+        ({ADDR['9addr3xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},   3000000),
+        ({ADDR['9addr4xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},   4000000),
+        ({ADDR['9addr5xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},   5000000),
+        ({ADDR['1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},   1000000),
+        ({ADDR['9contract2xshorterthan51chars']},                         2000000),
+        ({ADDR['9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx']}, 3000000),
+        ({ADDR['4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},  4000000);
 
-        insert into bal.tokens (address, token_id, value) values
-        ('9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', '{TOKEN_A}',   1000000),
-        ('9addr2xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', '{TOKEN_A}',   2000000),
-        ('9addr3xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', '{TOKEN_A}',   3000000),
-        ('9addr3xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', '{TOKEN_B}',   3000000),
-        ('9addr3bisxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', '{TOKEN_A}',   3000000),
-        ('9addr4xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', '{TOKEN_A}',   4000000),
-        ('9addr5xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', '{TOKEN_A}',   5000000),
-        ('1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', '{TOKEN_A}',   1000000),
-        ('9contract2xshorterthan51chars', '{TOKEN_A}',                         2000000),
-        ('9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx', '{TOKEN_A}', 3000000),
-        ('4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', '{TOKEN_A}',  4000000);
+        insert into bal.tokens (address_id, token_id, value) values
+        ({ADDR['9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}',   1000000),
+        ({ADDR['9addr2xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}',   2000000),
+        ({ADDR['9addr3xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}',   3000000),
+        ({ADDR['9addr3xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_B}',   3000000),
+        ({ADDR['9addr3bisxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}',   3000000),
+        ({ADDR['9addr4xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}',   4000000),
+        ({ADDR['9addr5xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}',   5000000),
+        ({ADDR['1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}',   1000000),
+        ({ADDR['9contract2xshorterthan51chars']}, '{TOKEN_A}',                         2000000),
+        ({ADDR['9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}', 3000000),
+        ({ADDR['4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}',  4000000);
     """
     with MockDB(sql=sql) as db_name:
         with TestClient(app) as client:

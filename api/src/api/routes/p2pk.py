@@ -28,8 +28,9 @@ async def get_p2pk_address_count(
     """
     query = f"""
         select count(*) as cnt
-        from bal.erg
-        where address like '9%' and length(address) = 51
+        from bal.erg b
+        join core.addresses a on a.id = b.address_id
+        where a.address like '9%' and length(address) = 51
     """
     args = []
     if token_id is not None:

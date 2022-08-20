@@ -63,11 +63,12 @@ async def token_supply(
         ) as emitted
         ,  
         (
-            select array[sum(value)
-                , sum(value) filter (where address not like '9%' or length(address) <> 51)
+            select array[sum(b.value)
+                , sum(b.value) filter (where a.address not like '9%' or length(a.address) <> 51)
             ] as total_and_contracts
-            from bal.tokens
-            where token_id = $1
+            from bal.tokens b
+            join core.addresses a on a.id = b.address_id
+            where b.token_id = $1
         ) 
     """
     async with request.app.state.db.acquire() as conn:

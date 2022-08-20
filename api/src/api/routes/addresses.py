@@ -36,14 +36,14 @@ async def address_balance(
     query = """
         select value
         from bal.erg
-        where address = $1;
+        where address_id = core.address_id($1);
     """
     if token_id is not None:
         args.append(token_id)
         query = """
             select value
             from bal.tokens
-            where address = $1
+            where address_id = core.address_id($1)
                 and token_id = $2;
         """
     async with request.app.state.db.acquire() as conn:
@@ -64,14 +64,14 @@ async def address_balance_at_height(
     query = """
         select sum(value) as value
         from bal.erg_diffs
-        where address = $1 and height <= $2
+        where address_id = core.address_id($1) and height <= $2
     """
     if token_id is not None:
         opt_args = [token_id]
         query = """
             select sum(value) as value
             from bal.tokens_diffs
-            where address = $1
+            where address_id = core.address_id($1)
                 and height <= $2
                 and token_id = $3
         """
@@ -95,7 +95,7 @@ async def address_balance_at_timestamp(
         select sum(d.value) as value
         from bal.erg_diffs d
         join core.headers h on h.height = d.height
-        where d.address = $1 and h.timestamp <= $2
+        where d.address_id = core.address_id($1) and h.timestamp <= $2
     """
     if token_id is not None:
         opt_args = [token_id]
@@ -103,7 +103,7 @@ async def address_balance_at_timestamp(
             select sum(value) as value
             from bal.tokens_diffs d
             join core.headers h on h.height = d.height
-            where address = $1
+            where address_id = core.address_id($1)
                 and h.timestamp <= $2
                 and token_id = $3
         """
@@ -137,7 +137,7 @@ async def address_balance_history(
             , sum(d.value) over (order by d.height) as balance
         from bal.{'erg' if token_id is None else 'tokens'}_diffs d
         join core.headers h on h.height = d.height
-        where d.address = $1
+        where d.address_id = core.address_id($1)
             {'' if token_id is None else 'and token_id = $4'}
         order by 1 {'desc' if desc else ''}
         limit $2 offset $3;
@@ -180,7 +180,7 @@ async def address_tags(
             , a.type
         from cex.addresses a
         join cex.cexs c on c.id = a.cex_id
-        where a.address = $1;
+        where a.address_id = core.address_id($1);
     """
     async with request.app.state.db.acquire() as conn:
         row = await conn.fetchrow(query, address)

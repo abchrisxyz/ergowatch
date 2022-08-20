@@ -34,13 +34,13 @@ async def p2pk_address_rank(
     """
     query = f"""
         with ranked_p2pk as (
-            select rank() over (order by value desc)
-                , address
-                , value
-            from bal.erg
-            where address like '9%'
-                and length(address) = 51
-            order by address desc
+            select rank() over (order by b.value desc)
+                , a.address
+                , b.value
+            from bal.erg b
+            join core.addresses a on a.id = b.address_id
+            where a.address like '9%'
+                and length(a.address) = 51
         ), target as (
             select rank
                 , address

@@ -12,33 +12,42 @@ TOKEN_X = "validxtokenxidxofxnonxexistingxtokenxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 @pytest.fixture(scope="module")
 def client():
+    coinex_main = "9fowPvQ2GXdmhD2bN54EL9dRnio3kBQGyrD3fkbHwuTXD6z1wBU"
     sql = f"""
-        insert into bal.erg_diffs (address, height, tx_id, value) values
-        ('addr1', 10, 'tx_1',   5000),
-        ('addr1', 20, 'tx_2',  -2000),
-        ('addr2', 20, 'tx_2',   2000),
-        ('addr1', 30, 'tx_3',   1000);
+        insert into core.addresses (id, address, spot_height) values
+        (1, 'addr1', 10),
+        (2, 'addr2', 20),
+        (3, '{coinex_main}', 30);
 
-        insert into bal.erg (address, value) values
-        ('addr1', 4000),
-        ('addr2', 2000);
+        insert into bal.erg_diffs (address_id, height, tx_id, value) values
+        (1, 10, 'tx_1',   5000),
+        (1, 20, 'tx_2',  -2000),
+        (2, 20, 'tx_2',   2000),
+        (1, 30, 'tx_3',   1000);
 
-        insert into bal.tokens_diffs (address, token_id, height, tx_id, value) values
-        ('addr1', '{TOKEN_A}', 10, 'tx_1',   500),
-        ('addr1', '{TOKEN_B}', 10, 'tx_1',   800),
-        ('addr1', '{TOKEN_A}', 20, 'tx_2',  -200),
-        ('addr2', '{TOKEN_A}', 20, 'tx_2',   200),
-        ('addr1', '{TOKEN_A}', 30, 'tx_3',   100);
+        insert into bal.erg (address_id, value) values
+        (1, 4000),
+        (2, 2000);
 
-        insert into bal.tokens (address, token_id, value) values
-        ('addr1', '{TOKEN_A}', 400),
-        ('addr1', '{TOKEN_B}', 800),
-        ('addr2', '{TOKEN_A}', 200);
+        insert into bal.tokens_diffs (address_id, token_id, height, tx_id, value) values
+        (1, '{TOKEN_A}', 10, 'tx_1',   500),
+        (1, '{TOKEN_B}', 10, 'tx_1',   800),
+        (1, '{TOKEN_A}', 20, 'tx_2',  -200),
+        (2, '{TOKEN_A}', 20, 'tx_2',   200),
+        (1, '{TOKEN_A}', 30, 'tx_3',   100);
+
+        insert into bal.tokens (address_id, token_id, value) values
+        (1, '{TOKEN_A}', 400),
+        (1, '{TOKEN_B}', 800),
+        (2, '{TOKEN_A}', 200);
 
         insert into core.headers (height, id, parent_id, timestamp, difficulty, vote1, vote2, vote3) values 
         (10, 'header10', 'header09', 1567123456789, 111222333, 0, 0, 0),
         (20, 'header20', 'header19', 1568123456789, 111122233, 0, 0, 0),
         (30, 'header30', 'header29', 1569123456789, 111222333, 0, 0, 0);
+
+        insert into cex.addresses (address_id, cex_id, type) values
+        (3, 1, 'main');
     """
     with MockDB(sql=sql) as _:
         with TestClient(app) as client:
