@@ -6,6 +6,10 @@
 
 [Issue 55](https://github.com/abchrisxyz/ergowatch/issues/55) - Added height <--> timestamp conversion utils
 
+### Fixed
+
+[Issue 64](https://github.com/abchrisxyz/ergowatch/issues/64) - Work around b-tree index limitations
+
 
 ## v0.4.0 - 2022-07-08
 
