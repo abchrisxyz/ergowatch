@@ -219,8 +219,6 @@ class TestRev0DB:
             pub1-box2  999
             >
             pub2-box1  999
-
-        
         """
         return Scenario(desc, 599_999, 1234560100000, main_only=True)
 
