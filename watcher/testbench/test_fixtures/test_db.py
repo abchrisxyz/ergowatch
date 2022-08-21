@@ -144,8 +144,7 @@ class TestPopulatedDB:
         assert "dummy-token-box-id-1" in box_ids
         assert scenario.id("pub1-box1") in box_ids
 
-    def test_db_state_bal(self, cur, scenario):
-        # Erg diffs
+    def test_bal_erg_diffs(self, cur, scenario):
         cur.execute(
             """
             select d.height
@@ -165,7 +164,7 @@ class TestPopulatedDB:
             (599_999, 1000, "dummy-token-minting-address"),
         ]
 
-        # Erg balances
+    def test_bal_erg(self, cur, scenario):
         cur.execute(
             """
             select b.value
@@ -183,6 +182,35 @@ class TestPopulatedDB:
             (1000, scenario.address("pub9")),
             (1000, "dummy-token-minting-address"),
         ]
+
+    def test_bal_tokens_diffs(self, cur, scenario):
+        cur.execute(
+            """
+            select d.height
+                , d.token_id
+                , d.tx_id
+                , d.value
+                , a.address
+            from bal.tokens_diffs d
+            join core.addresses a on a.id = d.address_id;
+            """
+        )
+        rows = cur.fetchall()
+        assert len(rows) == 0
+
+    def test_bal_tokens(self, cur, scenario):
+        cur.execute(
+            """
+            select b.value
+                , b.token_id
+                , a.address
+            from bal.tokens b
+            join core.addresses a on a.id = b.address_id
+            order by 2;
+            """
+        )
+        rows = cur.fetchall()
+        assert len(rows) == 0
 
 
 @pytest.mark.order(3)
