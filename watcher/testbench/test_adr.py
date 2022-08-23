@@ -152,55 +152,6 @@ class TestSyncRollback:
 
 
 @pytest.mark.order(ORDER)
-class TestSyncNoForkChild:
-    """
-    Start with bootstrapped db.
-    Scenario where node has two block candidates for last height.
-    """
-
-    scenario = Scenario(SCENARIO_DESCRIPTION, 599_999, 1234560000000)
-
-    @pytest.fixture(scope="class")
-    def synced_db(self, temp_cfg, temp_db_class_scoped):
-        """
-        Run watcher with mock api and return cursor to test db.
-        """
-        with MockApi() as api:
-            api = ApiUtil()
-
-            # Initially have blocks a, b and x
-            self.scenario.mask(3)
-            api.set_blocks(self.scenario.blocks)
-
-            # Bootstrap db
-            with pg.connect(temp_db_class_scoped) as conn:
-                bootstrap_db(conn, self.scenario)
-
-            # 1 st run
-            # No way to tell fork appart, should pick 1st block in appearance order (block-x)
-            cp = run_watcher(temp_cfg)
-            assert cp.returncode == 0
-            assert "Including block block-x" in cp.stdout.decode()
-            assert "Including block block-b" not in cp.stdout.decode()
-            assert "no child" not in cp.stdout.decode()
-
-            # Now make all blocks visible
-            self.scenario.unmask()
-            api.set_blocks(self.scenario.blocks)
-
-            # Run again
-            cp = run_watcher(temp_cfg)
-            assert cp.returncode == 0
-            assert "Including block block-c" in cp.stdout.decode()
-
-            with pg.connect(temp_db_class_scoped) as conn:
-                yield conn
-
-    def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.scenario)
-
-
-@pytest.mark.order(ORDER)
 class TestGenesis:
     """
     Start with empty, unconstrained db.
