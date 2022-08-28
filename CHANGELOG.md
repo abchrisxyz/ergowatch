@@ -1,10 +1,14 @@
 # Changelog
 
-## v0.5.0 - UNRELEASED
+## v0.4.1 - 2022-08-29
+
+BREAKING CHANGES - requires a full db resync. Intermediate release to fix indexing issues.
 
 ### New features
 
 [Issue 55](https://github.com/abchrisxyz/ergowatch/issues/55) - Added height <--> timestamp conversion utils
+
+[Issue 57](https://github.com/abchrisxyz/ergowatch/issues/57) - Track address-level mean supply age
 
 ### Fixed
 
