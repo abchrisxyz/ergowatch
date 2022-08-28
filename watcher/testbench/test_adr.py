@@ -180,7 +180,6 @@ class TestGenesis:
         _test_db_state(synced_db, self.scenario)
 
 
-@pytest.mark.skip("Not implemented")
 @pytest.mark.order(ORDER)
 class TestMigrations:
     """
