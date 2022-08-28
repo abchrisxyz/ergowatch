@@ -33,7 +33,7 @@ pub(super) const UPDATE_BALANCES: &str = "
     set value = a.value + d.value
         , mean_age_timestamp = case 
             when d.value > 0 then
-                a.value * a.mean_age_timestamp / (a.value + d.value) + d.value * $2::bigint / (a.value + d.value)
+                a.value / (a.value + d.value) * a.mean_age_timestamp + d.value / (a.value + d.value) * $2::bigint
             when d.value = -a.value then 0
             else a.mean_age_timestamp
         end
@@ -75,7 +75,7 @@ const ROLLBACK_BALANCE_UPDATES: &str = "
     set value = a.value - d.value
         , mean_age_timestamp = case
             when (a.value - d.value) <> 0 then
-                a.mean_age_timestamp * (a.value + d.value) / (a.value - d.value) - d.value * $2::bigint / (a.value - d.value)
+                a.mean_age_timestamp / (a.value - d.value) * (a.value + d.value) - d.value / (a.value - d.value) * $2::bigint
             else 0
         end
     from updated_addresses_diffs d
