@@ -1,3 +1,6 @@
+/// Erg/USD price defined at each block height.
+///
+/// Interpolated from hourly CoinGecko data.
 use crate::db::coingecko::Cache as CoinGeckoCache;
 use crate::parsing::BlockData;
 use log::info;
