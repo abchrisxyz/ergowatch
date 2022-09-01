@@ -354,11 +354,11 @@ fn start(
             // Pause repair session and wait for next message
             Ok(Message::Pause) => {
                 info!("Repair session received pause signal");
+                channel_tx.send(Response::Paused).unwrap();
                 match wait_for_message(&channel_rx) {
                     Message::Abort => break,
                     Message::Pause => {
-                        warn!("Repair sessions received pause signal while already paused");
-                        channel_tx.send(Response::Paused).unwrap();
+                        panic!("Repair session received pause signal while already paused");
                     }
                     Message::Resume => {
                         info!("Repair session received resume signal");
