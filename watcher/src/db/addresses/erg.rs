@@ -86,7 +86,7 @@ const ROLLBACK_BALANCE_UPDATES: &str = "
 // Precalc deleted balances to avoid bigint overflows
 const ROLLBACK_DELETE_ZERO_BALANCES: &str = "
     with deleted_addresses as (
-        select d.address_id
+        select distinct d.address_id
         from adr.erg_diffs d
         left join adr.erg a on a.address_id = d.address_id
         where d.height = $1
@@ -97,7 +97,7 @@ const ROLLBACK_DELETE_ZERO_BALANCES: &str = "
         from deleted_addresses x
         join adr.erg_diffs d on d.address_id = x.address_id
         where d.height < $1
-        group by 1
+        group by 1 having sum(d.value) <> 0
     )
     -- recalc from scratch
     insert into adr.erg(address_id, value, mean_age_timestamp)

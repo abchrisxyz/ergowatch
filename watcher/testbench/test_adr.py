@@ -22,23 +22,37 @@ from utils import assert_column_not_null
 ORDER = 12
 
 SCENARIO_DESCRIPTION = """
+    // pub8 is used to trigger what caused https://github.com/abchrisxyz/ergowatch/issues/65
+    // an existing address being rolled back while previous balance was zero
     block-a
         base-box1 1000
         >
         base-box2  950
-        con1-box1   50
+        con1-box1   45
+        pub8-box1    5
+        --
+        pub8-box1 5
+        >
+        con1-box2 5
 
     //----------------------fork-of-b----------------------
     block-x - fork of block b to be ignored/rolled back:
-        con1-box1   50
+        con1-box1   45
+        con1-box2    5
         >
         con9-box1    3
-        pub9-box1   20 (con1-box1: 3000)
+        pub9-box1   10 (con1-box1: 3000)
         pub1-box0   27
+        pub8-box2   10
+        --
+        pub8-box2   10
+        >
+        pub9-box2   10
     //------------------------------------------------------
 
     block-b-a
-        con1-box1   50
+        con1-box1   45
+        con1-box2    5
         >
         con2-box1   40
         pub1-box1   10 (con1-box1: 2000)
@@ -53,7 +67,7 @@ SCENARIO_DESCRIPTION = """
         --
         fees-box1    1
         >
-        con1-box2    1
+        con1-box3    1
         --
         // intra-block partial spend of token con1-box1
         // full burning of token pub1-box1
@@ -294,30 +308,34 @@ def assert_erg_diffs(cur: pg.Cursor, s: Scenario):
         """
     )
     rows = cur.fetchall()
-    assert len(rows) == 15
+    assert len(rows) == 18
 
     bootstrap_tx_id = GENESIS_ID if s.parent_height == 0 else "bootstrap-tx"
     assert rows[0] == (h + 0, bootstrap_tx_id, s.address("base"), 1000)
 
     assert rows[1] == (h + 1, s.id("tx-a1"), s.address("base"), -50)
-    assert rows[2] == (h + 1, s.id("tx-a1"), s.address("con1"), 50)
+    assert rows[2] == (h + 1, s.id("tx-a1"), s.address("pub8"), 5)
+    assert rows[3] == (h + 1, s.id("tx-a1"), s.address("con1"), 45)
 
-    assert rows[3] == (h + 2, s.id("tx-b1"), s.address("con1"), -50)
-    assert rows[4] == (h + 2, s.id("tx-b1"), s.address("pub1"), 10)
-    assert rows[5] == (h + 2, s.id("tx-b1"), s.address("con2"), 40)
+    assert rows[4] == (h + 1, s.id("tx-a2"), s.address("pub8"), -5)
+    assert rows[5] == (h + 1, s.id("tx-a2"), s.address("con1"), 5)
 
-    assert rows[6] == (h + 3, s.id("tx-c1"), s.address("pub1"), -4)
-    assert rows[7] == (h + 3, s.id("tx-c1"), s.address("fees"), 1)
-    assert rows[8] == (h + 3, s.id("tx-c1"), s.address("pub2"), 3)
+    assert rows[6] == (h + 2, s.id("tx-b1"), s.address("con1"), -50)
+    assert rows[7] == (h + 2, s.id("tx-b1"), s.address("pub1"), 10)
+    assert rows[8] == (h + 2, s.id("tx-b1"), s.address("con2"), 40)
 
-    assert rows[9] == (h + 3, s.id("tx-c2"), s.address("fees"), -1)
-    assert rows[10] == (h + 3, s.id("tx-c2"), s.address("con1"), 1)
+    assert rows[9] == (h + 3, s.id("tx-c1"), s.address("pub1"), -4)
+    assert rows[10] == (h + 3, s.id("tx-c1"), s.address("fees"), 1)
+    assert rows[11] == (h + 3, s.id("tx-c1"), s.address("pub2"), 3)
 
-    assert rows[11] == (h + 3, s.id("tx-c3"), s.address("pub2"), -1)
-    assert rows[12] == (h + 3, s.id("tx-c3"), s.address("pub1"), 1)
+    assert rows[12] == (h + 3, s.id("tx-c2"), s.address("fees"), -1)
+    assert rows[13] == (h + 3, s.id("tx-c2"), s.address("con1"), 1)
 
-    assert rows[13] == (h + 4, s.id("tx-d1"), s.address("base"), -50)
-    assert rows[14] == (h + 4, s.id("tx-d1"), s.address("con2"), 50)
+    assert rows[14] == (h + 3, s.id("tx-c3"), s.address("pub2"), -1)
+    assert rows[15] == (h + 3, s.id("tx-c3"), s.address("pub1"), 1)
+
+    assert rows[16] == (h + 4, s.id("tx-d1"), s.address("base"), -50)
+    assert rows[17] == (h + 4, s.id("tx-d1"), s.address("con2"), 50)
 
 
 def assert_erg_mean_age_timestamps(cur: pg.Cursor, s: Scenario):
