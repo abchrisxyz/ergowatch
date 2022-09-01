@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.4.2 - 2022-09-01
+
+### Fixed
+
+[Issue 65](https://github.com/abchrisxyz/ergowatch/issues/65) - Fixed division by zero during rollbacks
+
+Fixed deadlock when pausing repair events
+
+
 ## v0.4.1 - 2022-08-29
 
 BREAKING CHANGES - requires a full db resync. Intermediate release to fix indexing issues.
@@ -30,6 +39,7 @@ BREAKING CHANGES - requires a full db resync
 
 ### Fixed
 Faster balance diff processing.
+
 
 ## v0.3.0 - 2022-06-13
 
