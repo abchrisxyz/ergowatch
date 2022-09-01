@@ -149,7 +149,7 @@ impl RepairEvent {
                 }
             };
             // Now wait for pause ankownledgement or end of channel
-            // if pause request request was semt during last pass.
+            // if pause request was sent during last pass.
             if let Some(rx) = &self.rx {
                 match rx.recv() {
                     Ok(Response::Paused) => info!("Repair event paused"),
