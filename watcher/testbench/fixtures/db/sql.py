@@ -50,6 +50,7 @@ class Address:
     id: int
     address: str
     spot_height: int
+    p2pk: bool
 
 
 @dataclass
@@ -163,7 +164,7 @@ def generate_rev0_sql(scenario: Scenario) -> str:
     for tx in transactions:
         sql += format_transaction_sql(tx)
     for address in addresses:
-        sql += format_address_sql(address)
+        sql += format_address_sql(address, rev0=True)
     for box in outputs:
         sql += format_output_sql(box)
     for box in inputs:
@@ -370,13 +371,17 @@ def generate_bootstrap_sql_bal_erg(header: Header, outputs: List[Output]) -> str
     """
     qry_diffs = dedent(
         """
-        insert into adr.erg_diffs (address_id, height, tx_id, value)        values ('{}', {}, '{}', {});\n
+        insert into adr.erg_diffs (address_id, height, tx_id, value)
+        values ('{}', {}, '{}', {});\n
     """
     )
 
     qry_adr = dedent(
         """
-        insert into adr.erg(address_id, value, mean_age_timestamp)            select d.address_id                , sum(d.value)                , sum(d.value * h.timestamp) / sum(d.value)
+        insert into adr.erg(address_id, value, mean_age_timestamp)
+            select d.address_id
+                , sum(d.value)
+                , sum(d.value * h.timestamp) / sum(d.value)
             from adr.erg_diffs d
             join core.headers h on h.height = d.height
             group by 1
@@ -385,7 +390,8 @@ def generate_bootstrap_sql_bal_erg(header: Header, outputs: List[Output]) -> str
     )
     return "".join(
         [
-            qry_diffs.format(box.address_id, header.height, box.tx_id, box.value)            for box in outputs
+            qry_diffs.format(box.address_id, header.height, box.tx_id, box.value)
+            for box in outputs
         ]
         + [
             qry_adr,
@@ -621,6 +627,7 @@ def extract_addresses(outputs: List[Output]) -> List[Address]:
                 id=box.address_id,
                 address=box.address,
                 spot_height=box.creation_height,
+                p2pk=box.address.startswith("9") and len(box.address) == 51,
             )
         )
         known_ids.add(box.address_id)
@@ -835,17 +842,27 @@ def format_transaction_sql(tx: Transaction):
     )
 
 
-def format_address_sql(a: List):
-    return dedent(
-        f"""
-        insert into core.addresses (id, address, spot_height)
-        values (
-            '{a.id}',
-            '{a.address}',
-            '{a.spot_height}'
-        );
-    """
-    )
+def format_address_sql(a: List, rev0=False):
+    if rev0:
+        statement = f"""
+            insert into core.addresses (id, address, spot_height)
+            values (
+                '{a.id}',
+                '{a.address}',
+                '{a.spot_height}'
+            );
+        """
+    else:
+        statement = f"""
+            insert into core.addresses (id, address, spot_height, p2pk)
+            values (
+                '{a.id}',
+                '{a.address}',
+                '{a.spot_height}',
+                '{a.p2pk}'
+            );
+        """
+    return dedent(statement)
 
 
 def format_output_sql(box: Output):

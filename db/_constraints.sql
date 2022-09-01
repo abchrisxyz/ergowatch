@@ -17,6 +17,7 @@ alter table core.addresses add primary key (id);
 alter table core.addresses alter column id set not null;
 alter table core.addresses alter column address set not null;
 alter table core.addresses alter column spot_height set not null;
+alter table core.addresses alter column p2pk set not null;
 create index on core.addresses using brin(spot_height);
 --  Already declared in schema.sql:
 -- create index on core.addresses (md5(address));

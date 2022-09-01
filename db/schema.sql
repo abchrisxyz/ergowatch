@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (2, 15);
+insert into ew.revision (major, minor) values (2, 16);
 
 
 -------------------------------------------------------------------------------
@@ -19,7 +19,8 @@ create schema core;
 create table core.addresses (
 	id bigint,
 	address text,
-	spot_height int
+	spot_height int,
+	p2pk boolean
 );
 -- These are needed to add new addresses, so declaring here and not in constraints.sql.
 create index on core.addresses (md5(address));

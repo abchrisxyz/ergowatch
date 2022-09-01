@@ -651,18 +651,19 @@ def assert_addresses(cur: pg.Cursor, s: Scenario):
         select id
             , address
             , spot_height
+            , p2pk
         from core.addresses
         order by 1;
     """
     )
     rows = cur.fetchall()
     assert len(rows) == 6
-    assert rows[0] == (1, s.address("base"), s.parent_height + 0)
-    assert rows[1] == (2, s.address("con1"), s.parent_height + 1)
-    assert rows[2] == (3, s.address("con2"), s.parent_height + 2)
-    assert rows[3] == (4, s.address("pub1"), s.parent_height + 2)
-    assert rows[4] == (5, s.address("pub2"), s.parent_height + 3)
-    assert rows[5] == (6, s.address("fees"), s.parent_height + 3)
+    assert rows[0] == (1, s.address("base"), s.parent_height + 0, False)
+    assert rows[1] == (2, s.address("con1"), s.parent_height + 1, False)
+    assert rows[2] == (3, s.address("con2"), s.parent_height + 2, False)
+    assert rows[3] == (4, s.address("pub1"), s.parent_height + 2, True)
+    assert rows[4] == (5, s.address("pub2"), s.parent_height + 3, True)
+    assert rows[5] == (6, s.address("fees"), s.parent_height + 3, False)
 
 
 def assert_inputs(cur: pg.Cursor, s: Scenario):

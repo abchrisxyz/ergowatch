@@ -5,8 +5,8 @@ use postgres::Transaction;
 /// Insert address if new and return address id in any case
 const TRY_INSERT_ADDRESS: &str = "
     with test_insert as (
-        insert into core.addresses (id, address, spot_height)
-        select $1, $2, $3
+        insert into core.addresses (id, address, spot_height, p2pk)
+        select $1, $2, $3, $4
         -- where not exists (select * from core.addresses where address = $2)
         on conflict do nothing
         returning $1 as id
@@ -28,6 +28,7 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
                 Type::INT8, // id
                 Type::TEXT, // address
                 Type::INT4, // spot_height
+                Type::BOOL, // is it a p2pk address?
             ],
         )
         .unwrap();
@@ -36,7 +37,10 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
 
     for address in extract_addresses(block) {
         let row = tx
-            .query_one(&statement, &[&next_id, &address, &block.height])
+            .query_one(
+                &statement,
+                &[&next_id, &address, &block.height, &is_p2pk(address)],
+            )
             .unwrap();
         // Increment id if it was assigned to current address
         let address_id: i64 = row.get(0);
@@ -51,7 +55,10 @@ pub(super) fn include_genesis_boxes(tx: &mut Transaction, boxes: &Vec<crate::par
     let mut next_id = get_next_address_id(tx);
     for op in boxes {
         let row = tx
-            .query_one(TRY_INSERT_ADDRESS, &[&next_id, &op.address, &block_height])
+            .query_one(
+                TRY_INSERT_ADDRESS,
+                &[&next_id, &op.address, &block_height, &is_p2pk(&op.address)],
+            )
             .unwrap();
         // Increment id if it was assigned to current address
         let address_id: i64 = row.get(0);
@@ -102,9 +109,14 @@ fn get_next_address_id(tx: &mut Transaction) -> i64 {
     last_id + 1
 }
 
+fn is_p2pk(address: &str) -> bool {
+    address.starts_with("9") && address.len() == 51
+}
+
 #[cfg(test)]
 mod tests {
     use super::extract_addresses;
+    use super::is_p2pk;
     use crate::parsing::testing::block_with_repeated_addresses;
 
     #[test]
@@ -134,6 +146,31 @@ mod tests {
         assert_eq!(
             addresses[5],
             "88dhgzEuTXaRvR2VKsnXYTGUPh3A9VK8ojeRcpHihcrBu23dnwbB12BbVcJuTcdGfRuSzA8bW25Az6n9"
+        );
+    }
+
+    #[test]
+    fn test_is_p2pk() -> () {
+        assert_eq!(
+            true,
+            is_p2pk("9h7L7sUHZk43VQC3PHtSp5ujAWcZtYmWATBH746wi75C5XHi68b")
+        );
+        // 51 chars but not starting with 9
+        assert_eq!(
+            false,
+            is_p2pk("h7L7sUHZk43VQC3PHtSp5ujAWcZtYmWATBH746wi75C5XHi68b9")
+        );
+        // Too short
+        assert_eq!(
+            false,
+            is_p2pk("9h7L7sUHZk43VQC3PHtSp5ujAWcZtYmWATBH746wi75C5XHi68")
+        );
+        // No way
+        assert_eq!(
+            false,
+            is_p2pk(
+                "88dhgzEuTXaRvR2VKsnXYTGUPh3A9VK8ojeRcpHihcrBu23dnwbB12BbVcJuTcdGfRuSzA8bW25Az6n9"
+            )
         );
     }
 }
