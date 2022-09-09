@@ -1,5 +1,5 @@
 -------------------------------------------------------------------------------
--- Migrations
+-- Migrations and repairs
 -------------------------------------------------------------------------------
 create schema ew;
 create table ew.revision (
@@ -8,7 +8,14 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (2, 16);
+insert into ew.revision (major, minor) values (3, 16);
+
+create table ew.repairs (
+	singleton int primary key default 1,
+	-- creation timestamp - usefull for debugging
+	started timestamp not null,
+	check(singleton = 1)
+);
 
 
 -------------------------------------------------------------------------------

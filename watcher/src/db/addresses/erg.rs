@@ -131,64 +131,68 @@ pub mod replay {
 
     /// Create an instance of the adr.erg table as it was at `height`.
     ///
-    /// New table is created as repair.bal_erg.
-    pub fn prepare(tx: &mut Transaction, height: i32) {
+    /// New table is created as {id}_adr.erg.
+    pub fn prepare(tx: &mut Transaction, height: i32, id: &str) {
         tx.execute(
-            "
-            create table repair.bal_erg as
-                with balances as (
-                    select address_id
-                        , sum(value) as value
-                    from adr.erg_diffs
-                    where height <= $1
-                    group by 1 having sum(value) > 0
-                )
-                select d.address_id
-                    , b.value
-                    , sum(d.value / b.value * h.timestamp) as mean_age_timestamp
-                from adr.erg_diffs d
-                join balances b on b.address_id = d.address_id
-                join core.headers h on h.height = d.height
-                where h.height <= $1
-                group by 1, 2;
-            ",
+            &format!(
+                "
+                create table {id}_adr.erg as
+                    with balances as (
+                        select address_id
+                            , sum(value) as value
+                        from adr.erg_diffs
+                        where height <= $1
+                        group by 1 having sum(value) > 0
+                    )
+                    select d.address_id
+                        , b.value
+                        , sum(d.value / b.value * h.timestamp) as mean_age_timestamp
+                    from adr.erg_diffs d
+                    join balances b on b.address_id = d.address_id
+                    join core.headers h on h.height = d.height
+                    where h.height <= $1
+                    group by 1, 2;"
+            ),
             &[&height],
         )
         .unwrap();
 
         // Same constraints as synced table
         tx.execute(
-            "alter table repair.bal_erg add primary key (address_id);",
+            &format!("alter table {id}_adr.erg add primary key (address_id);"),
             &[],
         )
         .unwrap();
         tx.execute(
-            "alter table repair.bal_erg alter column address_id set not null;",
+            &format!("alter table {id}_adr.erg alter column address_id set not null;"),
             &[],
         )
         .unwrap();
         tx.execute(
-            "alter table repair.bal_erg alter column value set not null;",
+            &format!("alter table {id}_adr.erg alter column value set not null;"),
             &[],
         )
         .unwrap();
         tx.execute(
-            "alter table repair.bal_erg alter column mean_age_timestamp set not null;",
+            &format!("alter table {id}_adr.erg alter column mean_age_timestamp set not null;"),
             &[],
         )
         .unwrap();
-        tx.execute("alter table repair.bal_erg add check (value >= 0);", &[])
-            .unwrap();
-        tx.execute("create index on repair.bal_erg(value);", &[])
+        tx.execute(
+            &format!("alter table {id}_adr.erg add check (value >= 0);"),
+            &[],
+        )
+        .unwrap();
+        tx.execute(&format!("create index on {id}_adr.erg(value);"), &[])
             .unwrap();
     }
 
-    /// Advance repair table state to next `height`.
+    /// Advance state of replay table {id}_adr.erg) to next `height`.
     ///
-    /// Assumes current state is at `height` - 1.
-    pub fn step(tx: &mut Transaction, height: i32) {
+    /// Assumes current state of replay table is at `height` - 1.
+    pub fn step(tx: &mut Transaction, height: i32, id: &str) {
         // Update known addresses
-        tx.execute(
+        tx.execute(&format!(
             "
             with new_diffs as (
                 select address_id
@@ -201,7 +205,7 @@ pub mod replay {
                 from core.headers
                 where height = $1
             )
-            update repair.bal_erg a
+            update {id}_adr.erg a
             set value = a.value + d.value
                 , mean_age_timestamp = case 
                     when a.value + d.value <> 0 then
@@ -209,32 +213,35 @@ pub mod replay {
                     else 0
                 end
             from new_diffs d, timestamp t
-            where d.address_id = a.address_id;",
+            where d.address_id = a.address_id;"),
             &[&height]
         ).unwrap();
 
         // Insert new addresses
         tx.execute(
-            "with new_addresses as (
-                select d.address_id
-                    , sum(d.value) as value
-                from adr.erg_diffs d
-                left join repair.bal_erg b on b.address_id = d.address_id
-                where d.height = $1
-                    and b.address_id is null
-                group by 1
-            )
-            insert into repair.bal_erg(address_id, value, mean_age_timestamp)
-            select address_id
-                , value
-                , (select timestamp from core.headers where height = $1)
-            from new_addresses;",
+            &format!(
+                "
+                with new_addresses as (
+                    select d.address_id
+                        , sum(d.value) as value
+                    from adr.erg_diffs d
+                    left join {id}_adr.erg b on b.address_id = d.address_id
+                    where d.height = $1
+                        and b.address_id is null
+                    group by 1
+                )
+                insert into {id}_adr.erg(address_id, value, mean_age_timestamp)
+                select address_id
+                    , value
+                    , (select timestamp from core.headers where height = $1)
+                from new_addresses;"
+            ),
             &[&height],
         )
         .unwrap();
 
         // Delete zero balances
-        tx.execute("delete from repair.bal_erg where value = 0;", &[])
+        tx.execute(&format!("delete from {id}_adr.erg where value = 0;"), &[])
             .unwrap();
     }
 }

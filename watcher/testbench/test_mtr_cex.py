@@ -283,7 +283,8 @@ class TestRepair:
                 # Simulate an interupted repair,
                 # Should be cleaned up at startup.
                 with conn.cursor() as cur:
-                    cur.execute("create schema repair;")
+                    cur.execute("insert into ew.repairs (started) select now();")
+                    cur.execute("create schema repair_adr;")
                 conn.commit()
 
             # Run

@@ -38,6 +38,8 @@ use std::sync::Arc;
 use std::thread;
 use std::time;
 
+const REPLAY_ID: &str = "repair";
+
 pub enum RepairInitError {
     /// Another repair event is still running
     OtherRunning,
@@ -291,13 +293,14 @@ impl DB {
     }
 }
 
-/// Initialize a repair session on the db side by creating the 'repair' schema.
+/// Initialize a repair session on the db side.
 ///
 /// Will fail if another repair session is running.
 fn init(client: &mut Client) -> Result<(), RepairInitError> {
     let mut tx = client.transaction().unwrap();
-    // Create repair schema or report existing one
-    match tx.execute("create schema repair;", &[]) {
+    // Lock repair session (prevents others from starting)
+    // Log creation timestamp - usefull for debugging
+    match tx.execute("insert into ew.repairs (started) select now();", &[]) {
         Ok(_) => (),
         Err(err) => {
             if let Some(&postgres::error::SqlState::DUPLICATE_SCHEMA) = err.code() {
@@ -306,12 +309,6 @@ fn init(client: &mut Client) -> Result<(), RepairInitError> {
             panic!("{:?}", err);
         }
     };
-    // Log creation timestamp - usefull for debugging
-    tx.execute(
-        "create table repair.created as select now() as created;",
-        &[],
-    )
-    .unwrap();
     tx.commit().unwrap();
     Ok(())
 }
@@ -398,20 +395,21 @@ fn start(
 
 /// Create work tables for repair session.
 fn prepare(tx: &mut Transaction, at_height: i32) {
-    addresses::replay::prepare(tx, at_height);
+    addresses::replay::prepare(tx, at_height, REPLAY_ID);
 }
 
 /// Create work tables for repair session.
 fn step(tx: &mut Transaction, next_height: i32) {
-    addresses::replay::step(tx, next_height);
+    addresses::replay::step(tx, next_height, REPLAY_ID);
 }
 
 /// Cleanup
 fn cleanup(client: &mut Client) {
     debug!("Cleaning up repair session");
-    client
-        .execute("drop schema if exists repair cascade;", &[])
-        .unwrap();
+    let mut tx = client.transaction().unwrap();
+    addresses::replay::cleanup(&mut tx, REPLAY_ID);
+    tx.execute("truncate table ew.repairs;", &[]).unwrap();
+    tx.commit().unwrap();
 }
 
 fn wait_for_message(rx: &mpsc::Receiver<Message>) -> Message {

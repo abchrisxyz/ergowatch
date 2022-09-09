@@ -121,7 +121,7 @@ class TestMigrations:
 
         # Check schema revision matches number of migrations.
         # Migration 1 results in revision 2.1, mig 2 in rev 2.2 and so on...
-        assert current_rev_major == 2
+        assert current_rev_major == 3
         assert current_rev_minor == get_number_of_migrations()
 
         with db.cursor() as cur:
@@ -155,7 +155,7 @@ class TestMigrations:
         # Check db is at version 1.0 initially
         with db.cursor() as cur:
             cur.execute("select major, minor from ew.revision;")
-            assert cur.fetchone() == (2, 0)
+            assert cur.fetchone() == (3, 0)
 
         cp = run_watcher(temp_cfg, allow_migrations=True)
 
@@ -167,4 +167,4 @@ class TestMigrations:
         # Check migrations are applied
         with db.cursor() as cur:
             cur.execute("select major, minor from ew.revision;")
-            assert cur.fetchone() == (2, rev)
+            assert cur.fetchone() == (3, rev)

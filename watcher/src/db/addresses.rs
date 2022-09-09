@@ -150,18 +150,25 @@ fn set_constraints(tx: &mut Transaction) {
 
 pub(super) mod replay {
     use super::erg;
-    // use super::tokens;
     use postgres::Transaction;
 
     /// Create an instance of the balance tables as they were was at `height`.
-    pub fn prepare(tx: &mut Transaction, height: i32) {
-        erg::replay::prepare(tx, height);
+    pub fn prepare(tx: &mut Transaction, height: i32, replay_id: &str) {
+        // schema should never exist at this stage
+        tx.execute(&format!("create schema {replay_id}_adr;"), &[])
+            .unwrap();
+        erg::replay::prepare(tx, height, replay_id);
     }
 
     /// Advance state to next `height`.
     ///
     /// Assumes current state is at `height` - 1.
-    pub fn step(tx: &mut Transaction, height: i32) {
-        erg::replay::step(tx, height);
+    pub fn step(tx: &mut Transaction, height: i32, replay_id: &str) {
+        erg::replay::step(tx, height, replay_id);
+    }
+
+    pub fn cleanup(tx: &mut Transaction, id: &str) {
+        tx.execute(&format!("drop schema if exists {id}_adr cascade;"), &[])
+            .unwrap();
     }
 }

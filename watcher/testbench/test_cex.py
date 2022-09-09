@@ -295,7 +295,8 @@ class TestRepair:
                 # Simulate an interupted repair,
                 # Should be cleaned up at startup.
                 with conn.cursor() as cur:
-                    cur.execute("create schema repair;")
+                    cur.execute("insert into ew.repairs (started) select now();")
+                    cur.execute("create schema repair_adr;")
                 conn.commit()
 
             # Run
@@ -578,5 +579,6 @@ def assert_supply(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
 
 
 def assert_repair_cleaned_up(cur: pg.Cursor):
-    # Cleanup should have removed remair schema
-    cur.execute("create schema repair;")
+    # Cleanup should have removed repair schemas
+    cur.execute("insert into ew.repairs (started) select now();")
+    cur.execute("create schema repair_adr;")

@@ -2,6 +2,18 @@
 
 ## v0.5.0-dev - UNRELEASED
 
+BREAKING CHANGES - requires manual db migration (no resync needed):
+
+```
+update ew.revision set major = 3;
+
+create table ew.repairs (
+	singleton int primary key default 1,
+	started timestamp not null,
+	check(singleton = 1)
+);
+```
+
 
 ## v0.4.3 - 2022-09-26
 

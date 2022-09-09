@@ -12,7 +12,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (2, 0);
+insert into ew.revision (major, minor) values (3, 0);
 
 create table ew.constraints (
 	singleton int primary key default 1,
@@ -21,6 +21,13 @@ create table ew.constraints (
 	check(singleton = 1)
 );
 insert into ew.constraints (singleton) values (1);
+
+create table ew.repairs (
+	singleton int primary key default 1,
+	-- creation timestamp - usefull for debugging
+	started timestamp not null,
+	check(singleton = 1)
+);
 
 -------------------------------------------------------------------------------
 -- Core
