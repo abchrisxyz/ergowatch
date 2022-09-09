@@ -1,6 +1,6 @@
 /// Migration 16
 ///
-/// Ad p2pk flag to core.addresses
+/// Add p2pk flag to core.addresses
 use postgres::Transaction;
 
 pub(super) fn apply(tx: &mut Transaction) -> anyhow::Result<()> {
