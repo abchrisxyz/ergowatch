@@ -117,6 +117,16 @@ FEES_BOX = Box(
     "1005040004000e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a701730073011001020402d19683030193a38cc7b2a57300000193c2b2a57301007473027303830108cdeeac93b1a57304",
 )
 
+REEMISSION_BOX = Box(
+    "22WkKcVUvboYCZJe1urbmvBL3j67LKb5KEAvFhJXqA6ubYvHpSCvbvwvEY3xzUr7QvxpEtqjzMAPMsVdZh1VGWmZphvKoJdVzL1ayhsMftTtEFoA3YYdq3zKeeYXavVrrPUmK3fRXJ2HWEbZexewtBWcgAnHBw5tKvYFy9dEUi645gE2fYMUvVBtbvMExE9mjZ2W9goWkqu1VtThAsMZWZWjHxDjX116HpeQKu9b9neEUBj4kE5sX8QXaV6ZeReXxYHFJFg2rmaTknSPMxHXA8NpQKgzryBwLssp5EJ1QTqn5R6xuvGgFCEUZicCEo8qk8UNbE7e2d4WqW5qzpQPzJkKoPa5UtJEPYDWNhaCKmCpzdSc77",
+    "19870210040004000e20d3feeffa87f2df63a7a15b4905e618ae3ce4c69a7975f171bd314d0b877927b80400040004020580dac4090404040004020e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a70173007301100102040204c080fe010580f882ad160400d196830301938cb2e4c6b2a5730000020c4d0e73010001730293c2a7c2b2a5730300978302019683030191c1b2a5730400c1a790c1b2a5730500730693b1a5730796830501938cc7b2a573080001a39683020193c2b2a573090074730a730b830108cdeeac93a38cc7b2a5730c000192a3730d91a38cc7a70193730e99c1a7c1b2a5730f00",
+)
+
+PAY_TO_REEMISSION_BOX = Box(
+    "6KxusedL87PBibr1t1f4ggzAyTAmWEPqSpqXbkdoybNwHVw5Nb7cUESBmQw5XK8TyvbQiueyqkR9XMNaUgpWx3jT54p",
+    "193c03040004000e20d3feeffa87f2df63a7a15b4905e618ae3ce4c69a7975f171bd314d0b877927b8d1938cb2e4c6b2a5730000020c4d0e730100017302",
+)
+
 
 # Ensure addresses are unique
 assert len(P2PK_BOXES) == len(set([b.address for b in P2PK_BOXES]))
@@ -140,6 +150,8 @@ class _AddressCatalogue:
             **{f"cex{i+1}": box for i, box in enumerate(CEX_BOXES)},
             "base": COINBASE_BOX,
             "fees": FEES_BOX,
+            "reem": REEMISSION_BOX,
+            "p2re": PAY_TO_REEMISSION_BOX,
         }
         self._tree2addr = {
             **{box.ergo_tree: box.address for box in P2PK_BOXES},
@@ -147,9 +159,13 @@ class _AddressCatalogue:
             **{box.ergo_tree: box.address for box in CEX_BOXES},
             COINBASE_BOX.ergo_tree: COINBASE_BOX.address,
             FEES_BOX.ergo_tree: FEES_BOX.address,
+            REEMISSION_BOX.ergo_tree: REEMISSION_BOX.address,
+            PAY_TO_REEMISSION_BOX.ergo_tree: PAY_TO_REEMISSION_BOX.address,
         }
         self.coinbase = COINBASE_BOX
         self.fees = FEES_BOX
+        self.reemission = REEMISSION_BOX
+        self.pay2reemission = PAY_TO_REEMISSION_BOX
 
     def get(self, key: str) -> Box:
         """
@@ -172,6 +188,8 @@ class _AddressCatalogue:
         Anything after first hyphen is ignored.
         Keys are mapped to boxes like so:
             base --> coinbase address
+            reem --> reemission address
+            p2re --> pay 2 reemission address
             fees --> fees collection address
             pub<i> --> P2PK address at index i-1
             con<i> --> contract address at index i-1
@@ -188,6 +206,8 @@ class _AddressCatalogue:
         Anything after first hyphen is ignored.
         Keys are mapped to boxes like so:
             base --> coinbase address
+            reem --> reemission address
+            p2re --> pay 2 reemission address
             fees --> fees collection address
             pub<i> --> P2PK address at index i-1
             con<i> --> contract address at index i-1

@@ -17,6 +17,18 @@ class TestAddressCatalogue:
         assert AC.boxid2addr("fees-box1") == fees.address
         assert fees.address.startswith("2iHkR7CW")
 
+    def test_reemission_address(self):
+        reem = AC.reemission
+        assert AC.get("reem") == reem
+        assert AC.boxid2addr("reem-box1") == reem.address
+        assert reem.address.startswith("22WkKcVU")
+
+    def test_pay_to_reemission_address(self):
+        p2re = AC.pay2reemission
+        assert AC.get("p2re") == p2re
+        assert AC.boxid2addr("p2re-box1") == p2re.address
+        assert p2re.address.startswith("6KxusedL")
+
     def test_p2pk_address(self):
         pub5 = AC.get("pub5")
         assert AC.boxid2addr("pub5-box1") == pub5.address
