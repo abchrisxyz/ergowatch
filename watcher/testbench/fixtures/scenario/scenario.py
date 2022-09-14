@@ -88,6 +88,7 @@ class Scenario:
 
     def mask(self, index: int):
         """Mask blocks starting from `index`"""
+        assert index > 0
         self._mask = index
 
     def unmask(self):
