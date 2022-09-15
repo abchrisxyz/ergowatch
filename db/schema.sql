@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 17);
+insert into ew.revision (major, minor) values (3, 18);
 
 create table ew.repairs (
 	singleton int primary key default 1,
@@ -26,7 +26,8 @@ create table core.addresses (
 	id bigint,
 	address text,
 	spot_height int,
-	p2pk boolean
+	p2pk boolean,
+	miner boolean
 );
 -- These are needed to add new addresses, so declaring here and not in constraints.sql.
 create index on core.addresses (md5(address));

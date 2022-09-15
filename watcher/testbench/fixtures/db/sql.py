@@ -51,6 +51,7 @@ class Address:
     address: str
     spot_height: int
     p2pk: bool
+    miner: bool
 
 
 @dataclass
@@ -636,6 +637,7 @@ def extract_addresses(outputs: List[Output]) -> List[Address]:
                 address=box.address,
                 spot_height=box.creation_height,
                 p2pk=box.address.startswith("9") and len(box.address) == 51,
+                miner=box.address.startswith("88dhgzEuTX"),
             )
         )
         known_ids.add(box.address_id)
@@ -862,12 +864,13 @@ def format_address_sql(a: List, rev0=False):
         """
     else:
         statement = f"""
-            insert into core.addresses (id, address, spot_height, p2pk)
+            insert into core.addresses (id, address, spot_height, p2pk, miner)
             values (
                 '{a.id}',
                 '{a.address}',
                 '{a.spot_height}',
-                '{a.p2pk}'
+                '{a.p2pk}',
+                '{a.miner}'
             );
         """
     return dedent(statement)

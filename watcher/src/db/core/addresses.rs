@@ -5,8 +5,8 @@ use postgres::Transaction;
 /// Insert address if new and return address id in any case
 const TRY_INSERT_ADDRESS: &str = "
     with test_insert as (
-        insert into core.addresses (id, address, spot_height, p2pk)
-        select $1, $2, $3, $4
+        insert into core.addresses (id, address, spot_height, p2pk, miner)
+        select $1, $2, $3, $4, $5
         -- where not exists (select * from core.addresses where address = $2)
         on conflict do nothing
         returning $1 as id
@@ -29,6 +29,7 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
                 Type::TEXT, // address
                 Type::INT4, // spot_height
                 Type::BOOL, // is it a p2pk address?
+                Type::BOOL, // is it a mining contract address?
             ],
         )
         .unwrap();
@@ -39,7 +40,13 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
         let row = tx
             .query_one(
                 &statement,
-                &[&next_id, &address, &block.height, &is_p2pk(address)],
+                &[
+                    &next_id,
+                    &address,
+                    &block.height,
+                    &is_p2pk(address),
+                    &is_miner(address),
+                ],
             )
             .unwrap();
         // Increment id if it was assigned to current address
@@ -57,7 +64,13 @@ pub(super) fn include_genesis_boxes(tx: &mut Transaction, boxes: &Vec<crate::par
         let row = tx
             .query_one(
                 TRY_INSERT_ADDRESS,
-                &[&next_id, &op.address, &block_height, &is_p2pk(&op.address)],
+                &[
+                    &next_id,
+                    &op.address,
+                    &block_height,
+                    &is_p2pk(&op.address),
+                    &is_miner(&op.address),
+                ],
             )
             .unwrap();
         // Increment id if it was assigned to current address
@@ -82,6 +95,8 @@ pub(super) fn set_constraints(tx: &mut Transaction) {
         "alter table core.addresses alter column id set not null;",
         "alter table core.addresses alter column address set not null;",
         "alter table core.addresses alter column spot_height set not null;",
+        "alter table core.addresses alter column p2pk set not null;",
+        "alter table core.addresses alter column miner set not null;",
         "create index on core.addresses using brin(spot_height);",
     ];
 
@@ -109,13 +124,26 @@ fn get_next_address_id(tx: &mut Transaction) -> i64 {
     last_id + 1
 }
 
+/// Returns true for a p2pk address
 fn is_p2pk(address: &str) -> bool {
     address.starts_with("9") && address.len() == 51
+}
+
+/// Returns true if address is a mining contract
+fn is_miner(address: &str) -> bool {
+    // select count(*)
+    // from node_outputs
+    // where ergo_tree_template_hash = '961e872f7ab750cb77ad75ea8a32d0ea3472bd0c230de09329b802801b3d1817'
+    // 	and address not ilike '88dhgzEuTX%'
+    // ----> 0 (done at 840000)
+    // So '88dhgzEuTX%' should be safe to use to id miner contracts
+    address.starts_with("88dhgzEuTX")
 }
 
 #[cfg(test)]
 mod tests {
     use super::extract_addresses;
+    use super::is_miner;
     use super::is_p2pk;
     use crate::parsing::testing::block_with_repeated_addresses;
 
@@ -170,6 +198,23 @@ mod tests {
             false,
             is_p2pk(
                 "88dhgzEuTXaRvR2VKsnXYTGUPh3A9VK8ojeRcpHihcrBu23dnwbB12BbVcJuTcdGfRuSzA8bW25Az6n9"
+            )
+        );
+    }
+
+    #[test]
+    fn test_is_miner() -> () {
+        assert_eq!(
+            true,
+            is_miner(
+                "88dhgzEuTXaVfva5U9pvg84LryFq6umpt3ZpaUt63yDLcHydKsEHaXbebCbnKsprU5PW3G2GqX8ZdmUM"
+            )
+        );
+        // Not starting with 88dhgzEuTX
+        assert_eq!(
+            false,
+            is_miner(
+                "88dhgzEuTxaVfva5U9pvg84LryFq6umpt3ZpaUt63yDLcHydKsEHaXbebCbnKsprU5PW3G2GqX8ZdmUM"
             )
         );
     }
