@@ -379,10 +379,17 @@ def generate_bootstrap_sql_bal_erg(header: Header, outputs: List[Output]) -> str
     qry_adr = dedent(
         """
         insert into adr.erg(address_id, value, mean_age_timestamp)
+            with totals as (
+                select d.address_id
+                    , sum(d.value) as value
+                from adr.erg_diffs d
+                group by 1
+            )
             select d.address_id
                 , sum(d.value)
-                , sum(d.value * h.timestamp) / sum(d.value)
+                , sum(d.value / t.value * h.timestamp)
             from adr.erg_diffs d
+            join totals t on t.address_id = d.address_id
             join core.headers h on h.height = d.height
             group by 1
         ;\n
