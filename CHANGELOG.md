@@ -14,6 +14,10 @@ create table ew.repairs (
 );
 ```
 
+### New features
+
+[Issue 58](https://github.com/abchrisxyz/ergowatch/issues/58) - Added address counts by minimal balance
+
 
 ## v0.4.3 - 2022-09-26
 

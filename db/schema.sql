@@ -8,11 +8,10 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 16);
+insert into ew.revision (major, minor) values (3, 17);
 
 create table ew.repairs (
 	singleton int primary key default 1,
-	-- creation timestamp - usefull for debugging
 	started timestamp not null,
 	check(singleton = 1)
 );
@@ -420,6 +419,8 @@ create table mtr._log (
 	singleton int primary key default 1,
 	ergusd_constraints_set bool not null default FALSE,
 	ergusd_bootstrapped bool not null default FALSE,
+	address_counts_constraints_set bool not null default FALSE,
+	address_counts_bootstrapped bool not null default FALSE,
 	check(singleton = 1)
 );
 insert into mtr._log(singleton) values (1);
@@ -443,6 +444,36 @@ create table mtr.ergusd_provisional (
 	height int
 );
 
+
+-- Address counts by balance
+create table mtr.address_counts_by_balance_p2pk (
+	height int,
+	total bigint,
+	ge_0p001 bigint,
+	ge_0p01 bigint,
+	ge_0p1 bigint,
+	ge_1 bigint,
+	ge_10 bigint,
+	ge_100 bigint,
+	ge_1k bigint,
+	ge_10k bigint,
+	ge_100k bigint,
+	ge_1m bigint
+);
+create table mtr.address_counts_by_balance_contracts (
+	height int,
+	total bigint,
+	ge_0p001 bigint,
+	ge_0p01 bigint,
+	ge_0p1 bigint,
+	ge_1 bigint,
+	ge_10 bigint,
+	ge_100 bigint,
+	ge_1k bigint,
+	ge_10k bigint,
+	ge_100k bigint,
+	ge_1m bigint
+);
 
 -- Supply across all cex's, at each height.
 create table mtr.cex_supply (

@@ -108,7 +108,7 @@ impl DB {
         run(&self, &unspent::bootstrap)?;
         addresses::bootstrap(&mut client)?;
         run(&self, &cexs::bootstrap)?;
-        run(&self, &metrics::bootstrap)?;
+        metrics::bootstrap(&mut client)?;
 
         // Bootstrapping doesn't rely on cache and will not update it,
         // so reload it now to pick up latest db state.
