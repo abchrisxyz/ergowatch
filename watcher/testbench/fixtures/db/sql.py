@@ -545,6 +545,7 @@ def extract_existing_outputs(scenario: Scenario) -> List[Output]:
                         header_id=header.id,
                         creation_height=header.height,
                         index=index,
+                        value=DEFAULT_BOX_VALUE,
                     )
                     outputs.append(output)
                     index += 1
