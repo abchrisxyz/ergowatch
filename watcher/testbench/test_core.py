@@ -480,6 +480,7 @@ def assert_db_constraints(conn: pg.Connection):
     assert_column_not_null(conn, "core", "addresses", "id")
     assert_column_not_null(conn, "core", "addresses", "address")
     assert_column_not_null(conn, "core", "addresses", "spot_height")
+    assert_column_not_null(conn, "core", "addresses", "p2pk")
     assert_index_def(
         conn,
         "core",
