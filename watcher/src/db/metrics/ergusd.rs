@@ -226,6 +226,7 @@ fn set_constraints(tx: &mut Transaction) {
         "alter table mtr.ergusd alter column value set not null;",
         "alter table mtr.ergusd_provisional add primary key(height);",
         "alter table mtr.ergusd_provisional alter column height set not null;",
+        "update mtr._log set ergusd_constraints_set = TRUE;",
     ];
     for statement in statements {
         tx.execute(statement, &[]).unwrap();
