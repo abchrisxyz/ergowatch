@@ -29,6 +29,12 @@ class TestAddressCatalogue:
         assert AC.boxid2addr("p2re-box1") == p2re.address
         assert p2re.address.startswith("6KxusedL")
 
+    def test_treasury_address(self):
+        tres = AC.treasury
+        assert AC.get("tres") == tres
+        assert AC.boxid2addr("tres-box1") == tres.address
+        assert tres.address.startswith("4L1ktFSzm3SH1UioDuUf")
+
     def test_p2pk_address(self):
         pub5 = AC.get("pub5")
         assert AC.boxid2addr("pub5-box1") == pub5.address

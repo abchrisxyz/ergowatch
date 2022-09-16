@@ -142,6 +142,10 @@ PAY_TO_REEMISSION_BOX = Box(
     "193c03040004000e20d3feeffa87f2df63a7a15b4905e618ae3ce4c69a7975f171bd314d0b877927b8d1938cb2e4c6b2a5730000020c4d0e730100017302",
 )
 
+TREASURY_BOX = Box(
+    "4L1ktFSzm3SH1UioDuUf5hyaraHird4D2dEACwQ1qHGjSKtA6KaNvSzRCZXZGf9jkfNAEC1SrYaZmCuvb2BKiXk5zW9xuvrXFT7FdNe2KqbymiZvo5UQLAm5jQY8ZBRhTZ4AFtZa1UF5nd4aofwPiL7YkJuyiL5hDHMZL1ZnyL746tHmRYMjAhCgE7d698dRhkdSeVy",
+    "100e040004c094400580809cde91e7b0010580acc7f03704be944004808948058080c7b7e4992c0580b4c4c32104fe884804c0fd4f0580bcc1960b04befd4f05000400ea03d192c1b2a5730000958fa373019a73029c73037e997304a305958fa373059a73069c73077e997308a305958fa373099c730a7e99730ba305730cd193c2a7c2b2a5730d00d5040800",
+)
 
 # Ensure addresses are unique
 assert len(P2PK_BOXES) == len(set([b.address for b in P2PK_BOXES]))
@@ -169,6 +173,7 @@ class _AddressCatalogue:
             "fees": FEES_BOX,
             "reem": REEMISSION_BOX,
             "p2re": PAY_TO_REEMISSION_BOX,
+            "tres": TREASURY_BOX,
         }
         self._tree2addr = {
             **{box.ergo_tree: box.address for box in P2PK_BOXES},
@@ -179,11 +184,13 @@ class _AddressCatalogue:
             FEES_BOX.ergo_tree: FEES_BOX.address,
             REEMISSION_BOX.ergo_tree: REEMISSION_BOX.address,
             PAY_TO_REEMISSION_BOX.ergo_tree: PAY_TO_REEMISSION_BOX.address,
+            TREASURY_BOX.ergo_tree: TREASURY_BOX.address,
         }
         self.coinbase = COINBASE_BOX
         self.fees = FEES_BOX
         self.reemission = REEMISSION_BOX
         self.pay2reemission = PAY_TO_REEMISSION_BOX
+        self.treasury = TREASURY_BOX
 
     def get(self, key: str) -> Box:
         """
@@ -209,10 +216,12 @@ class _AddressCatalogue:
             reem --> reemission address
             p2re --> pay 2 reemission address
             fees --> fees collection address
+            tres --> treasury contract address
             pub<i> --> P2PK address at index i-1
             con<i> --> contract address at index i-1
             min<i> --> miner contract address at index i-1
             cex<i> --> cex address at index i-1
+
         """
         key = box_id.split("-")[0]
         return self._key2box[key].address
@@ -228,6 +237,7 @@ class _AddressCatalogue:
             reem --> reemission address
             p2re --> pay 2 reemission address
             fees --> fees collection address
+            tres --> treasury contract address
             pub<i> --> P2PK address at index i-1
             con<i> --> contract address at index i-1
             min<i> --> miner contract address at index i-1
