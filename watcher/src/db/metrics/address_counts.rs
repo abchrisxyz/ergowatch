@@ -174,6 +174,11 @@ fn do_bootstrap(client: &mut Client) -> anyhow::Result<()> {
         );
     }
 
+    // Cleanup replay tables
+    let mut tx = client.transaction()?;
+    addresses::replay::cleanup(&mut tx, replay_id);
+    tx.commit()?;
+
     client.execute(
         "update mtr._log set address_counts_bootstrapped = TRUE;",
         &[],
