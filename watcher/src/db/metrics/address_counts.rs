@@ -11,33 +11,41 @@ use std::time::Instant;
 // core.addresses p2pk flag values
 const P2PK: bool = true;
 const CONTRACTS: bool = false;
+const NOT_MINER: bool = false;
+const MINER: bool = true;
 
 pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &mut Cache) {
     // Get changes in address counts by balance
-    let p2pk_diffs = get_count_diffs(tx, block.height, P2PK);
-    let contract_diffs = get_count_diffs(tx, block.height, CONTRACTS);
+    let p2pk_diffs = get_count_diffs(tx, block.height, P2PK, NOT_MINER);
+    let contract_diffs = get_count_diffs(tx, block.height, CONTRACTS, NOT_MINER);
+    let miner_diffs = get_count_diffs(tx, block.height, CONTRACTS, MINER);
 
     // New snapshots = previous snapshot + diffs
     let p2pk_counts = cache.p2pk_counts + p2pk_diffs;
     let contract_counts = cache.contract_counts + contract_diffs;
+    let miner_counts = cache.miner_counts + miner_diffs;
 
     // Update cache
     cache.p2pk_counts = p2pk_counts;
     cache.contract_counts = contract_counts;
+    cache.miner_counts = miner_counts;
 
     // Insert new snapshots
     insert_p2pk_record(tx, block.height, p2pk_counts);
     insert_contract_record(tx, block.height, contract_counts);
+    insert_miner_record(tx, block.height, contract_counts);
 }
 
 pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut Cache) {
     // Get changes in address counts by balance
-    let p2pk_diffs = get_count_diffs(tx, block.height, P2PK);
-    let contract_diffs = get_count_diffs(tx, block.height, CONTRACTS);
+    let p2pk_diffs = get_count_diffs(tx, block.height, P2PK, NOT_MINER);
+    let contract_diffs = get_count_diffs(tx, block.height, CONTRACTS, NOT_MINER);
+    let miner_diffs = get_count_diffs(tx, block.height, CONTRACTS, MINER);
 
     // Update cache
     cache.p2pk_counts -= p2pk_diffs;
     cache.contract_counts -= contract_diffs;
+    cache.miner_counts -= miner_diffs;
 
     // Delete snapshots
     tx.execute(
@@ -47,6 +55,11 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut Cach
     .unwrap();
     tx.execute(
         "delete from mtr.address_counts_by_balance_contracts where height = $1",
+        &[&block.height],
+    )
+    .unwrap();
+    tx.execute(
+        "delete from mtr.address_counts_by_balance_miners where height = $1",
         &[&block.height],
     )
     .unwrap();
@@ -94,13 +107,19 @@ fn do_bootstrap(client: &mut Client) -> anyhow::Result<()> {
     let mut p2pk_counts: Record = client
         .query_one(
             &GET_SNAPSHOT.replace(" adr.erg ", &format!(" {replay_id}_adr.erg ")),
-            &[&P2PK],
+            &[&P2PK, &NOT_MINER],
         )?
         .into();
     let mut cons_counts: Record = client
         .query_one(
             &GET_SNAPSHOT.replace(" adr.erg ", &format!(" {replay_id}_adr.erg ")),
-            &[&CONTRACTS],
+            &[&CONTRACTS, &NOT_MINER],
+        )?
+        .into();
+    let mut mins_counts: Record = client
+        .query_one(
+            &GET_SNAPSHOT.replace(" adr.erg ", &format!(" {replay_id}_adr.erg ")),
+            &[&CONTRACTS, &MINER],
         )?
         .into();
 
@@ -124,18 +143,25 @@ fn do_bootstrap(client: &mut Client) -> anyhow::Result<()> {
             addresses::replay::step(&mut tx, *height, replay_id);
 
             // get diffs
-            let p2pk_diffs: Record = tx.query_one(&stmt_get_diffs, &[&height, &P2PK])?.into();
+            let p2pk_diffs: Record = tx
+                .query_one(&stmt_get_diffs, &[&height, &P2PK, &NOT_MINER])?
+                .into();
             let cons_diffs: Record = tx
-                .query_one(&stmt_get_diffs, &[&height, &CONTRACTS])?
+                .query_one(&stmt_get_diffs, &[&height, &CONTRACTS, &NOT_MINER])?
+                .into();
+            let mins_diffs: Record = tx
+                .query_one(&stmt_get_diffs, &[&height, &CONTRACTS, &MINER])?
                 .into();
 
             // update cache
             p2pk_counts += p2pk_diffs;
             cons_counts += cons_diffs;
+            mins_counts += mins_diffs;
 
             // insert records
             insert_p2pk_record(&mut tx, *height, p2pk_counts);
             insert_contract_record(&mut tx, *height, cons_counts);
+            insert_miner_record(&mut tx, *height, mins_counts);
         }
 
         tx.commit()?;
@@ -213,6 +239,20 @@ fn set_constraints(client: &mut Client) {
         "alter table mtr.address_counts_by_balance_contracts alter column ge_10k set not null;",
         "alter table mtr.address_counts_by_balance_contracts alter column ge_100k set not null;",
         "alter table mtr.address_counts_by_balance_contracts alter column ge_1m set not null;",
+        // Miners
+        "alter table mtr.address_counts_by_balance_miners add primary key(height);",
+        "alter table mtr.address_counts_by_balance_miners alter column height set not null;",
+        "alter table mtr.address_counts_by_balance_miners alter column total set not null;",
+        "alter table mtr.address_counts_by_balance_miners alter column ge_0p001 set not null;",
+        "alter table mtr.address_counts_by_balance_miners alter column ge_0p01 set not null;",
+        "alter table mtr.address_counts_by_balance_miners alter column ge_0p1 set not null;",
+        "alter table mtr.address_counts_by_balance_miners alter column ge_1 set not null;",
+        "alter table mtr.address_counts_by_balance_miners alter column ge_10 set not null;",
+        "alter table mtr.address_counts_by_balance_miners alter column ge_100 set not null;",
+        "alter table mtr.address_counts_by_balance_miners alter column ge_1k set not null;",
+        "alter table mtr.address_counts_by_balance_miners alter column ge_10k set not null;",
+        "alter table mtr.address_counts_by_balance_miners alter column ge_100k set not null;",
+        "alter table mtr.address_counts_by_balance_miners alter column ge_1m set not null;",
         // Flag
         "update mtr._log set address_counts_constraints_set = TRUE;",
     ];
@@ -331,13 +371,13 @@ impl From<Row> for Record {
 }
 
 /// Generate an address count snapshot from scratch
-fn get_count_snapshot(tx: &mut Transaction, p2pk: bool) -> Record {
-    tx.query_one(GET_SNAPSHOT, &[&p2pk]).unwrap().into()
+fn get_count_snapshot(tx: &mut Transaction, p2pk: bool, miner: bool) -> Record {
+    tx.query_one(GET_SNAPSHOT, &[&p2pk, &miner]).unwrap().into()
 }
 
 /// Get address count difference at given height
-fn get_count_diffs(tx: &mut Transaction, height: i32, p2pk: bool) -> Record {
-    tx.query_one(GET_DIFFS_AT_HEIGHT, &[&height, &p2pk])
+fn get_count_diffs(tx: &mut Transaction, height: i32, p2pk: bool, miner: bool) -> Record {
+    tx.query_one(GET_DIFFS_AT_HEIGHT, &[&height, &p2pk, &miner])
         .unwrap()
         .into()
 }
@@ -350,6 +390,7 @@ const GET_DIFFS_AT_HEIGHT: &str = "
         join core.addresses a on a.id = d.address_id
         where d.height = $1
             and a.p2pk = $2
+            and a.miner = $3
             and d.address_id <> core.address_id('2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU')
             and d.address_id <> coalesce(core.address_id('22WkKcVUvboYCZJe1urbmvBL3j67LKb5KEAvFhJXqA6ubYvHpSCvbvwvEY3xzUr7QvxpEtqjzMAPMsVdZh1VGWmZphvKoJdVzL1ayhsMftTtEFoA3YYdq3zKeeYXavVrrPUmK3fRXJ2HWEbZexewtBWcgAnHBw5tKvYFy9dEUi645gE2fYMUvVBtbvMExE9mjZ2W9goWkqu1VtThAsMZWZWjHxDjX116HpeQKu9b9neEUBj4kE5sX8QXaV6ZeReXxYHFJFg2rmaTknSPMxHXA8NpQKgzryBwLssp5EJ1QTqn5R6xuvGgFCEUZicCEo8qk8UNbE7e2d4WqW5qzpQPzJkKoPa5UtJEPYDWNhaCKmCpzdSc77'), 0)
             and d.address_id <> coalesce(core.address_id('6KxusedL87PBibr1t1f4ggzAyTAmWEPqSpqXbkdoybNwHVw5Nb7cUESBmQw5XK8TyvbQiueyqkR9XMNaUgpWx3jT54p'), 0)
@@ -385,6 +426,7 @@ const GET_SNAPSHOT: &str = "
     from adr.erg b
     join core.addresses a on a.id = b.address_id
     where a.p2pk = $1
+        and a.miner = $2
         and b.address_id <> core.address_id('2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU')
         and b.address_id <> coalesce(core.address_id('22WkKcVUvboYCZJe1urbmvBL3j67LKb5KEAvFhJXqA6ubYvHpSCvbvwvEY3xzUr7QvxpEtqjzMAPMsVdZh1VGWmZphvKoJdVzL1ayhsMftTtEFoA3YYdq3zKeeYXavVrrPUmK3fRXJ2HWEbZexewtBWcgAnHBw5tKvYFy9dEUi645gE2fYMUvVBtbvMExE9mjZ2W9goWkqu1VtThAsMZWZWjHxDjX116HpeQKu9b9neEUBj4kE5sX8QXaV6ZeReXxYHFJFg2rmaTknSPMxHXA8NpQKgzryBwLssp5EJ1QTqn5R6xuvGgFCEUZicCEo8qk8UNbE7e2d4WqW5qzpQPzJkKoPa5UtJEPYDWNhaCKmCpzdSc77'), 0)
         and b.address_id <> coalesce(core.address_id('6KxusedL87PBibr1t1f4ggzAyTAmWEPqSpqXbkdoybNwHVw5Nb7cUESBmQw5XK8TyvbQiueyqkR9XMNaUgpWx3jT54p'), 0)
@@ -397,6 +439,11 @@ fn insert_p2pk_record(tx: &mut Transaction, height: i32, rec: Record) {
 
 fn insert_contract_record(tx: &mut Transaction, height: i32, rec: Record) {
     let table = "mtr.address_counts_by_balance_contracts";
+    insert_record(tx, height, rec, table);
+}
+
+fn insert_miner_record(tx: &mut Transaction, height: i32, rec: Record) {
+    let table = "mtr.address_counts_by_balance_miners";
     insert_record(tx, height, rec, table);
 }
 
@@ -442,6 +489,7 @@ fn insert_record(tx: &mut Transaction, height: i32, rec: Record, table: &str) {
 pub struct Cache {
     pub p2pk_counts: Record,
     pub contract_counts: Record,
+    pub miner_counts: Record,
 }
 
 impl Cache {
@@ -449,14 +497,16 @@ impl Cache {
         Self {
             p2pk_counts: Record::new(),
             contract_counts: Record::new(),
+            miner_counts: Record::new(),
         }
     }
 
     pub(super) fn load(client: &mut Client) -> Self {
         let mut tx = client.transaction().unwrap();
         Self {
-            p2pk_counts: get_count_snapshot(&mut tx, P2PK),
-            contract_counts: get_count_snapshot(&mut tx, CONTRACTS),
+            p2pk_counts: get_count_snapshot(&mut tx, P2PK, NOT_MINER),
+            contract_counts: get_count_snapshot(&mut tx, CONTRACTS, NOT_MINER),
+            miner_counts: get_count_snapshot(&mut tx, CONTRACTS, MINER),
         }
     }
 }

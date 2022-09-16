@@ -46,3 +46,15 @@ class TestAddressCatalogue:
         assert con5.ergo_tree.startswith(
             "10030404040205a09c01d1ed93b1a5730093c1b2a57301007302"
         )
+
+    def test_miner_address(self):
+        min2 = AC.get("min2")
+        assert AC.boxid2addr("min2-box1") == min2.address
+        assert (
+            min2.address
+            == "88dhgzEuTXaSMfvRg39TK9MK5DAn6fzemXbstAmcRyxzEjnmkpDuCZTXKPfrEiRMZGVsia8CoqCix3PZ"
+        )
+        assert (
+            min2.ergo_tree
+            == "100204a00b08cd02c22a3385ff58d705d9c5d94fe7167460d9a86a4d552fc204ed7043583c495c80ea02d192a39a8cc7a70173007301"
+        )

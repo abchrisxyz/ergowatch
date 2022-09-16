@@ -447,6 +447,7 @@ create table mtr.ergusd_provisional (
 
 
 -- Address counts by balance
+------------------------------------------------------------------------------- 
 create table mtr.address_counts_by_balance_p2pk (
 	height int,
 	total bigint,
@@ -462,6 +463,20 @@ create table mtr.address_counts_by_balance_p2pk (
 	ge_1m bigint
 );
 create table mtr.address_counts_by_balance_contracts (
+	height int,
+	total bigint,
+	ge_0p001 bigint,
+	ge_0p01 bigint,
+	ge_0p1 bigint,
+	ge_1 bigint,
+	ge_10 bigint,
+	ge_100 bigint,
+	ge_1k bigint,
+	ge_10k bigint,
+	ge_100k bigint,
+	ge_1m bigint
+);
+create table mtr.address_counts_by_balance_miners (
 	height int,
 	total bigint,
 	ge_0p001 bigint,

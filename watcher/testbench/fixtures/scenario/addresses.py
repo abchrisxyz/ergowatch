@@ -107,6 +107,21 @@ CONTRACT_BOXES = [
     Box("4fnj6HBm9WNjNkwUZ5dudBMbThbNi4E", "100205aad4180504d1939e7cc5a773007301"),
 ]
 
+MINER_BOXES = [
+    Box(
+        "88dhgzEuTXaR43bqdpnDceosv2jRJBMtbKnxMG9c1KGrya7d4q3aGcntv7AAoyJmxzX9jgjrFCxzToYA",
+        "100204a00b08cd025856eaacbeb7ab863620bdd3599700d08067a93eda175ba818644146142ddffbea02d192a39a8cc7a70173007301",
+    ),
+    Box(
+        "88dhgzEuTXaSMfvRg39TK9MK5DAn6fzemXbstAmcRyxzEjnmkpDuCZTXKPfrEiRMZGVsia8CoqCix3PZ",
+        "100204a00b08cd02c22a3385ff58d705d9c5d94fe7167460d9a86a4d552fc204ed7043583c495c80ea02d192a39a8cc7a70173007301",
+    ),
+    Box(
+        "88dhgzEuTXaW1EuNPMaucRHhxCjLU4zsWrswdLkn3M8AJxu198SytmR9o3bUPC2WecQgv6yqevYu2exk",
+        "100204a00b08cd03ea379d9ced5777531f1488f62420cae56526dc18f3b8da5bef69cf7cf7f0803cea02d192a39a8cc7a70173007301",
+    ),
+]
+
 COINBASE_BOX = Box(
     "2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU",
     "101004020e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a7017300730110010204020404040004c0fd4f05808c82f5f6030580b8c9e5ae040580f882ad16040204c0944004c0f407040004000580f882ad16d19683030191a38cc7a7019683020193c2b2a57300007473017302830108cdeeac93a38cc7b2a573030001978302019683040193b1a5730493c2a7c2b2a573050093958fa3730673079973089c73097e9a730a9d99a3730b730c0599c1a7c1b2a5730d00938cc7b2a5730e0001a390c1a7730f",
@@ -131,6 +146,7 @@ PAY_TO_REEMISSION_BOX = Box(
 # Ensure addresses are unique
 assert len(P2PK_BOXES) == len(set([b.address for b in P2PK_BOXES]))
 assert len(CONTRACT_BOXES) == len(set([b.address for b in CONTRACT_BOXES]))
+assert len(MINER_BOXES) == len(set([b.address for b in MINER_BOXES]))
 
 
 class _AddressCatalogue:
@@ -147,6 +163,7 @@ class _AddressCatalogue:
         self._key2box = {
             **{f"pub{i+1}": box for i, box in enumerate(P2PK_BOXES)},
             **{f"con{i+1}": box for i, box in enumerate(CONTRACT_BOXES)},
+            **{f"min{i+1}": box for i, box in enumerate(MINER_BOXES)},
             **{f"cex{i+1}": box for i, box in enumerate(CEX_BOXES)},
             "base": COINBASE_BOX,
             "fees": FEES_BOX,
@@ -156,6 +173,7 @@ class _AddressCatalogue:
         self._tree2addr = {
             **{box.ergo_tree: box.address for box in P2PK_BOXES},
             **{box.ergo_tree: box.address for box in CONTRACT_BOXES},
+            **{box.ergo_tree: box.address for box in MINER_BOXES},
             **{box.ergo_tree: box.address for box in CEX_BOXES},
             COINBASE_BOX.ergo_tree: COINBASE_BOX.address,
             FEES_BOX.ergo_tree: FEES_BOX.address,
@@ -193,6 +211,7 @@ class _AddressCatalogue:
             fees --> fees collection address
             pub<i> --> P2PK address at index i-1
             con<i> --> contract address at index i-1
+            min<i> --> miner contract address at index i-1
             cex<i> --> cex address at index i-1
         """
         key = box_id.split("-")[0]
@@ -211,6 +230,7 @@ class _AddressCatalogue:
             fees --> fees collection address
             pub<i> --> P2PK address at index i-1
             con<i> --> contract address at index i-1
+            min<i> --> miner contract address at index i-1
             cex<i> --> cex address at index i-1
         """
         key = box_id.split("-")[0]

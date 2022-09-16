@@ -37,7 +37,8 @@ SCENARIO_DESCRIPTION = f"""
         // Existing base box with same value as fixtures.db.sql.default_box_value
         base-box1 {2_000_000 * 10**9}
         >
-        p2re-box1 {1500000 * 10**9} // pay to reemission contract, should be ignored
+        p2re-box1 {1499999 * 10**9} // pay to reemission contract, should be ignored
+        min1-box1       {1 * 10**9}
         pub1-box1  {500000 * 10**9}
         pub2-box1  {500000 * 10**9}
     block-b
@@ -253,6 +254,21 @@ def assert_db_constraints(conn: pg.Connection):
     assert_column_not_null(conn, "mtr", table, "ge_100k")
     assert_column_not_null(conn, "mtr", table, "ge_1m")
 
+    table = "address_counts_by_balance_miners"
+    assert_pk(conn, "mtr", table, ["height"])
+    assert_column_not_null(conn, "mtr", table, "height")
+    assert_column_not_null(conn, "mtr", table, "total")
+    assert_column_not_null(conn, "mtr", table, "ge_0p001")
+    assert_column_not_null(conn, "mtr", table, "ge_0p01")
+    assert_column_not_null(conn, "mtr", table, "ge_0p1")
+    assert_column_not_null(conn, "mtr", table, "ge_1")
+    assert_column_not_null(conn, "mtr", table, "ge_10")
+    assert_column_not_null(conn, "mtr", table, "ge_100")
+    assert_column_not_null(conn, "mtr", table, "ge_1k")
+    assert_column_not_null(conn, "mtr", table, "ge_10k")
+    assert_column_not_null(conn, "mtr", table, "ge_100k")
+    assert_column_not_null(conn, "mtr", table, "ge_1m")
+
 
 def assert_p2pk_counts(cur: pg.Cursor, s: Scenario):
     cur.execute(
@@ -308,3 +324,31 @@ def assert_contract_counts(cur: pg.Cursor, s: Scenario):
     assert rows[2] == (s.parent_height + 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
     assert rows[3] == (s.parent_height + 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
     assert rows[4] == (s.parent_height + 4, 2, 2, 2, 2, 2, 2, 2, 2, 1, 0, 0)
+
+
+def assert_miner_counts(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        """
+        select height
+            , total
+            , ge_0p001
+            , ge_0p01
+            , ge_0p1
+            , ge_1
+            , ge_10
+            , ge_100
+            , ge_1k
+            , ge_10k
+            , ge_100k
+            , ge_1m
+        from mtr.address_counts_by_balance_miners
+        order by 1;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 5
+    assert rows[0] == (s.parent_height + 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    assert rows[1] == (s.parent_height + 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0)
+    assert rows[2] == (s.parent_height + 2, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0)
+    assert rows[3] == (s.parent_height + 3, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0)
+    assert rows[4] == (s.parent_height + 4, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0)

@@ -254,4 +254,19 @@ alter table mtr.address_counts_by_balance_contracts alter column ge_1k set not n
 alter table mtr.address_counts_by_balance_contracts alter column ge_10k set not null;
 alter table mtr.address_counts_by_balance_contracts alter column ge_100k set not null;
 alter table mtr.address_counts_by_balance_contracts alter column ge_1m set not null;
+-- Address counts (miners)
+alter table mtr.address_counts_by_balance_miners add primary key(height);
+alter table mtr.address_counts_by_balance_miners alter column height set not null;
+alter table mtr.address_counts_by_balance_miners alter column total set not null;
+alter table mtr.address_counts_by_balance_miners alter column ge_0p001 set not null;
+alter table mtr.address_counts_by_balance_miners alter column ge_0p01 set not null;
+alter table mtr.address_counts_by_balance_miners alter column ge_0p1 set not null;
+alter table mtr.address_counts_by_balance_miners alter column ge_1 set not null;
+alter table mtr.address_counts_by_balance_miners alter column ge_10 set not null;
+alter table mtr.address_counts_by_balance_miners alter column ge_100 set not null;
+alter table mtr.address_counts_by_balance_miners alter column ge_1k set not null;
+alter table mtr.address_counts_by_balance_miners alter column ge_10k set not null;
+alter table mtr.address_counts_by_balance_miners alter column ge_100k set not null;
+alter table mtr.address_counts_by_balance_miners alter column ge_1m set not null;
 update mtr._log set address_counts_constraints_set = TRUE;
+
