@@ -407,8 +407,14 @@ fn step(tx: &mut Transaction, next_height: i32) {
 fn cleanup(client: &mut Client) {
     debug!("Cleaning up repair session");
     let mut tx = client.transaction().unwrap();
-    addresses::replay::cleanup(&mut tx, REPLAY_ID);
-    tx.execute("truncate table ew.repairs;", &[]).unwrap();
+    let any_repairs: bool = tx
+        .query_one("select exists(select * from ew.repairs);", &[])
+        .unwrap()
+        .get(0);
+    if any_repairs {
+        addresses::replay::cleanup(&mut tx, REPLAY_ID);
+        tx.execute("truncate table ew.repairs;", &[]).unwrap();
+    }
     tx.commit().unwrap();
 }
 
