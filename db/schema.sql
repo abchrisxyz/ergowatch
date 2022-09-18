@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 18);
+insert into ew.revision (major, minor) values (3, 19);
 
 create table ew.repairs (
 	singleton int primary key default 1,
@@ -422,6 +422,8 @@ create table mtr._log (
 	ergusd_bootstrapped bool not null default FALSE,
 	address_counts_constraints_set bool not null default FALSE,
 	address_counts_bootstrapped bool not null default FALSE,
+	supply_distribution_constraints_set bool not null default FALSE,
+	supply_distribution_bootstrapped bool not null default FALSE,
 	check(singleton = 1)
 );
 insert into mtr._log(singleton) values (1);
@@ -489,6 +491,52 @@ create table mtr.address_counts_by_balance_miners (
 	ge_10k bigint,
 	ge_100k bigint,
 	ge_1m bigint
+);
+
+
+-- Circulating supply distribution
+------------------------------------------------------------------------------- 
+
+-- Circulating supply on p2pk addresses excluding main exchange addresses
+create table mtr.supply_on_top_addresses_p2pk (
+	height int,
+	total bigint,
+	top_10_prc bigint,
+	top_1_prc bigint,
+	top_0p1_prc bigint,
+	top_0p01_prc bigint,
+	top_10k bigint,
+	top_1k bigint,
+	top_100 bigint,
+	top_10 bigint
+);
+
+-- Circulating supply on contract addresses excluding EF treasury and miners
+create table mtr.supply_on_top_addresses_contracts (
+	height int,
+	total bigint,
+	top_10_prc bigint,
+	top_1_prc bigint,
+	top_0p1_prc bigint,
+	top_0p01_prc bigint,
+	top_10k bigint,
+	top_1k bigint,
+	top_100 bigint,
+	top_10 bigint
+);
+
+-- Circulating supply on mining contracts (starting with '88dhgzEuTX')
+create table mtr.supply_on_top_addresses_miners (
+	height int,
+	total bigint,
+	top_10_prc bigint,
+	top_1_prc bigint,
+	top_0p1_prc bigint,
+	top_0p01_prc bigint,
+	top_10k bigint,
+	top_1k bigint,
+	top_100 bigint,
+	top_10 bigint
 );
 
 -- Supply across all cex's, at each height.

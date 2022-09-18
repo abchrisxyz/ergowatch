@@ -4,6 +4,7 @@
 mod address_counts;
 mod cexs;
 mod ergusd;
+mod supply_distribution;
 pub mod utxos;
 use crate::db::coingecko::Cache as CoinGeckoCache;
 use crate::parsing::BlockData;
@@ -20,6 +21,7 @@ pub(super) fn include_block(
     utxos::include(tx, block, cache);
     cexs::include(tx, block);
     address_counts::include(tx, block, &mut cache.address_counts);
+    supply_distribution::include(tx, block);
 
     if ergusd::pending_update(&cache.ergusd, cgo_cache) {
         // Update ergusd values
@@ -34,6 +36,7 @@ pub(super) fn rollback_block(
     block: &BlockData,
     cache: &mut Cache,
 ) -> anyhow::Result<()> {
+    supply_distribution::rollback(tx, block);
     address_counts::rollback(tx, block, &mut cache.address_counts);
     cexs::rollback(tx, block);
     utxos::rollback(tx, block, cache);
@@ -49,6 +52,7 @@ pub(super) fn bootstrap(client: &mut Client) -> anyhow::Result<()> {
     tx.commit()?;
 
     address_counts::bootstrap(client)?;
+    supply_distribution::bootstrap(client)?;
     Ok(())
 }
 
@@ -79,4 +83,5 @@ impl Cache {
 
 pub(super) fn repair(tx: &mut Transaction, height: i32) {
     cexs::repair(tx, height);
+    supply_distribution::repair(tx, height);
 }

@@ -38,7 +38,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time;
 
-const REPLAY_ID: &str = "repair";
+pub const REPLAY_ID: &str = "repair";
 
 pub enum RepairInitError {
     /// Another repair event is still running
