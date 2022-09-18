@@ -1,5 +1,5 @@
-use crate::db::addresses;
 /// Adcress counts by balance
+use crate::db::addresses;
 use crate::parsing::BlockData;
 use log::info;
 use postgres::types::Type;
@@ -188,7 +188,6 @@ fn do_bootstrap(client: &mut Client) -> anyhow::Result<()> {
 }
 
 fn is_bootstrapped(client: &mut Client) -> bool {
-    // p2pk and contracts table are progressed together, so ok to check only one.
     let row = client
         .query_one("select address_counts_bootstrapped from mtr._log;", &[])
         .unwrap();
@@ -204,7 +203,7 @@ fn constraints_are_set(client: &mut Client) -> bool {
 
 /// Get sync height of address counts tables.
 fn get_sync_height(client: &mut Client) -> Option<i32> {
-    // P2PK and contract tables are progressed in sync, so enough to probe only one.
+    // P2PK and other tables are progressed in sync, so enough to probe only one.
     let row = client
         .query_one(
             "select max(height) from mtr.address_counts_by_balance_p2pk;",
