@@ -69,8 +69,8 @@ fn do_bootstrap(client: &mut Client) -> anyhow::Result<()> {
         .map(|r| r.get(0))
         .collect();
 
-    // Bootstrapping will be performed in batches of 1000
-    let batch_size = 1000;
+    // Bootstrapping will be performed in batches of 10k
+    let batch_size = 10000;
     let batches = blocks.chunks(batch_size);
     let nb_batches = batches.len();
 
