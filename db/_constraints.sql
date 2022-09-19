@@ -156,6 +156,21 @@ update adr._log set constraints_set = TRUE;
 
 
 -------------------------------------------------------------------------------
+-- Block stats
+-------------------------------------------------------------------------------
+alter table blk.stats add primary key(height);
+alter table blk.stats alter column height set not null;
+alter table blk.stats alter column circulating_supply set not null;
+alter table blk.stats alter column emission set not null;
+alter table blk.stats alter column reward set not null;
+alter table blk.stats alter column tx_fees set not null;
+alter table blk.stats alter column tx_count set not null;
+alter table blk.stats alter column volume set not null;
+
+update blk._log set constraints_set = TRUE;
+
+
+-------------------------------------------------------------------------------
 -- CEX's
 -------------------------------------------------------------------------------
 alter table cex.cexs add primary key (id);

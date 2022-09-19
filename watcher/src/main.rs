@@ -1,6 +1,7 @@
 mod coingecko;
 mod constants;
 mod db;
+mod emission;
 mod node;
 mod parsing;
 mod session;

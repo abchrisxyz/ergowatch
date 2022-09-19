@@ -1,4 +1,5 @@
 pub mod addresses;
+pub mod blocks;
 pub mod cexs;
 pub mod coingecko;
 pub mod core;
@@ -45,6 +46,7 @@ impl DB {
         core::include_block(&mut tx, block)?;
         unspent::include_block(&mut tx, block)?;
         addresses::include_block(&mut tx, block)?;
+        blocks::include_block(&mut tx, block, &mut self.cache.blocks)?;
         cexs::include_block(&mut tx, block, &mut self.cache.cexs)?;
         metrics::include_block(
             &mut tx,
@@ -65,6 +67,7 @@ impl DB {
 
         metrics::rollback_block(&mut tx, block, &mut self.cache.metrics)?;
         cexs::rollback_block(&mut tx, block, &mut self.cache.cexs)?;
+        blocks::rollback_block(&mut tx, block, &mut self.cache.blocks)?;
         addresses::rollback_block(&mut tx, block)?;
         unspent::rollback_block(&mut tx, block)?;
         core::rollback_block(&mut tx, block)?;
@@ -107,6 +110,7 @@ impl DB {
 
         run(&self, &unspent::bootstrap)?;
         addresses::bootstrap(&mut client)?;
+        blocks::bootstrap(&mut client)?;
         run(&self, &cexs::bootstrap)?;
         metrics::bootstrap(&mut client)?;
 
@@ -267,6 +271,7 @@ pub struct Cache {
     pub cexs: cexs::Cache,
     pub coingecko: coingecko::Cache,
     pub metrics: metrics::Cache,
+    pub blocks: blocks::Cache,
 }
 
 impl Cache {
@@ -276,6 +281,7 @@ impl Cache {
             cexs: cexs::Cache::new(),
             coingecko: coingecko::Cache::new(),
             metrics: metrics::Cache::new(),
+            blocks: blocks::Cache::new(),
         }
     }
 
@@ -285,5 +291,6 @@ impl Cache {
         self.cexs = cexs::Cache::load(client);
         self.coingecko = coingecko::Cache::load(client);
         self.metrics = metrics::Cache::load(client);
+        self.blocks = blocks::Cache::load(client);
     }
 }

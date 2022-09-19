@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 19);
+insert into ew.revision (major, minor) values (3, 20);
 
 create table ew.repairs (
 	singleton int primary key default 1,
@@ -184,6 +184,31 @@ create table adr.tokens_diffs (
 	height int,
 	tx_id text,
 	value bigint
+);
+
+
+-------------------------------------------------------------------------------
+-- Block level info
+------------------------------------------------------------------------------- 
+create schema blk;
+
+-- Internal usage
+create table blk._log (
+	singleton int primary key default 1,
+	constraints_set bool not null default FALSE,
+	bootstrapped bool not null default FALSE,
+	check(singleton = 1)
+);
+insert into blk._log(singleton) values (1);
+
+create table blk.stats (
+	height int,
+	circulating_supply bigint,
+	emission bigint,
+	reward bigint,
+	tx_fees bigint,
+	tx_count bigint,
+	volume bigint -- erg changing addresses, excluding emission
 );
 
 
