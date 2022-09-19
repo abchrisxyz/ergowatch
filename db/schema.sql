@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 20);
+insert into ew.revision (major, minor) values (3, 21);
 
 create table ew.repairs (
 	singleton int primary key default 1,
@@ -449,6 +449,7 @@ create table mtr._log (
 	address_counts_bootstrapped bool not null default FALSE,
 	supply_distribution_constraints_set bool not null default FALSE,
 	supply_distribution_bootstrapped bool not null default FALSE,
+	transactions_constraints_set bool not null default FALSE,
 	check(singleton = 1)
 );
 insert into mtr._log(singleton) values (1);
@@ -575,4 +576,12 @@ create table mtr.cex_supply (
 create table mtr.utxos (
 	height int,
 	value bigint
+
+create table mtr.transactions(
+	height int,
+	daily_1d bigint,    -- txs/day over past 24h
+	daily_7d bigint,    -- txs/day over past 7 days
+	daily_28d bigint   -- txs/day over past 4 weeks
+);
+
 );

@@ -9,7 +9,7 @@ from fixtures.db import fill_rev0_db
 from fixtures.db import temp_db_class_scoped
 from fixtures.db import temp_db_rev0_class_scoped
 from fixtures.db import unconstrained_db_class_scoped
-from utils import run_watcher
+from utils import assert_column_not_null, run_watcher
 from utils import assert_pk
 
 ORDER = 14
@@ -27,6 +27,11 @@ SCENARIO_DESCRIPTION = """
         >
         con9-box1   30
         pub9-box1   20 (con1-box1: 3000)
+        --
+        // extra tx in orphan block
+        con9-box1   30
+        > 
+        con9-box2   30
     //------------------------------------------------------
 
     block-b-a
@@ -184,7 +189,7 @@ class TestGenesis:
     Start with empty, unconstrained db.
     """
 
-    scenario = Scenario(SCENARIO_DESCRIPTION, 0, 1234560000000)
+    scenario = Scenario(SCENARIO_DESCRIPTION, 0, Scenario.GENESIS_TIMESTAMP + 100_000)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, unconstrained_db_class_scoped):
@@ -244,11 +249,31 @@ def _test_db_state(conn: pg.Connection, s: Scenario):
     assert_db_constraints(conn)
     with conn.cursor() as cur:
         assert_utxos(cur, s)
+        assert_transactions(cur, s)
 
 
 def assert_db_constraints(conn: pg.Connection):
     # Utxos
     assert_pk(conn, "mtr", "utxos", ["height"])
+
+    # Transactions
+    assert_pk(conn, "mtr", "transactions", ["height"])
+    assert_column_not_null(conn, "mtr", "transactions", "height")
+    assert_column_not_null(conn, "mtr", "transactions", "daily_1d")
+    assert_column_not_null(conn, "mtr", "transactions", "daily_7d")
+    assert_column_not_null(conn, "mtr", "transactions", "daily_28d")
+
+
+def assert_transactions(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        "select height, daily_1d, daily_7d, daily_28d from mtr.transactions order by 1;"
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 4
+    assert rows[0] == (s.parent_height + 0, 1, 0, 0)  # initial state
+    assert rows[1] == (s.parent_height + 1, 2, 0, 0)  # +1 tx
+    assert rows[2] == (s.parent_height + 2, 3, 0, 0)  # +1 tx
+    assert rows[3] == (s.parent_height + 3, 5, 1, 0)  # +2 txs
 
 
 def assert_utxos(cur: pg.Cursor, s: Scenario):

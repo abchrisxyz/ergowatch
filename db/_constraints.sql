@@ -324,3 +324,11 @@ alter table mtr.supply_on_top_addresses_miners alter column top_100 set not null
 alter table mtr.supply_on_top_addresses_miners alter column top_10 set not null;
 
 update mtr._log set supply_distribution_constraints_set = TRUE;
+
+-- Transactions
+alter table mtr.transactions add primary key(height);
+alter table mtr.transactions alter column height set not null;
+alter table mtr.transactions alter column daily_1d set not null;
+alter table mtr.transactions alter column daily_7d set not null;
+alter table mtr.transactions alter column daily_28d set not null;
+update mtr._log set transactions_constraints_set = TRUE;
