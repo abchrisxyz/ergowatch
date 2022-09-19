@@ -100,7 +100,7 @@ fn do_bootstrap(client: &mut Client) -> anyhow::Result<()> {
         tx.commit()?;
 
         info!(
-            "Bootstrapping address count metrics - batch {} / {} (processed in {}s)",
+            "Bootstrapping block stats - batch {} / {} (processed in {}s)",
             ibatch + 1,
             nb_batches,
             timer.elapsed().as_secs()
