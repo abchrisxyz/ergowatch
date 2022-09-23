@@ -107,6 +107,8 @@ fn do_bootstrap(client: &mut Client) -> anyhow::Result<()> {
         );
     }
 
+    client.execute("update blk._log set bootstrapped = TRUE;", &[])?;
+
     Ok(())
 }
 
