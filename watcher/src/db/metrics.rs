@@ -53,16 +53,16 @@ pub(super) fn rollback_block(
     Ok(())
 }
 
-pub(super) fn bootstrap(client: &mut Client) -> anyhow::Result<()> {
+pub(super) fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
     let mut tx = client.transaction()?;
     ergusd::bootstrap(&mut tx)?;
     utxos::bootstrap(&mut tx)?;
     cexs::bootstrap(&mut tx)?;
     tx.commit()?;
 
-    address_counts::bootstrap(client)?;
-    supply_distribution::bootstrap(client)?;
-    transactions::bootstrap(client)?;
+    address_counts::bootstrap(client, work_mem_kb)?;
+    supply_distribution::bootstrap(client, work_mem_kb)?;
+    transactions::bootstrap(client, work_mem_kb)?;
     Ok(())
 }
 

@@ -21,9 +21,9 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
     tx.execute(sql::DELETE_SNAPSHOT, &[&block.height]).unwrap();
 }
 
-pub fn bootstrap(client: &mut Client) -> anyhow::Result<()> {
+pub fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
     if !is_bootstrapped(client) {
-        do_bootstrap(client)?;
+        do_bootstrap(client, work_mem_kb)?;
     }
     if !constraints_are_set(client) {
         set_constraints(client);
@@ -31,10 +31,12 @@ pub fn bootstrap(client: &mut Client) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn do_bootstrap(client: &mut Client) -> anyhow::Result<()> {
+fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
     info!("Bootstrapping metrics - transaction counts");
 
     let mut tx = client.transaction()?;
+
+    tx.execute(&format!("set local work_mem = {};", work_mem_kb), &[])?;
 
     // Prep a work table with both height and timestamps
     tx.execute(

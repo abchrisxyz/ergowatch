@@ -76,9 +76,9 @@ pub(super) fn repair(tx: &mut Transaction, height: i32) {
     update_miner_record(tx, height, mins_snapshot);
 }
 
-pub fn bootstrap(client: &mut Client) -> anyhow::Result<()> {
+pub fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
     if !is_bootstrapped(client) {
-        do_bootstrap(client)?;
+        do_bootstrap(client, work_mem_kb)?;
     }
     if !constraints_are_set(client) {
         set_constraints(client);
@@ -86,7 +86,7 @@ pub fn bootstrap(client: &mut Client) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn do_bootstrap(client: &mut Client) -> anyhow::Result<()> {
+fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
     info!("Bootstrapping metrics - supply distribution");
 
     let replay_id = "mtr_sd";
@@ -130,10 +130,7 @@ fn do_bootstrap(client: &mut Client) -> anyhow::Result<()> {
         let timer = Instant::now();
         let mut tx = client.transaction()?;
 
-        tx.execute(
-            &format!("set local work_mem = {};", work_mem_kb),
-            &[],
-        )?;
+        tx.execute(&format!("set local work_mem = {};", work_mem_kb),&[])?;
 
         // Prepare statements
         let p2pk_stmt = tx.prepare_typed(p2pk_qry.as_str(), &[Type::INT8])?;

@@ -112,7 +112,7 @@ impl DB {
         addresses::bootstrap(&mut client)?;
         blocks::bootstrap(&mut client)?;
         run(&self, &cexs::bootstrap)?;
-        metrics::bootstrap(&mut client)?;
+        metrics::bootstrap(&mut client, self.bootstrapping_work_mem_kb)?;
 
         // Bootstrapping doesn't rely on cache and will not update it,
         // so reload it now to pick up latest db state.
