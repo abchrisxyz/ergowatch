@@ -526,12 +526,7 @@ create table mtr.address_counts_by_balance_miners (
 -- Circulating supply on p2pk addresses excluding main exchange addresses
 create table mtr.supply_on_top_addresses_p2pk (
 	height int,
-	total bigint,
-	top_10_prc bigint,
 	top_1_prc bigint,
-	top_0p1_prc bigint,
-	top_0p01_prc bigint,
-	top_10k bigint,
 	top_1k bigint,
 	top_100 bigint,
 	top_10 bigint
@@ -540,12 +535,7 @@ create table mtr.supply_on_top_addresses_p2pk (
 -- Circulating supply on contract addresses excluding EF treasury and miners
 create table mtr.supply_on_top_addresses_contracts (
 	height int,
-	total bigint,
-	top_10_prc bigint,
 	top_1_prc bigint,
-	top_0p1_prc bigint,
-	top_0p01_prc bigint,
-	top_10k bigint,
 	top_1k bigint,
 	top_100 bigint,
 	top_10 bigint
@@ -554,12 +544,7 @@ create table mtr.supply_on_top_addresses_contracts (
 -- Circulating supply on mining contracts (starting with '88dhgzEuTX')
 create table mtr.supply_on_top_addresses_miners (
 	height int,
-	total bigint,
-	top_10_prc bigint,
 	top_1_prc bigint,
-	top_0p1_prc bigint,
-	top_0p01_prc bigint,
-	top_10k bigint,
 	top_1k bigint,
 	top_100 bigint,
 	top_10 bigint

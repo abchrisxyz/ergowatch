@@ -25,7 +25,7 @@ pub(super) fn include_block(
     utxos::include(tx, block, cache);
     cexs::include(tx, block);
     address_counts::include(tx, block, &mut cache.address_counts);
-    supply_distribution::include(tx, block);
+    supply_distribution::include(tx, block, &cache.address_counts);
     transactions::include(tx, block, cache);
 
     if ergusd::pending_update(&cache.ergusd, cgo_cache) {

@@ -275,12 +275,7 @@ def assert_db_constraints(conn: pg.Connection):
     ]:
         assert_pk(conn, "mtr", table, ["height"])
         assert_column_not_null(conn, "mtr", table, "height")
-        assert_column_not_null(conn, "mtr", table, "total")
-        assert_column_not_null(conn, "mtr", table, "top_10_prc")
         assert_column_not_null(conn, "mtr", table, "top_1_prc")
-        assert_column_not_null(conn, "mtr", table, "top_0p1_prc")
-        assert_column_not_null(conn, "mtr", table, "top_0p01_prc")
-        assert_column_not_null(conn, "mtr", table, "top_10k")
         assert_column_not_null(conn, "mtr", table, "top_1k")
         assert_column_not_null(conn, "mtr", table, "top_100")
         assert_column_not_null(conn, "mtr", table, "top_10")
@@ -290,12 +285,7 @@ def assert_supply_distribution_p2pk(cur: pg.Cursor, s: Scenario):
     cur.execute(
         """
         select height
-            , total 
-            , top_10_prc 
             , top_1_prc 
-            , top_0p1_prc 
-            , top_0p01_prc 
-            , top_10k 
             , top_1k 
             , top_100 
             , top_10 
@@ -306,24 +296,19 @@ def assert_supply_distribution_p2pk(cur: pg.Cursor, s: Scenario):
     rows = cur.fetchall()
     ph = s.parent_height
     assert len(rows) == 6
-    assert rows[0] == (ph + 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-    assert rows[1] == (ph + 1, 700, 200, 200, 200, 200, 700, 700, 700, 700)
-    assert rows[2] == (ph + 2, 400, 200, 200, 200, 200, 400, 400, 400, 400)
-    assert rows[3] == (ph + 3, 400, 200, 200, 200, 200, 400, 400, 400, 400)
-    assert rows[4] == (ph + 4, 400, 200, 200, 200, 200, 400, 400, 400, 400)
-    assert rows[5] == (ph + 5, 400, 200, 200, 200, 200, 400, 400, 400, 400)
+    assert rows[0] == (ph + 0, 0, 0, 0, 0)
+    assert rows[1] == (ph + 1, 200, 700, 700, 700)
+    assert rows[2] == (ph + 2, 200, 400, 400, 400)
+    assert rows[3] == (ph + 3, 200, 400, 400, 400)
+    assert rows[4] == (ph + 4, 200, 400, 400, 400)
+    assert rows[5] == (ph + 5, 200, 400, 400, 400)
 
 
 def assert_supply_distribution_contracts(cur: pg.Cursor, s: Scenario):
     cur.execute(
         """
         select height
-            , total 
-            , top_10_prc 
             , top_1_prc 
-            , top_0p1_prc 
-            , top_0p01_prc 
-            , top_10k 
             , top_1k 
             , top_100 
             , top_10 
@@ -334,24 +319,19 @@ def assert_supply_distribution_contracts(cur: pg.Cursor, s: Scenario):
     rows = cur.fetchall()
     ph = s.parent_height
     assert len(rows) == 6
-    assert rows[0] == (ph + 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-    assert rows[1] == (ph + 1, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-    assert rows[2] == (ph + 2, 200, 200, 200, 200, 200, 200, 200, 200, 200)
-    assert rows[3] == (ph + 3, 202, 202, 202, 202, 202, 202, 202, 202, 202)
-    assert rows[4] == (ph + 4, 302, 202, 202, 202, 202, 302, 302, 302, 302)
-    assert rows[5] == (ph + 5, 302, 202, 202, 202, 202, 302, 302, 302, 302)
+    assert rows[0] == (ph + 0, 0, 0, 0, 0)
+    assert rows[1] == (ph + 1, 0, 0, 0, 0)
+    assert rows[2] == (ph + 2, 200, 200, 200, 200)
+    assert rows[3] == (ph + 3, 202, 202, 202, 202)
+    assert rows[4] == (ph + 4, 202, 302, 302, 302)
+    assert rows[5] == (ph + 5, 202, 302, 302, 302)
 
 
 def assert_supply_distribution_miners(cur: pg.Cursor, s: Scenario):
     cur.execute(
         """
         select height
-            , total 
-            , top_10_prc 
             , top_1_prc 
-            , top_0p1_prc 
-            , top_0p01_prc 
-            , top_10k 
             , top_1k 
             , top_100 
             , top_10 
@@ -362,9 +342,9 @@ def assert_supply_distribution_miners(cur: pg.Cursor, s: Scenario):
     rows = cur.fetchall()
     ph = s.parent_height
     assert len(rows) == 6
-    assert rows[0] == (ph + 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-    assert rows[1] == (ph + 1, 10, 10, 10, 10, 10, 10, 10, 10, 10)
-    assert rows[2] == (ph + 2, 10, 10, 10, 10, 10, 10, 10, 10, 10)
-    assert rows[3] == (ph + 3, 6, 6, 6, 6, 6, 6, 6, 6, 6)
-    assert rows[4] == (ph + 4, 6, 6, 6, 6, 6, 6, 6, 6, 6)
-    assert rows[5] == (ph + 5, 6, 6, 6, 6, 6, 6, 6, 6, 6)
+    assert rows[0] == (ph + 0, 0, 0, 0, 0)
+    assert rows[1] == (ph + 1, 10, 10, 10, 10)
+    assert rows[2] == (ph + 2, 10, 10, 10, 10)
+    assert rows[3] == (ph + 3, 6, 6, 6, 6)
+    assert rows[4] == (ph + 4, 6, 6, 6, 6)
+    assert rows[5] == (ph + 5, 6, 6, 6, 6)

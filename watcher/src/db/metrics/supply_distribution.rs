@@ -6,13 +6,20 @@ use log::info;
 use postgres::Client;
 use postgres::Row;
 use postgres::Transaction;
+use postgres::types::Type;
 use std::time::Instant;
+use super::address_counts::Cache as AddressCountsCache;
 
-pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
+pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &AddressCountsCache) {
+    // Calculate rank of 1st percentiles
+    let p2pk_1prc = first_percentile_rank(cache.p2pk_counts.total);
+    let cons_1prc = first_percentile_rank(cache.contract_counts.total);
+    let mins_1prc = first_percentile_rank(cache.miner_counts.total);
+
     // Get snapshots
-    let p2pk_snapshot: Record = tx.query_one(sql::GET_SNAPSHOT_P2PK, &[]).unwrap().into();
-    let cons_snapshot: Record = tx.query_one(sql::GET_SNAPSHOT_CONTRACTS, &[]).unwrap().into();
-    let mins_snapshot: Record = tx.query_one(sql::GET_SNAPSHOT_MINERS, &[]).unwrap().into();
+    let p2pk_snapshot: Record = tx.query_one(sql::GET_SNAPSHOT_P2PK, &[&p2pk_1prc]).unwrap().into();
+    let cons_snapshot: Record = tx.query_one(sql::GET_SNAPSHOT_CONTRACTS, &[&cons_1prc]).unwrap().into();
+    let mins_snapshot: Record = tx.query_one(sql::GET_SNAPSHOT_MINERS, &[&mins_1prc]).unwrap().into();
     
     // Insert snapshots
     insert_p2pk_record(tx, block.height,  p2pk_snapshot);
@@ -47,10 +54,21 @@ pub(super) fn repair(tx: &mut Transaction, height: i32) {
     let cons_qry = sql::GET_SNAPSHOT_CONTRACTS.replace(" adr.erg ", &format!(" {replay_id}_adr.erg "));
     let mins_qry = sql::GET_SNAPSHOT_MINERS.replace(" adr.erg ", &format!(" {replay_id}_adr.erg "));
 
+    // Obtain total address counts and calculate rank of 1st percentiles
+    let row = tx.query_one("
+        select 
+            (select total from mtr.address_counts_by_balance_p2pk where height = $1),
+            (select total from mtr.address_counts_by_balance_contracts where height = $1),
+            (select total from mtr.address_counts_by_balance_miners where height = $1)
+        ", &[&height]).unwrap();
+    let p2pk_1prc = first_percentile_rank(row.get(0));
+    let cons_1prc = first_percentile_rank(row.get(1));
+    let mins_1prc = first_percentile_rank(row.get(2));
+
     // Get snapshots
-    let p2pk_snapshot: Record = tx.query_one(&p2pk_qry, &[]).unwrap().into();
-    let cons_snapshot: Record = tx.query_one(&cons_qry, &[]).unwrap().into();
-    let mins_snapshot: Record = tx.query_one(&mins_qry, &[]).unwrap().into();
+    let p2pk_snapshot: Record = tx.query_one(&p2pk_qry, &[&p2pk_1prc]).unwrap().into();
+    let cons_snapshot: Record = tx.query_one(&cons_qry, &[&cons_1prc]).unwrap().into();
+    let mins_snapshot: Record = tx.query_one(&mins_qry, &[&mins_1prc]).unwrap().into();
 
     // Update records at h
     update_p2pk_record(tx, height, p2pk_snapshot);
@@ -91,8 +109,10 @@ fn do_bootstrap(client: &mut Client) -> anyhow::Result<()> {
         .map(|r| r.get(0))
         .collect();
 
-    // Prepare replay tables
     let mut tx = client.transaction()?;
+
+    // Prepare replay tables
+    addresses::replay::cleanup(&mut tx, replay_id);
     addresses::replay::prepare(&mut tx, sync_height, replay_id);
     tx.commit()?;
 
@@ -110,19 +130,38 @@ fn do_bootstrap(client: &mut Client) -> anyhow::Result<()> {
         let timer = Instant::now();
         let mut tx = client.transaction()?;
 
+        tx.execute(
+            &format!("set local work_mem = {};", work_mem_kb),
+            &[],
+        )?;
+
         // Prepare statements
-        let p2pk_stmt = tx.prepare_typed(p2pk_qry.as_str(), &[])?;
-        let cons_stmt = tx.prepare_typed(cons_qry.as_str(), &[])?;
-        let mins_stmt = tx.prepare_typed(mins_qry.as_str(), &[])?;
+        let p2pk_stmt = tx.prepare_typed(p2pk_qry.as_str(), &[Type::INT8])?;
+        let cons_stmt = tx.prepare_typed(cons_qry.as_str(), &[Type::INT8])?;
+        let mins_stmt = tx.prepare_typed(mins_qry.as_str(), &[Type::INT8])?;
+        let counts_stmt = tx.prepare_typed("
+            select 
+                (select total from mtr.address_counts_by_balance_p2pk where height = $1),
+                (select total from mtr.address_counts_by_balance_contracts where height = $1),
+                (select total from mtr.address_counts_by_balance_miners where height = $1)
+            ", &[Type::INT4])?;
 
         for height in batch_blocks {
             // step replay
             addresses::replay::step(&mut tx, *height, replay_id);
 
+            // get address counts
+            let row = tx.query_one(&counts_stmt, &[&height])?;
+
+            // Calculate 1st percentile counts
+            let p2pk_1prc = first_percentile_rank(row.get(0));
+            let cons_1prc = first_percentile_rank(row.get(1));
+            let mins_1prc = first_percentile_rank(row.get(2));
+
             // get snapshots
-            let p2pk_snapshot: Record = tx.query_one(&p2pk_stmt, &[])?.into();
-            let cons_snapshot: Record = tx.query_one(&cons_stmt, &[])?.into();
-            let mins_snapshot: Record = tx.query_one(&mins_stmt, &[])?.into();
+            let p2pk_snapshot: Record = tx.query_one(&p2pk_stmt, &[&p2pk_1prc])?.into();
+            let cons_snapshot: Record = tx.query_one(&cons_stmt, &[&cons_1prc])?.into();
+            let mins_snapshot: Record = tx.query_one(&mins_stmt, &[&mins_1prc])?.into();
 
             // insert records
             insert_p2pk_record(&mut tx, *height, p2pk_snapshot);
@@ -183,36 +222,21 @@ fn set_constraints(client: &mut Client) {
         // P2PK
         "alter table mtr.supply_on_top_addresses_p2pk add primary key(height);",
         "alter table mtr.supply_on_top_addresses_p2pk alter column height set not null;",
-        "alter table mtr.supply_on_top_addresses_p2pk alter column total set not null;",
-        "alter table mtr.supply_on_top_addresses_p2pk alter column top_10_prc set not null;",
         "alter table mtr.supply_on_top_addresses_p2pk alter column top_1_prc set not null;",
-        "alter table mtr.supply_on_top_addresses_p2pk alter column top_0p1_prc set not null;",
-        "alter table mtr.supply_on_top_addresses_p2pk alter column top_0p01_prc set not null;",
-        "alter table mtr.supply_on_top_addresses_p2pk alter column top_10k set not null;",
         "alter table mtr.supply_on_top_addresses_p2pk alter column top_1k set not null;",
         "alter table mtr.supply_on_top_addresses_p2pk alter column top_100 set not null;",
         "alter table mtr.supply_on_top_addresses_p2pk alter column top_10 set not null;",
         // Contracts
         "alter table mtr.supply_on_top_addresses_contracts add primary key(height);",
         "alter table mtr.supply_on_top_addresses_contracts alter column height set not null;",
-        "alter table mtr.supply_on_top_addresses_contracts alter column total set not null;",
-        "alter table mtr.supply_on_top_addresses_contracts alter column top_10_prc set not null;",
         "alter table mtr.supply_on_top_addresses_contracts alter column top_1_prc set not null;",
-        "alter table mtr.supply_on_top_addresses_contracts alter column top_0p1_prc set not null;",
-        "alter table mtr.supply_on_top_addresses_contracts alter column top_0p01_prc set not null;",
-        "alter table mtr.supply_on_top_addresses_contracts alter column top_10k set not null;",
         "alter table mtr.supply_on_top_addresses_contracts alter column top_1k set not null;",
         "alter table mtr.supply_on_top_addresses_contracts alter column top_100 set not null;",
         "alter table mtr.supply_on_top_addresses_contracts alter column top_10 set not null;",
         // Miners
         "alter table mtr.supply_on_top_addresses_miners add primary key(height);",
         "alter table mtr.supply_on_top_addresses_miners alter column height set not null;",
-        "alter table mtr.supply_on_top_addresses_miners alter column total set not null;",
-        "alter table mtr.supply_on_top_addresses_miners alter column top_10_prc set not null;",
         "alter table mtr.supply_on_top_addresses_miners alter column top_1_prc set not null;",
-        "alter table mtr.supply_on_top_addresses_miners alter column top_0p1_prc set not null;",
-        "alter table mtr.supply_on_top_addresses_miners alter column top_0p01_prc set not null;",
-        "alter table mtr.supply_on_top_addresses_miners alter column top_10k set not null;",
         "alter table mtr.supply_on_top_addresses_miners alter column top_1k set not null;",
         "alter table mtr.supply_on_top_addresses_miners alter column top_100 set not null;",
         "alter table mtr.supply_on_top_addresses_miners alter column top_10 set not null;",
@@ -226,14 +250,14 @@ fn set_constraints(client: &mut Client) {
     tx.commit().unwrap();
 }
 
+/// Returns rank of 1st percentile record for given total `count`.
+fn first_percentile_rank(count: i64) -> i64 {
+    std::cmp::max(1, (count as f64 / 100f64).round() as i64)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Record {
-    total: i64,
-	top_10_prc: i64,
 	top_1_prc: i64,
-	top_0p1_prc: i64,
-	top_0p01_prc: i64,
-	top_10k: i64,
 	top_1k: i64,
 	top_100: i64,
 	top_10: i64,
@@ -242,15 +266,10 @@ pub struct Record {
 impl From<Row> for Record {
     fn from(row: Row) -> Record {
         Record {
-            total: row.get(0),
-            top_10_prc: row.get(1),
-            top_1_prc: row.get(2),
-            top_0p1_prc: row.get(3),
-            top_0p01_prc: row.get(4),
-            top_10k: row.get(5),
-            top_1k: row.get(6),
-            top_100: row.get(7),
-            top_10: row.get(8),
+            top_1_prc: row.get(0),
+            top_1k: row.get(1),
+            top_100: row.get(2),
+            top_10: row.get(3),
         }
     }
 }
@@ -276,26 +295,16 @@ fn insert_record(tx: &mut Transaction, height: i32, rec: Record, table: &str) {
             "
             insert into {table} (
                 height,
-                total,
-                top_10_prc,
                 top_1_prc,
-                top_0p1_prc,
-                top_0p01_prc,
-                top_10k,
                 top_1k,
                 top_100,
                 top_10
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+            ) values ($1, $2, $3, $4, $5);
         "
         ),
         &[
             &height,
-            &rec.total,
-            &rec.top_10_prc,
             &rec.top_1_prc,
-            &rec.top_0p1_prc,
-            &rec.top_0p01_prc,
-            &rec.top_10k,
             &rec.top_1k,
             &rec.top_100,
             &rec.top_10,
@@ -324,24 +333,14 @@ fn update_record(tx: &mut Transaction, height: i32, rec: Record, table: &str) {
         &format!(
             "
             update {table}
-            set total = $2
-                , top_10_prc = $3
-                , top_1_prc = $4
-                , top_0p1_prc = $5
-                , top_0p01_prc = $6
-                , top_10k = $7
-                , top_1k = $8
-                , top_100 = $9
-                , top_10 = $10
+            set top_1_prc = $2
+                , top_1k = $3
+                , top_100 = $4
+                , top_10 = $5
             where height = $1;"),
             &[
                 &height,
-                &rec.total,
-                &rec.top_10_prc,
                 &rec.top_1_prc,
-                &rec.top_0p1_prc,
-                &rec.top_0p01_prc,
-                &rec.top_10k,
                 &rec.top_1k,
                 &rec.top_100,
                 &rec.top_10,
@@ -363,21 +362,9 @@ mod sql {
                 -- ignore main cex addresses
                 and c.address_id is null
             order by value desc
-        ), percentile_ranks as (
-            select greatest(1, round(count(*) * 0.1)) as p10
-                , greatest(1, round(count(*) * 0.01)) as p1
-                , greatest(1, round(count(*) * 0.001)) as p01
-                , greatest(1, round(count(*) * 0.0001)) as p001
-            from ranked_addresses
+            limit greatest(1000::bigint, $1)
         )
-        select coalesce((select sum(value) from ranked_addresses), 0)::bigint as total
-            
-            , coalesce((select sum(r.value) from ranked_addresses r, percentile_ranks p where value_rank <= p.p10), 0)::bigint as p10
-            , coalesce((select sum(r.value) from ranked_addresses r, percentile_ranks p where value_rank <= p.p1), 0)::bigint as p1
-            , coalesce((select sum(r.value) from ranked_addresses r, percentile_ranks p where value_rank <= p.p01), 0)::bigint as p01
-            , coalesce((select sum(r.value) from ranked_addresses r, percentile_ranks p where value_rank <= p.p001), 0)::bigint as p001
-
-            , coalesce((select sum(value) from ranked_addresses where value_rank <= 10000), 0)::bigint as t10k
+        select coalesce((select sum(r.value) from ranked_addresses r where value_rank <= $1), 0)::bigint as p1
             , coalesce((select sum(value) from ranked_addresses where value_rank <= 1000), 0)::bigint as t1k
             , coalesce((select sum(value) from ranked_addresses where value_rank <= 100), 0)::bigint as t100
             , coalesce((select sum(value) from ranked_addresses where value_rank <= 10), 0)::bigint as t10;
@@ -399,21 +386,9 @@ mod sql {
                 -- exclude treasury contract
                 and b.address_id <> coalesce(core.address_id('4L1ktFSzm3SH1UioDuUf5hyaraHird4D2dEACwQ1qHGjSKtA6KaNvSzRCZXZGf9jkfNAEC1SrYaZmCuvb2BKiXk5zW9xuvrXFT7FdNe2KqbymiZvo5UQLAm5jQY8ZBRhTZ4AFtZa1UF5nd4aofwPiL7YkJuyiL5hDHMZL1ZnyL746tHmRYMjAhCgE7d698dRhkdSeVy'), 0)
             order by value desc
-        ), percentile_ranks as (
-            select greatest(1, round(count(*) * 0.1)) as p10
-                , greatest(1, round(count(*) * 0.01)) as p1
-                , greatest(1, round(count(*) * 0.001)) as p01
-                , greatest(1, round(count(*) * 0.0001)) as p001
-            from ranked_addresses
+            limit greatest(1000::bigint, $1)
         )
-        select coalesce((select sum(value) from ranked_addresses), 0)::bigint as total
-            
-            , coalesce((select sum(r.value) from ranked_addresses r, percentile_ranks p where value_rank <= p.p10), 0)::bigint as p10
-            , coalesce((select sum(r.value) from ranked_addresses r, percentile_ranks p where value_rank <= p.p1), 0)::bigint as p1
-            , coalesce((select sum(r.value) from ranked_addresses r, percentile_ranks p where value_rank <= p.p01), 0)::bigint as p01
-            , coalesce((select sum(r.value) from ranked_addresses r, percentile_ranks p where value_rank <= p.p001), 0)::bigint as p001
-
-            , coalesce((select sum(value) from ranked_addresses where value_rank <= 10000), 0)::bigint as t10k
+        select coalesce((select sum(r.value) from ranked_addresses r where value_rank <= $1), 0)::bigint as p1
             , coalesce((select sum(value) from ranked_addresses where value_rank <= 1000), 0)::bigint as t1k
             , coalesce((select sum(value) from ranked_addresses where value_rank <= 100), 0)::bigint as t100
             , coalesce((select sum(value) from ranked_addresses where value_rank <= 10), 0)::bigint as t10;
@@ -428,23 +403,27 @@ mod sql {
             join core.addresses a on a.id = b.address_id
             where a.miner
             order by value desc
-        ), percentile_ranks as (
-            select greatest(1, round(count(*) * 0.1)) as p10
-                , greatest(1, round(count(*) * 0.01)) as p1
-                , greatest(1, round(count(*) * 0.001)) as p01
-                , greatest(1, round(count(*) * 0.0001)) as p001
-            from ranked_addresses
+            limit greatest(1000::bigint, $1)
         )
-        select coalesce((select sum(value) from ranked_addresses), 0)::bigint as total
-            
-            , coalesce((select sum(r.value) from ranked_addresses r, percentile_ranks p where value_rank <= p.p10), 0)::bigint as p10
-            , coalesce((select sum(r.value) from ranked_addresses r, percentile_ranks p where value_rank <= p.p1), 0)::bigint as p1
-            , coalesce((select sum(r.value) from ranked_addresses r, percentile_ranks p where value_rank <= p.p01), 0)::bigint as p01
-            , coalesce((select sum(r.value) from ranked_addresses r, percentile_ranks p where value_rank <= p.p001), 0)::bigint as p001
-
-            , coalesce((select sum(value) from ranked_addresses where value_rank <= 10000), 0)::bigint as t10k
+        select coalesce((select sum(r.value) from ranked_addresses r where value_rank <= $1), 0)::bigint as p1
             , coalesce((select sum(value) from ranked_addresses where value_rank <= 1000), 0)::bigint as t1k
             , coalesce((select sum(value) from ranked_addresses where value_rank <= 100), 0)::bigint as t100
             , coalesce((select sum(value) from ranked_addresses where value_rank <= 10), 0)::bigint as t10;
         ";
 }	
+
+
+#[cfg(test)]
+mod tests {
+    use super::first_percentile_rank;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_1st_percentile_rank() -> () {
+        // Min value should be 1
+        assert_eq!(first_percentile_rank(34), 1);
+        // Ranks are rounded to closest int
+        assert_eq!(first_percentile_rank(1490), 15);
+        assert_eq!(first_percentile_rank(1510), 15);
+    }
+}

@@ -8,12 +8,7 @@ pub(super) fn apply(tx: &mut Transaction) -> anyhow::Result<()> {
         "
         create table mtr.supply_on_top_addresses_p2pk (
             height int,
-            total bigint,
-            top_10_prc bigint,
             top_1_prc bigint,
-            top_0p1_prc bigint,
-            top_0p01_prc bigint,
-            top_10k bigint,
             top_1k bigint,
             top_100 bigint,
             top_10 bigint
@@ -24,12 +19,7 @@ pub(super) fn apply(tx: &mut Transaction) -> anyhow::Result<()> {
         "
         create table mtr.supply_on_top_addresses_contracts (
             height int,
-            total bigint,
-            top_10_prc bigint,
             top_1_prc bigint,
-            top_0p1_prc bigint,
-            top_0p01_prc bigint,
-            top_10k bigint,
             top_1k bigint,
             top_100 bigint,
             top_10 bigint
@@ -40,12 +30,7 @@ pub(super) fn apply(tx: &mut Transaction) -> anyhow::Result<()> {
         "
         create table mtr.supply_on_top_addresses_miners (
             height int,
-            total bigint,
-            top_10_prc bigint,
             top_1_prc bigint,
-            top_0p1_prc bigint,
-            top_0p01_prc bigint,
-            top_10k bigint,
             top_1k bigint,
             top_100 bigint,
             top_10 bigint

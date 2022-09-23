@@ -269,17 +269,17 @@ fn set_constraints(client: &mut Client) {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Record {
-    total: i64,
-    ge_0p001: i64,
-    ge_0p01: i64,
-    ge_0p1: i64,
-    ge_1: i64,
-    ge_10: i64,
-    ge_100: i64,
-    ge_1k: i64,
-    ge_10k: i64,
-    ge_100k: i64,
-    ge_1m: i64,
+    pub total: i64,
+    pub ge_0p001: i64,
+    pub ge_0p01: i64,
+    pub ge_0p1: i64,
+    pub ge_1: i64,
+    pub ge_10: i64,
+    pub ge_100: i64,
+    pub ge_1k: i64,
+    pub ge_10k: i64,
+    pub ge_100k: i64,
+    pub ge_1m: i64,
 }
 
 impl Record {

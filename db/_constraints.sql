@@ -289,36 +289,21 @@ update mtr._log set address_counts_constraints_set = TRUE;
 -- Supply distribution (p2pk)
 alter table mtr.supply_on_top_addresses_p2pk add primary key(height);
 alter table mtr.supply_on_top_addresses_p2pk alter column height set not null;
-alter table mtr.supply_on_top_addresses_p2pk alter column total set not null;
-alter table mtr.supply_on_top_addresses_p2pk alter column top_10_prc set not null;
 alter table mtr.supply_on_top_addresses_p2pk alter column top_1_prc set not null;
-alter table mtr.supply_on_top_addresses_p2pk alter column top_0p1_prc set not null;
-alter table mtr.supply_on_top_addresses_p2pk alter column top_0p01_prc set not null;
-alter table mtr.supply_on_top_addresses_p2pk alter column top_10k set not null;
 alter table mtr.supply_on_top_addresses_p2pk alter column top_1k set not null;
 alter table mtr.supply_on_top_addresses_p2pk alter column top_100 set not null;
 alter table mtr.supply_on_top_addresses_p2pk alter column top_10 set not null;
 -- Supply distribution (contracts)
 alter table mtr.supply_on_top_addresses_contracts add primary key(height);
 alter table mtr.supply_on_top_addresses_contracts alter column height set not null;
-alter table mtr.supply_on_top_addresses_contracts alter column total set not null;
-alter table mtr.supply_on_top_addresses_contracts alter column top_10_prc set not null;
 alter table mtr.supply_on_top_addresses_contracts alter column top_1_prc set not null;
-alter table mtr.supply_on_top_addresses_contracts alter column top_0p1_prc set not null;
-alter table mtr.supply_on_top_addresses_contracts alter column top_0p01_prc set not null;
-alter table mtr.supply_on_top_addresses_contracts alter column top_10k set not null;
 alter table mtr.supply_on_top_addresses_contracts alter column top_1k set not null;
 alter table mtr.supply_on_top_addresses_contracts alter column top_100 set not null;
 alter table mtr.supply_on_top_addresses_contracts alter column top_10 set not null;
 -- Supply distribution (miners)
 alter table mtr.supply_on_top_addresses_miners add primary key(height);
 alter table mtr.supply_on_top_addresses_miners alter column height set not null;
-alter table mtr.supply_on_top_addresses_miners alter column total set not null;
-alter table mtr.supply_on_top_addresses_miners alter column top_10_prc set not null;
 alter table mtr.supply_on_top_addresses_miners alter column top_1_prc set not null;
-alter table mtr.supply_on_top_addresses_miners alter column top_0p1_prc set not null;
-alter table mtr.supply_on_top_addresses_miners alter column top_0p01_prc set not null;
-alter table mtr.supply_on_top_addresses_miners alter column top_10k set not null;
 alter table mtr.supply_on_top_addresses_miners alter column top_1k set not null;
 alter table mtr.supply_on_top_addresses_miners alter column top_100 set not null;
 alter table mtr.supply_on_top_addresses_miners alter column top_10 set not null;
