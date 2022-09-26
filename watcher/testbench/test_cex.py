@@ -35,8 +35,9 @@ SCENARIO_DESCRIPTION = """
         // coinbase tx:
         base-box1 1000
         >
-        base-box2  840
+        base-box2  830
         con1-box1   60
+        pub8-box1   10
         pub9-box1  100
 
     block-b
@@ -116,6 +117,14 @@ SCENARIO_DESCRIPTION = """
         con1-box4    5
         >
         cex3-box3    5
+        --
+        // https://github.com/abchrisxyz/ergowatch/issues/70
+        // "airdrop" senders should be ignored as deposit addresses
+        pub8-box1   10
+        >
+        cex1-box8    1
+        cex2-box8    1
+        pub8-box2    8
     """
 
 
@@ -475,6 +484,7 @@ def assert_deposit_addresses(cur: pg.Cursor):
 
 
 def assert_addresses_conflicts(cur: pg.Cursor, s: Scenario):
+    pub8 = AC.get("pub8")
     pub9 = AC.get("pub9")
     cur.execute(
         """
@@ -489,9 +499,10 @@ def assert_addresses_conflicts(cur: pg.Cursor, s: Scenario):
         """
     )
     rows = cur.fetchall()
-    assert len(rows) == 1
+    assert len(rows) == 2
     assert rows == [
         (pub9.address, 1, "deposit", s.parent_height + 2, s.parent_height + 5),
+        (pub8.address, 1, "deposit", s.parent_height + 5, s.parent_height + 5),
     ]
 
 
@@ -544,22 +555,24 @@ def assert_supply(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
     )
     rows = cur.fetchall()
     if bootstrapped:
-        assert len(rows) == 6
+        assert len(rows) == 7
         assert rows == [
             (height_b, 1, 6, 20),
             (height_c, 1, 16, 10),
             (height_c, 2, 0, 15),
             (height_d, 2, 5, 9),
-            (height_e, 2, 8, 6),
+            (height_e, 1, 17, 10),
+            (height_e, 2, 9, 6),
             (height_e, 3, 99, 0),
         ]
     else:
-        assert len(rows) == 5
+        assert len(rows) == 6
         assert rows == [
             (height_b, 1, 6, 94),
             (height_c, 1, 16, 104),
             (height_d, 2, 5, 9),
-            (height_e, 2, 8, 6),
+            (height_e, 1, 17, 104),
+            (height_e, 2, 9, 6),
             (height_e, 3, 99, 0),
         ]
 
