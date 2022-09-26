@@ -70,7 +70,8 @@ SCENARIO_DESCRIPTION = """
     block-e
         base-box3   90
         >
-        base-box4   90
+        base-box4   89
+        con4-box1    1
     """
 
 
@@ -324,7 +325,7 @@ def assert_supply_distribution_contracts(cur: pg.Cursor, s: Scenario):
     assert rows[2] == (ph + 2, 200, 200, 200, 200)
     assert rows[3] == (ph + 3, 202, 202, 202, 202)
     assert rows[4] == (ph + 4, 202, 302, 302, 302)
-    assert rows[5] == (ph + 5, 202, 302, 302, 302)
+    assert rows[5] == (ph + 5, 202, 303, 303, 303)
 
 
 def assert_supply_distribution_miners(cur: pg.Cursor, s: Scenario):
