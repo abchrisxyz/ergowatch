@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.3 - 2022-09-26
+
+### Fixed
+
+[Issue 70](https://github.com/abchrisxyz/ergowatch/issues/70) - Fixed cex address detection issue with airdrops
+
+
 ## v0.4.2 - 2022-09-01
 
 ### Fixed
