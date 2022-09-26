@@ -143,7 +143,7 @@ fn rollback_address_declarations(tx: &mut Transaction, cache: &mut Cache, height
 }
 
 /// Creates a temp table holding new deposit address candidates
-/// spotted at given height.
+/// spotted at given `height`.
 fn spot_deposit_candidates(tx: &mut Transaction, height: i32) {
     tx.execute(
         "
@@ -201,12 +201,22 @@ fn insert_new_deposit_addresses(tx: &mut Transaction, height: i32) -> Option<i32
     if let Some(conflicting_addresses) = get_cex_conflict_addresses(tx) {
         for address_id in conflicting_addresses {
             info!(
-                "Found deposit address linked to multiple CEX's: {}",
+                "Found existing deposit address linked to multiple CEX's: {}",
                 address_id
             );
             log_cex_conflict(tx, address_id, height);
             update_processing_log_for_conflict(tx, address_id);
             resolve_cex_conflict(tx, address_id);
+        }
+    }
+    if let Some(airdrop_addresses) = get_cex_airdrop_addresses(tx, height) {
+        for aa in airdrop_addresses {
+            info!(
+                "Found candidate deposit address linked to multiple CEX's: {}",
+                aa.address_id
+            );
+            log_cex_airdrop_conflict(tx, &aa);
+            resolve_cex_conflict(tx, aa.address_id);
         }
     }
     tx.execute(
@@ -241,8 +251,8 @@ fn get_cex_conflict_addresses(tx: &mut Transaction) -> Option<Vec<i64>> {
         select array_agg(a.address_id)
         from _cex_deposit_candidates c
         join cex.addresses a
-        on a.address_id = c.address_id
-        and a.cex_id <> c.cex_id;
+            on a.address_id = c.address_id
+            and a.cex_id <> c.cex_id;
         ",
         &[],
     )
@@ -284,6 +294,66 @@ fn resolve_cex_conflict(tx: &mut Transaction, address_id: i64) {
     tx.execute(
         "delete from _cex_deposit_candidates where address_id = $1;",
         &[&address_id],
+    )
+    .unwrap();
+}
+
+/// Addresses sending to multiple CEX's at once.
+///
+/// Often resulting from token airdrops sending to top x ERG holding addresses.
+struct AirdropAddress {
+    address_id: i64,
+    first_cex_id: i32,
+    spot_height: i32,
+}
+
+/// Retrieves airdop addresses from candidates
+///
+/// `height`: current block height
+fn get_cex_airdrop_addresses(tx: &mut Transaction, height: i32) -> Option<Vec<AirdropAddress>> {
+    let aas: Vec<AirdropAddress> = tx
+        .query(
+            "
+        select address_id
+            , min(cex_id) as first_cex_id
+        from _cex_deposit_candidates
+        where address_id in (
+            select address_id
+            from _cex_deposit_candidates
+            group by 1 having count(*) > 1
+        )
+        group by 1
+        ",
+            &[],
+        )
+        .unwrap()
+        .iter()
+        .map(|row| AirdropAddress {
+            address_id: row.get(0),
+            first_cex_id: row.get(1),
+            spot_height: height,
+        })
+        .collect();
+
+    match aas.is_empty() {
+        true => None,
+        false => Some(aas),
+    }
+}
+
+/// Add address in cex.addresses_conflicts
+fn log_cex_airdrop_conflict(tx: &mut Transaction, aa: &AirdropAddress) {
+    tx.execute(
+        "
+        insert into cex.addresses_conflicts (
+            address_id,
+            first_cex_id,
+            type,
+            spot_height,
+            conflict_spot_height
+        ) values ($1, $2, 'deposit', $3, $3);
+        ",
+        &[&aa.address_id, &aa.first_cex_id, &aa.spot_height],
     )
     .unwrap();
 }
