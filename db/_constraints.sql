@@ -310,6 +310,13 @@ alter table mtr.supply_on_top_addresses_miners alter column top_10 set not null;
 
 update mtr._log set supply_distribution_constraints_set = TRUE;
 
+-- Supply age
+alter table mtr.supply_age add primary key(height);
+alter table mtr.supply_age alter column seconds_all set not null;
+alter table mtr.supply_age alter column seconds_p2pk set not null;
+alter table mtr.supply_age alter column seconds_contracts set not null;
+alter table mtr.supply_age alter column seconds_exchanges set not null;
+
 -- Transactions
 alter table mtr.transactions add primary key(height);
 alter table mtr.transactions alter column height set not null;
@@ -317,3 +324,11 @@ alter table mtr.transactions alter column daily_1d set not null;
 alter table mtr.transactions alter column daily_7d set not null;
 alter table mtr.transactions alter column daily_28d set not null;
 update mtr._log set transactions_constraints_set = TRUE;
+
+-- Volume
+alter table mtr.volume add primary key(height);
+alter table mtr.volume alter column height set not null;
+alter table mtr.volume alter column daily_1d set not null;
+alter table mtr.volume alter column daily_7d set not null;
+alter table mtr.volume alter column daily_28d set not null;
+update mtr._log set volume_constraints_set = TRUE;

@@ -7,6 +7,7 @@ mod ergusd;
 mod supply_distribution;
 mod transactions;
 pub mod utxos;
+mod volume;
 use crate::db::coingecko::Cache as CoinGeckoCache;
 use crate::parsing::BlockData;
 use postgres::Client;
@@ -27,6 +28,7 @@ pub(super) fn include_block(
     address_counts::include(tx, block, &mut cache.address_counts);
     supply_distribution::include(tx, block, &cache.address_counts);
     transactions::include(tx, block, cache);
+    volume::include(tx, block, cache);
 
     if ergusd::pending_update(&cache.ergusd, cgo_cache) {
         // Update ergusd values
@@ -41,6 +43,7 @@ pub(super) fn rollback_block(
     block: &BlockData,
     cache: &mut Cache,
 ) -> anyhow::Result<()> {
+    volume::rollback(tx, block);
     transactions::rollback(tx, block);
     supply_distribution::rollback(tx, block);
     address_counts::rollback(tx, block, &mut cache.address_counts);
@@ -63,6 +66,7 @@ pub(super) fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result
     address_counts::bootstrap(client, work_mem_kb)?;
     supply_distribution::bootstrap(client, work_mem_kb)?;
     transactions::bootstrap(client, work_mem_kb)?;
+    volume::bootstrap(client, work_mem_kb)?;
     Ok(())
 }
 

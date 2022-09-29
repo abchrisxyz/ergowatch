@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 21);
+insert into ew.revision (major, minor) values (3, 22);
 
 create table ew.repairs (
 	singleton int primary key default 1,
@@ -450,6 +450,7 @@ create table mtr._log (
 	supply_distribution_constraints_set bool not null default FALSE,
 	supply_distribution_bootstrapped bool not null default FALSE,
 	transactions_constraints_set bool not null default FALSE,
+	volume_constraints_set bool not null default FALSE,
 	check(singleton = 1)
 );
 insert into mtr._log(singleton) values (1);
@@ -566,7 +567,12 @@ create table mtr.transactions(
 	height int,
 	daily_1d bigint,    -- txs/day over past 24h
 	daily_7d bigint,    -- txs/day over past 7 days
-	daily_28d bigint   -- txs/day over past 4 weeks
+	daily_28d bigint    -- txs/day over past 4 weeks
 );
 
+create table mtr.volume(
+	height int,
+	daily_1d bigint,    -- daily volume over past 24h
+	daily_7d bigint,    -- daily volume over past 7 days
+	daily_28d bigint    -- daily volume over past 4 weeks
 );

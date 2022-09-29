@@ -250,6 +250,7 @@ def _test_db_state(conn: pg.Connection, s: Scenario):
     with conn.cursor() as cur:
         assert_utxos(cur, s)
         assert_transactions(cur, s)
+        assert_volume(cur, s)
 
 
 def assert_db_constraints(conn: pg.Connection):
@@ -263,6 +264,13 @@ def assert_db_constraints(conn: pg.Connection):
     assert_column_not_null(conn, "mtr", "transactions", "daily_7d")
     assert_column_not_null(conn, "mtr", "transactions", "daily_28d")
 
+    # Volume
+    assert_pk(conn, "mtr", "volume", ["height"])
+    assert_column_not_null(conn, "mtr", "volume", "height")
+    assert_column_not_null(conn, "mtr", "volume", "daily_1d")
+    assert_column_not_null(conn, "mtr", "volume", "daily_7d")
+    assert_column_not_null(conn, "mtr", "volume", "daily_28d")
+
 
 def assert_transactions(cur: pg.Cursor, s: Scenario):
     cur.execute(
@@ -274,6 +282,18 @@ def assert_transactions(cur: pg.Cursor, s: Scenario):
     assert rows[1] == (s.parent_height + 1, 2, 0, 0)  # +1 tx
     assert rows[2] == (s.parent_height + 2, 3, 0, 0)  # +1 tx
     assert rows[3] == (s.parent_height + 3, 5, 1, 0)  # +2 txs
+
+
+def assert_volume(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        "select height, daily_1d, daily_7d, daily_28d from mtr.volume order by 1;"
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 4
+    assert rows[0] == (s.parent_height + 0, 0, 0, 0)
+    assert rows[1] == (s.parent_height + 1, 0, 0, 0)
+    assert rows[2] == (s.parent_height + 2, 50, 7, 2)
+    assert rows[3] == (s.parent_height + 3, 55, 8, 2)
 
 
 def assert_utxos(cur: pg.Cursor, s: Scenario):
