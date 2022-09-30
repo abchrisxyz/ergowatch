@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 22);
+insert into ew.revision (major, minor) values (3, 23);
 
 create table ew.repairs (
 	singleton int primary key default 1,
@@ -447,8 +447,10 @@ create table mtr._log (
 	ergusd_bootstrapped bool not null default FALSE,
 	address_counts_constraints_set bool not null default FALSE,
 	address_counts_bootstrapped bool not null default FALSE,
-	supply_distribution_constraints_set bool not null default FALSE,
+	supply_age_bootstrapped bool not null default FALSE,
+	supply_age_constraints_set bool not null default FALSE,
 	supply_distribution_bootstrapped bool not null default FALSE,
+	supply_distribution_constraints_set bool not null default FALSE,
 	transactions_constraints_set bool not null default FALSE,
 	volume_constraints_set bool not null default FALSE,
 	check(singleton = 1)
@@ -474,6 +476,11 @@ create table mtr.ergusd_provisional (
 	height int
 );
 
+-- UTxO counts
+create table mtr.utxos (
+	height int,
+	value bigint
+);
 
 -- Address counts by balance
 ------------------------------------------------------------------------------- 
@@ -558,10 +565,15 @@ create table mtr.cex_supply (
 	deposit bigint
 );
 
--- UTxO counts
-create table mtr.utxos (
+-- Mean supply age in seconds (since last change of address)
+create table mtr.supply_age (
 	height int,
-	value bigint
+	secs_all bigint,
+	secs_p2pk bigint,       -- excluding mian cex's
+	secs_exchanges bigint,  -- main cex addresses
+	secs_contracts bigint,  -- excluding EF treasury
+	secs_miners bigint
+);
 
 create table mtr.transactions(
 	height int,

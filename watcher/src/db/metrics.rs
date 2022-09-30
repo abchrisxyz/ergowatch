@@ -4,6 +4,7 @@
 mod address_counts;
 mod cexs;
 mod ergusd;
+mod supply_age;
 mod supply_distribution;
 mod transactions;
 pub mod utxos;
@@ -26,6 +27,7 @@ pub(super) fn include_block(
     utxos::include(tx, block, cache);
     cexs::include(tx, block);
     address_counts::include(tx, block, &mut cache.address_counts);
+    supply_age::include(tx, block);
     supply_distribution::include(tx, block, &cache.address_counts);
     transactions::include(tx, block, cache);
     volume::include(tx, block, cache);
@@ -46,6 +48,7 @@ pub(super) fn rollback_block(
     volume::rollback(tx, block);
     transactions::rollback(tx, block);
     supply_distribution::rollback(tx, block);
+    supply_age::rollback(tx, block);
     address_counts::rollback(tx, block, &mut cache.address_counts);
     cexs::rollback(tx, block);
     utxos::rollback(tx, block, cache);
@@ -64,6 +67,7 @@ pub(super) fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result
     tx.commit()?;
 
     address_counts::bootstrap(client, work_mem_kb)?;
+    supply_age::bootstrap(client, work_mem_kb)?;
     supply_distribution::bootstrap(client, work_mem_kb)?;
     transactions::bootstrap(client, work_mem_kb)?;
     volume::bootstrap(client, work_mem_kb)?;

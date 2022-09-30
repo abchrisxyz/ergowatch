@@ -312,10 +312,12 @@ update mtr._log set supply_distribution_constraints_set = TRUE;
 
 -- Supply age
 alter table mtr.supply_age add primary key(height);
-alter table mtr.supply_age alter column seconds_all set not null;
-alter table mtr.supply_age alter column seconds_p2pk set not null;
-alter table mtr.supply_age alter column seconds_contracts set not null;
-alter table mtr.supply_age alter column seconds_exchanges set not null;
+alter table mtr.supply_age alter column secs_all set not null;
+alter table mtr.supply_age alter column secs_p2pk set not null;
+alter table mtr.supply_age alter column secs_exchanges set not null;
+alter table mtr.supply_age alter column secs_contracts set not null;
+alter table mtr.supply_age alter column secs_miners set not null;
+update mtr._log set supply_age_constraints_set = TRUE;
 
 -- Transactions
 alter table mtr.transactions add primary key(height);
