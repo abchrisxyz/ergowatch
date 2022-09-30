@@ -100,6 +100,7 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
 
     // Prepare replay tables
     let mut tx = client.transaction()?;
+    tx.execute(&format!("set local work_mem = {};", work_mem_kb), &[])?;
     addresses::replay::prepare(&mut tx, sync_height, replay_id);
     tx.commit()?;
 
