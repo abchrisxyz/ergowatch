@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 23);
+insert into ew.revision (major, minor) values (3, 24);
 
 create table ew.repairs (
 	singleton int primary key default 1,

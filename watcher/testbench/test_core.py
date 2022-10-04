@@ -476,6 +476,7 @@ def assert_db_constraints(conn: pg.Connection):
 
     # Addresses
     assert_pk(conn, "core", "addresses", ["id"])
+    assert_column_ge(conn, "core", "addresses", "id", 1)
     assert_excl(conn, "core", "addresses", "addresses_address_excl")
     assert_column_not_null(conn, "core", "addresses", "id")
     assert_column_not_null(conn, "core", "addresses", "address")

@@ -92,6 +92,7 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
 pub(super) fn set_constraints(tx: &mut Transaction) {
     let statements = vec![
         "alter table core.addresses add primary key (id);",
+        "alter table core.addresses add check (id > 0);",
         "alter table core.addresses alter column id set not null;",
         "alter table core.addresses alter column address set not null;",
         "alter table core.addresses alter column spot_height set not null;",

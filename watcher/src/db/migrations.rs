@@ -25,9 +25,10 @@ mod mig_020;
 mod mig_021;
 mod mig_022;
 mod mig_023;
+mod mig_024;
 
 const CURRENT_REVISION_MAJOR: i32 = 3;
-const CURRENT_REVISION_MINOR: i32 = 23;
+const CURRENT_REVISION_MINOR: i32 = 24;
 
 struct Revision {
     major: i32,
@@ -100,6 +101,7 @@ fn apply_migration(client: &mut Client, migration_id: i32) -> anyhow::Result<()>
         21 => mig_021::apply(&mut tx)?,
         22 => mig_022::apply(&mut tx)?,
         23 => mig_023::apply(&mut tx)?,
+        24 => mig_024::apply(&mut tx)?,
         _ => return Err(anyhow!("Attempted to apply migration with unknown ID")),
     };
     // Increment revision
