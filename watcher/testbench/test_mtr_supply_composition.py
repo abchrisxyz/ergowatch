@@ -299,7 +299,7 @@ def assert_supply_composition(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
             , miners
             , treasury
         from mtr.supply_composition
-        order by 1, 2;
+        order by 1;
         """
     )
     rows = cur.fetchall()
