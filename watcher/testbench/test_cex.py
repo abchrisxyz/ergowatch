@@ -321,7 +321,7 @@ def _test_db_state(conn: pg.Connection, s: Scenario, bootstrapped=False):
     TestSync and SyncRollback trigger no bootstrap and no repair.
     TestGenesis and TestMigrations will bootstrap their cex schema.
     TestRepair does no bootstrap but ends with a repair and so produces
-    the same state as TestGeneis and TestMigrations.
+    the same state as TestGenesis and TestMigrations.
     """
     assert_db_constraints(conn)
     with conn.cursor() as cur:

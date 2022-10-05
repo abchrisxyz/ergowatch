@@ -13,7 +13,7 @@ Mean age timestamp of circulating supply can be updated incrementaly at each blo
 Ignoring all (re)-emission addresses
     D = Sum over debits (negative diff) of diff_addr * t_addr
     C = Sum over credits (positive diff) of diff_addr * t_current_block
-    CS = current circualting supply
+    CS = current circulating supply
     dt = D/CS + C/CS
     abs(D) always <= C, so dt always >= 0
     t(h) = t(h-1) + dt
