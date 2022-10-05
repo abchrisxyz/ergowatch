@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 24);
+insert into ew.revision (major, minor) values (3, 25);
 
 create table ew.repairs (
 	singleton int primary key default 1,
@@ -449,6 +449,8 @@ create table mtr._log (
 	address_counts_bootstrapped bool not null default FALSE,
 	supply_age_bootstrapped bool not null default FALSE,
 	supply_age_constraints_set bool not null default FALSE,
+	supply_composition_bootstrapped bool not null default FALSE,
+	supply_composition_constraints_set bool not null default FALSE,
 	supply_distribution_bootstrapped bool not null default FALSE,
 	supply_distribution_constraints_set bool not null default FALSE,
 	transactions_constraints_set bool not null default FALSE,
@@ -525,6 +527,31 @@ create table mtr.address_counts_by_balance_miners (
 	ge_10k bigint,
 	ge_100k bigint,
 	ge_1m bigint
+);
+
+
+-- Supply composition
+------------------------------------------------------------------------------- 
+-- Emitted supply by address type
+-- Total will exceed actual CS because some of miner's supply is meant for
+-- re-emission contract.
+-- Sum of all terms = emitted supply.
+-- Emitted supply >= circualting supply (because of reemissions still on
+-- miner contracts)
+create table mtr.supply_composition (
+	height int,
+	-- supply on p2pk addresses, excluding main cex addresses
+	p2pks bigint,
+	-- supply on main cex addresses
+	cex_main bigint,
+	-- supply on cex deposit addresses
+	cex_deposits bigint,
+	-- contracts excluding treasury
+	contracts bigint,
+	-- all supply on miner addresses, including destined to reemission.
+	miners bigint,
+	-- unlocked treasury supply (boils down to treasury balance after first 2.5 years)
+	treasury bigint
 );
 
 

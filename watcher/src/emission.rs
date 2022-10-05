@@ -36,6 +36,18 @@ pub fn miner_reward_at_height(height: i32) -> i64 {
     }
 }
 
+/// Treasury reward unlocked in EF contract at given `height`
+pub fn treasury_reward_at_height(h: i64) -> i64 {
+    if h < 1 {
+        0i64
+    } else if h < FIXED_RATE_PERIOD {
+        INITIAL_TREASURY_REWARD
+    } else {
+        let epoch = 1i64 + (h - FIXED_RATE_PERIOD) / EPOCH_LENGTH as i64;
+        std::cmp::max(INITIAL_TREASURY_REWARD - ONE_EPOCH_REDUCTION * epoch, 0)
+    }
+}
+
 /// Coinbase emission at height, before EIP-27
 fn pre_eip27_emission_at_height(h: i64) -> i64 {
     if h < FIXED_RATE_PERIOD {
@@ -72,6 +84,7 @@ fn reemission_at_height(h: i64) -> i64 {
 mod tests {
     use super::emission_at_height;
     use super::miner_reward_at_height;
+    use super::treasury_reward_at_height;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -87,7 +100,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rewards_at_height() -> () {
+    fn test_miner_rewards_at_height() -> () {
         assert_eq!(miner_reward_at_height(0), 0i64);
         assert_eq!(miner_reward_at_height(1), 67_500_000_000i64);
         assert_eq!(miner_reward_at_height(525599), 67_500_000_000i64);
@@ -96,5 +109,18 @@ mod tests {
         assert_eq!(miner_reward_at_height(777217), 51_000_000_000i64);
         assert_eq!(miner_reward_at_height(2080799), 3_000_000_000i64);
         assert_eq!(miner_reward_at_height(2080800), 3_000_000_000i64);
+    }
+
+    #[test]
+    fn test_treasury_rewards_at_height() -> () {
+        assert_eq!(treasury_reward_at_height(0), 0i64);
+        assert_eq!(treasury_reward_at_height(1), 7_500_000_000i64);
+        assert_eq!(treasury_reward_at_height(525599), 7_500_000_000i64);
+        assert_eq!(treasury_reward_at_height(525600), 4_500_000_000i64);
+        assert_eq!(treasury_reward_at_height(589999), 4_500_000_000i64);
+        assert_eq!(treasury_reward_at_height(590800), 1_500_000_000i64);
+        assert_eq!(treasury_reward_at_height(654999), 1_500_000_000i64);
+        assert_eq!(treasury_reward_at_height(655600), 0i64);
+        assert_eq!(treasury_reward_at_height(2080800), 0i64);
     }
 }

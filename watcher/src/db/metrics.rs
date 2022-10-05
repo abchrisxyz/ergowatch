@@ -5,6 +5,7 @@ mod address_counts;
 mod cexs;
 mod ergusd;
 mod supply_age;
+mod supply_composition;
 mod supply_distribution;
 mod transactions;
 pub mod utxos;
@@ -27,6 +28,7 @@ pub(super) fn include_block(
     utxos::include(tx, block, cache);
     cexs::include(tx, block);
     address_counts::include(tx, block, &mut cache.address_counts);
+    supply_composition::include(tx, block, &mut cache.supply_composition);
     supply_age::include(tx, block);
     supply_distribution::include(tx, block, &cache.address_counts);
     transactions::include(tx, block, cache);
@@ -49,6 +51,7 @@ pub(super) fn rollback_block(
     transactions::rollback(tx, block);
     supply_distribution::rollback(tx, block);
     supply_age::rollback(tx, block);
+    supply_composition::rollback(tx, block, &mut cache.supply_composition);
     address_counts::rollback(tx, block, &mut cache.address_counts);
     cexs::rollback(tx, block);
     utxos::rollback(tx, block, cache);
@@ -67,6 +70,7 @@ pub(super) fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result
     tx.commit()?;
 
     address_counts::bootstrap(client, work_mem_kb)?;
+    supply_composition::bootstrap(client, work_mem_kb)?;
     supply_age::bootstrap(client, work_mem_kb)?;
     supply_distribution::bootstrap(client, work_mem_kb)?;
     transactions::bootstrap(client, work_mem_kb)?;
@@ -78,6 +82,7 @@ pub(super) fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result
 pub struct Cache {
     pub address_counts: address_counts::Cache,
     pub ergusd: ergusd::Cache,
+    pub supply_composition: supply_composition::Cache,
     pub utxos: i64,
     // Heights x days prior to current last block
     height_1d_ago: i32,
@@ -90,6 +95,7 @@ impl Cache {
         Self {
             address_counts: address_counts::Cache::new(),
             ergusd: ergusd::Cache::new(),
+            supply_composition: supply_composition::Cache::new(),
             utxos: 0,
             height_1d_ago: 0,
             height_7d_ago: 0,
@@ -101,6 +107,7 @@ impl Cache {
         Self {
             address_counts: address_counts::Cache::load(client),
             ergusd: ergusd::Cache::load(client),
+            supply_composition: supply_composition::Cache::load(client),
             utxos: utxos::get_utxo_count(client),
             height_1d_ago: load_height_days_ago(client, 1),
             height_7d_ago: load_height_days_ago(client, 7),
@@ -111,6 +118,7 @@ impl Cache {
 
 pub(super) fn repair(tx: &mut Transaction, height: i32) {
     cexs::repair(tx, height);
+    supply_composition::repair(tx, height);
     supply_distribution::repair(tx, height);
 }
 

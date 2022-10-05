@@ -287,6 +287,16 @@ alter table mtr.address_counts_by_balance_miners alter column ge_1m set not null
 
 update mtr._log set address_counts_constraints_set = TRUE;
 
+-- Supply composition
+alter table mtr.supply_composition add primary key (height);
+alter table mtr.supply_composition alter column p2pks set not null;
+alter table mtr.supply_composition alter column cex_main set not null;
+alter table mtr.supply_composition alter column cex_deposits set not null;
+alter table mtr.supply_composition alter column contracts set not null;
+alter table mtr.supply_composition alter column miners set not null;
+alter table mtr.supply_composition alter column treasury set not null;
+update mtr._log set supply_composition_constraints_set = TRUE;
+
 -- Supply distribution (p2pk)
 alter table mtr.supply_on_top_addresses_p2pk add primary key(height);
 alter table mtr.supply_on_top_addresses_p2pk alter column height set not null;
