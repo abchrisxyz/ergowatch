@@ -15,9 +15,28 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
     tx.execute(ROLLBACK_BALANCE_UPDATES, &[height, &block.timestamp])
         .unwrap();
     // Then, restore deleted addresses from scratch
-    tx.execute(ROLLBACK_DELETE_ZERO_BALANCES, &[height])
-        .unwrap();
+    let addresses = get_spent_addresses(tx, block.height);
+    for address_id in addresses {
+        restore_spent_address(tx, address_id, block.height);
+    }
+
+    // Finally
     tx.execute(DELETE_ZERO_BALANCES, &[]).unwrap();
+}
+
+pub fn set_constraints(tx: &mut Transaction) {
+    let statements = vec![
+        "alter table adr.erg add primary key(address_id);",
+        "alter table adr.erg alter column address_id set not null;",
+        "alter table adr.erg alter column value set not null;",
+        "alter table adr.erg alter column mean_age_timestamp set not null;",
+        "alter table adr.erg add check (value >= 0);",
+        "create index on adr.erg(value);",
+    ];
+
+    for statement in statements {
+        tx.execute(statement, &[]).unwrap();
+    }
 }
 
 // Updates balances for known addresses
@@ -81,49 +100,66 @@ const ROLLBACK_BALANCE_UPDATES: &str = "
     from updated_addresses_diffs d
     where d.address_id = a.address_id;";
 
-// Restore deleted addresses from scratch.
-//
-// Precalc deleted balances to avoid bigint overflows
-const ROLLBACK_DELETE_ZERO_BALANCES: &str = "
-    with deleted_addresses as (
-        select distinct d.address_id
+/// Get addresses that got spent at given `height`.
+fn get_spent_addresses(tx: &mut Transaction, height: i32) -> Vec<i64> {
+    tx.query(
+        "
+        select d.address_id
         from adr.erg_diffs d
-        left join adr.erg a on a.address_id = d.address_id
+        left join adr.erg b on b.address_id = d.address_id
         where d.height = $1
-            and a.address_id is null
-    ), deleted_balances as (
-        select d.address_id
-            , sum(d.value) as prev_balance
-        from deleted_addresses x
-        join adr.erg_diffs d on d.address_id = x.address_id
-        where d.height < $1
-        group by 1 having sum(d.value) <> 0
+            -- Limit to spent addresses (i.e. no more balance)
+            and b.address_id is null
+        -- Limit to addresses that had an existing balance
+        group by 1 having sum(d.value) < 0;",
+        &[&height],
     )
-    -- recalc from scratch
-    insert into adr.erg(address_id, value, mean_age_timestamp)
-        select d.address_id
-            , x.prev_balance
-            , sum(d.value / x.prev_balance * h.timestamp)
-        from deleted_balances x
-        join adr.erg_diffs d on d.address_id = x.address_id
-        join core.headers h on h.height = d.height
-        where d.height < $1
-        group by 1, 2
-        having sum(d.value) <> 0;";
+    .unwrap()
+    .iter()
+    .map(|r| r.get(0))
+    .collect()
+}
 
-pub fn set_constraints(tx: &mut Transaction) {
-    let statements = vec![
-        "alter table adr.erg add primary key(address_id);",
-        "alter table adr.erg alter column address_id set not null;",
-        "alter table adr.erg alter column value set not null;",
-        "alter table adr.erg alter column mean_age_timestamp set not null;",
-        "alter table adr.erg add check (value >= 0);",
-        "create index on adr.erg(value);",
-    ];
+/// Roll back a spent address.
+///
+/// Calculates address balance and age as they were prior to given `height`
+/// and inserts it back into adr.erg.
+fn restore_spent_address(tx: &mut Transaction, address_id: i64, height: i32) {
+    tx.execute("
+        with recursive diffs as (
+            select row_number() over (order by h.height, t.index) as rn
+                , h.timestamp as ts
+                , d.value as diff
+            from adr.erg_diffs d
+            join core.transactions t on t.id = d.tx_id
+            join core.headers h on h.height = d.height
+            where d.address_id = $1
+                -- ignore current block!
+                and d.height < $2
+        )
+        , rec_query(rn, ts, diff, bal, mat) as (
+            select rn, ts, diff, diff, ts from diffs where rn = 1
 
-    for statement in statements {
-        tx.execute(statement, &[]).unwrap();
-    }
+            union all
+
+            select n.rn
+                , n.ts
+                , n.diff
+                , p.bal + n.diff
+                , case
+                    when n.diff = p.bal then 0
+                    when n.diff < 0 then p.mat
+                    else p.bal::numeric * p.mat / (p.bal + n.diff) + n.diff::numeric * n.ts / (p.bal + n.diff)
+                end::bigint
+            from rec_query p
+            join diffs n on n.rn = p.rn + 1
+        )
+        insert into adr.erg(address_id, value, mean_age_timestamp)
+        select $1
+            , bal
+            , mat
+        from rec_query
+        order by rn desc limit 1;", &[&address_id, &height]).unwrap();
 }
 
 pub mod replay {
