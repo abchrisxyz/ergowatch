@@ -25,12 +25,15 @@ of address mean_age_timestamp's.
 */
 
 pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
-    tx.execute(sql::INSERT_SNAPSHOT, &[&block.height, &block.timestamp])
-        .unwrap();
+    tx.execute(sql::INSERT_SNAPSHOT, &[&block.height]).unwrap();
+
 }
 
 pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
-    tx.execute(sql::DELETE_SNAPSHOT, &[&block.height]).unwrap();
+    tx.execute(sql::DELETE_SNAPSHOT_TIMESTAMPS, &[&block.height])
+        .unwrap();
+    tx.execute(sql::DELETE_SNAPSHOT_SECONDS, &[&block.height])
+        .unwrap();
 }
 
 pub fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
@@ -70,8 +73,12 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
     // Prepare replay tables
     let mut tx = client.transaction()?;
     tx.execute(&format!("set local work_mem = {};", work_mem_kb), &[])?;
-    addresses::replay::cleanup(&mut tx, replay_id);
-    addresses::replay::prepare(&mut tx, sync_height, replay_id);
+    // Replay prep doen't work for any h >= 0
+    if sync_height == -1 {
+        addresses::replay::prepare_with_age(&mut tx, sync_height, replay_id);
+    } else {
+        addresses::replay::resume(&mut tx, sync_height, replay_id);
+    }
     tx.commit()?;
 
     // Bootstrapping will be performed in batches of 1000
@@ -88,15 +95,16 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
         // Prepare statements
         let stmt_insert_snapshot = tx.prepare_typed(
             &sql::INSERT_SNAPSHOT.replace(" adr.erg ", &format!(" {replay_id}_adr.erg ")),
-            &[Type::INT4, Type::INT8],
+            &[Type::INT4],
         )?;
 
-        for (height, timestamp) in batch_blocks {
+        for (height, _timestamp) in batch_blocks {
             // step replay
-            addresses::replay::step(&mut tx, *height, replay_id);
+            addresses::replay::step_with_age(&mut tx, *height, replay_id);
+
 
             // Insert snapshot
-            tx.execute(&stmt_insert_snapshot, &[height, timestamp])?;
+            tx.execute(&stmt_insert_snapshot, &[height])?;
         }
 
         tx.commit()?;
@@ -114,10 +122,7 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
     addresses::replay::cleanup(&mut tx, replay_id);
     tx.commit()?;
 
-    client.execute(
-        "update mtr._log set address_counts_bootstrapped = TRUE;",
-        &[],
-    )?;
+    client.execute("update mtr._log set supply_age_bootstrapped = TRUE;", &[])?;
 
     Ok(())
 }
@@ -136,24 +141,31 @@ fn constraints_are_set(client: &mut Client) -> bool {
     row.get(0)
 }
 
-/// Get sync height of address counts tables.
+/// Get sync height of supply age tables.
 fn get_sync_height(client: &mut Client) -> Option<i32> {
-    // P2PK and other tables are progressed in sync, so enough to probe only one.
+    // All tables are progressed in sync, so enough to probe only one.
     let row = client
-        .query_one("select max(height) from mtr.supply_age;", &[])
+        .query_one("select max(height) from mtr.supply_age_timestamps;", &[])
         .unwrap();
     row.get(0)
 }
 
 fn set_constraints(client: &mut Client) {
     let statements = vec![
-        "alter table mtr.supply_age add primary key(height);",
-        "alter table mtr.supply_age alter column height set not null;",
-        "alter table mtr.supply_age alter column secs_all set not null;",
-        "alter table mtr.supply_age alter column secs_p2pk set not null;",
-        "alter table mtr.supply_age alter column secs_exchanges set not null;",
-        "alter table mtr.supply_age alter column secs_contracts set not null;",
-        "alter table mtr.supply_age alter column secs_miners set not null;",
+        "alter table mtr.supply_age_timestamps add primary key(height);",
+        "alter table mtr.supply_age_timestamps alter column height set not null;",
+        "alter table mtr.supply_age_timestamps alter column overall set not null;",
+        "alter table mtr.supply_age_timestamps alter column p2pks set not null;",
+        "alter table mtr.supply_age_timestamps alter column cexs set not null;",
+        "alter table mtr.supply_age_timestamps alter column contracts set not null;",
+        "alter table mtr.supply_age_timestamps alter column miners set not null;",
+        "alter table mtr.supply_age_seconds add primary key(height);",
+        "alter table mtr.supply_age_seconds alter column height set not null;",
+        "alter table mtr.supply_age_seconds alter column overall set not null;",
+        "alter table mtr.supply_age_seconds alter column p2pks set not null;",
+        "alter table mtr.supply_age_seconds alter column cexs set not null;",
+        "alter table mtr.supply_age_seconds alter column contracts set not null;",
+        "alter table mtr.supply_age_seconds alter column miners set not null;",
         "update mtr._log set supply_age_constraints_set = TRUE;",
     ];
     let mut tx = client.transaction().unwrap();
@@ -165,33 +177,53 @@ fn set_constraints(client: &mut Client) {
 
 mod sql {
     pub(super) const INSERT_SNAPSHOT: &str = "
-        insert into mtr.supply_age (
+        insert into mtr.supply_age_timestamps (
             height,
-            secs_all,
-            secs_p2pk,
-            secs_exchanges,
-            secs_contracts,
-            secs_miners
-    )
-    with mean_age_timestamps as (
-        select coalesce(sum(value::numeric * mean_age_timestamp) / sum(value), 0) as t_all
-            , coalesce(sum(value::numeric * mean_age_timestamp) filter(where a.p2pk and c.address_id is null) / sum(value) filter(where a.p2pk and c.address_id is null), 0) as t_p2pk
-            , coalesce(sum(value::numeric * mean_age_timestamp) filter(where a.p2pk and c.address_id is not null) / sum(value) filter(where a.p2pk and c.address_id is not null), 0) as t_cexs
-            , coalesce(sum(value::numeric * mean_age_timestamp) filter(where not a.p2pk and not a.miner) / sum(value) filter(where not a.p2pk and not a.miner), 0) as t_cons
-            , coalesce(sum(value::numeric * mean_age_timestamp) filter(where a.miner) / sum(value) filter(where a.miner), 0) as t_mins
-        from adr.erg b
-        join core.addresses a on a.id = b.address_id
-        left join cex.addresses c on c.address_id = b.address_id and c.type = 'main'
-        -- exclude emission and treasury contracts
-        where b.address_id not in (1, 3, 596523, 599350)
-    )
-    select $1
-        , ($2::bigint - t_all) / 1000
-        , ($2::bigint - t_p2pk) / 1000
-        , ($2::bigint - t_cexs) / 1000
-        , ($2::bigint - t_cons) / 1000
-        , ($2::bigint - t_mins) / 1000
-    from mean_age_timestamps;";
+            overall,
+            p2pks,
+            cexs,
+            contracts,
+            miners
+        )
+        with mean_age_timestamps as (
+            select coalesce(sum(value::numeric * mean_age_timestamp) / sum(value), 0) as t_all
+                , coalesce(
+                    sum(value::numeric * mean_age_timestamp) filter(where a.p2pk and c.address_id is null)
+                    / sum(value) filter(where a.p2pk and c.address_id is null), 0
+                ) as t_p2pk
+                , coalesce(
+                    sum(value::numeric * mean_age_timestamp) filter(where a.p2pk and c.address_id is not null)
+                    / sum(value) filter(where a.p2pk and c.address_id is not null), 0
+                ) as t_cexs
+                , coalesce(
+                    sum(value::numeric * mean_age_timestamp) filter(where not a.p2pk and not a.miner)
+                    / sum(value) filter(where not a.p2pk and not a.miner), 0
+                ) as t_cons
+                , coalesce(
+                    sum(value::numeric * mean_age_timestamp) filter(where a.miner)
+                    / sum(value) filter(where a.miner), 0
+                ) as t_mins
+            from adr.erg b
+            join core.addresses a on a.id = b.address_id
+            left join cex.addresses c on c.type = 'main' and c.address_id = b.address_id
+            -- exclude emission and treasury contracts
+            where b.address_id <> core.address_id('2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU')
+                and b.address_id <> coalesce(core.address_id('22WkKcVUvboYCZJe1urbmvBL3j67LKb5KEAvFhJXqA6ubYvHpSCvbvwvEY3xzUr7QvxpEtqjzMAPMsVdZh1VGWmZphvKoJdVzL1ayhsMftTtEFoA3YYdq3zKeeYXavVrrPUmK3fRXJ2HWEbZexewtBWcgAnHBw5tKvYFy9dEUi645gE2fYMUvVBtbvMExE9mjZ2W9goWkqu1VtThAsMZWZWjHxDjX116HpeQKu9b9neEUBj4kE5sX8QXaV6ZeReXxYHFJFg2rmaTknSPMxHXA8NpQKgzryBwLssp5EJ1QTqn5R6xuvGgFCEUZicCEo8qk8UNbE7e2d4WqW5qzpQPzJkKoPa5UtJEPYDWNhaCKmCpzdSc77'), 0)
+                and b.address_id <> coalesce(core.address_id('6KxusedL87PBibr1t1f4ggzAyTAmWEPqSpqXbkdoybNwHVw5Nb7cUESBmQw5XK8TyvbQiueyqkR9XMNaUgpWx3jT54p'), 0)
+                and b.address_id <> coalesce(core.address_id('4L1ktFSzm3SH1UioDuUf5hyaraHird4D2dEACwQ1qHGjSKtA6KaNvSzRCZXZGf9jkfNAEC1SrYaZmCuvb2BKiXk5zW9xuvrXFT7FdNe2KqbymiZvo5UQLAm5jQY8ZBRhTZ4AFtZa1UF5nd4aofwPiL7YkJuyiL5hDHMZL1ZnyL746tHmRYMjAhCgE7d698dRhkdSeVy'), 0)
+                -- exclude fees as always zero
+                and b.address_id <> coalesce(core.address_id('2iHkR7CWvD1R4j1yZg5bkeDRQavjAaVPeTDFGGLZduHyfWMuYpmhHocX8GJoaieTx78FntzJbCBVL6rf96ocJoZdmWBL2fci7NqWgAirppPQmZ7fN9V6z13Ay6brPriBKYqLp1bT2Fk4FkFLCfdPpe'), 0)
+        )
+        select $1
+            , t_all::bigint
+            , t_p2pk::bigint
+            , t_cexs::bigint
+            , t_cons::bigint
+            , t_mins::bigint
+        from mean_age_timestamps;";
 
-    pub(super) const DELETE_SNAPSHOT: &str = "delete from mtr.supply_age where height= $1;";
+    pub(super) const DELETE_SNAPSHOT_TIMESTAMPS: &str =
+        "delete from mtr.supply_age_timestamps where height= $1;";
+    pub(super) const DELETE_SNAPSHOT_SECONDS: &str =
+        "delete from mtr.supply_age_seconds where height= $1;";
 }

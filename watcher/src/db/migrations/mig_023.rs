@@ -6,13 +6,25 @@ use postgres::Transaction;
 pub(super) fn apply(tx: &mut Transaction) -> anyhow::Result<()> {
     tx.execute(
         "
-        create table mtr.supply_age (
+        create table mtr.supply_age_timestamps (
             height int,
-            secs_all bigint,
-            secs_p2pk bigint,
-            secs_exchanges bigint,
-            secs_contracts bigint,
-            secs_miners bigint
+            overall bigint,
+            p2pks bigint,
+            cexs bigint,
+            contracts bigint,
+            miners bigint
+        );",
+        &[],
+    )?;
+    tx.execute(
+        "
+        create table mtr.supply_age_seconds (
+            height int,
+            overall bigint,
+            p2pks bigint,
+            cexs bigint,
+            contracts bigint,
+            miners bigint
         );",
         &[],
     )?;

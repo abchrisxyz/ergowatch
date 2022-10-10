@@ -592,14 +592,23 @@ create table mtr.cex_supply (
 	deposit bigint
 );
 
--- Mean supply age in seconds (since last change of address)
-create table mtr.supply_age (
+-- Mean age timestamp of supply
+create table mtr.supply_age_timestamps (
 	height int,
-	secs_all bigint,
-	secs_p2pk bigint,       -- excluding mian cex's
-	secs_exchanges bigint,  -- main cex addresses
-	secs_contracts bigint,  -- excluding EF treasury
-	secs_miners bigint
+	overall bigint,    -- all supply not in (re)emission contracts
+	p2pks bigint,      -- excluding main cex addresses
+	cexs bigint,       -- main cex addresses
+	contracts bigint,  -- excluding EF treasury
+	miners bigint      -- mining contrats
+);
+-- Mean supply age in seconds
+create table mtr.supply_age_seconds (
+	height int,
+	overall bigint,    -- all supply not in (re)emission contracts
+	p2pks bigint,      -- excluding main cex addresses
+	cexs bigint,       -- main cex addresses
+	contracts bigint,  -- excluding EF treasury
+	miners bigint      -- mining contracts
 );
 
 create table mtr.transactions(
