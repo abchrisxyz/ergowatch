@@ -152,12 +152,96 @@ pub(super) mod replay {
     use super::erg;
     use postgres::Transaction;
 
-    /// Create an instance of the balance tables as they were was at `height`.
+    /// Create an instance of this schema as it was at `height`.
+    ///
+    /// Will panic if a schema already exists for given `replay_id`.
     pub fn prepare(tx: &mut Transaction, height: i32, replay_id: &str) {
+        let schema_name = format!("{replay_id}_adr");
+
         // schema should never exist at this stage
-        tx.execute(&format!("create schema {replay_id}_adr;"), &[])
+        tx.execute(&format!("create schema {schema_name};"), &[])
             .unwrap();
         erg::replay::prepare(tx, height, replay_id);
+    }
+
+    /// Create an instance of this schema as it was at `height`.
+    ///
+    /// Will panic if a schema already exists for given `replay_id`.
+    pub fn prepare_with_age(tx: &mut Transaction, height: i32, replay_id: &str) {
+        assert!(height < 0);
+        let schema_name = format!("{replay_id}_adr");
+
+        // schema should never exist at this stage
+        tx.execute(&format!("create schema {schema_name};"), &[])
+            .unwrap();
+        erg::replay::create_with_age(tx, replay_id);
+    }
+
+    /// Create an instance of this schema as it was at `height`.
+    ///
+    /// Will panic if a schema already exists for given `replay_id` unless it's
+    /// height matches the target `height`. This is useful
+    /// to resume interupted bootstrap sessions.
+    pub fn prepare_or_resume(tx: &mut Transaction, height: i32, replay_id: &str) {
+        let schema_name = format!("{replay_id}_adr");
+
+        // Check for existing instance
+        let schema_exists: bool = tx
+            .query_one(
+                "
+                select exists(
+                    select schema_name
+                    from information_schema.schemata
+                    where schema_name = $1
+                );",
+                &[&schema_name],
+            )
+            .unwrap()
+            .get(0);
+
+        if schema_exists {
+            resume(tx, height, replay_id);
+        } else {
+            prepare(tx, height, replay_id);
+        }
+    }
+
+    /// Checks schema exists for given `replay_id` and it is at given `height`.
+    pub fn resume(tx: &mut Transaction, height: i32, replay_id: &str) {
+        let schema_name = format!("{replay_id}_adr");
+
+        // Check for existing instance
+        let schema_exists: bool = tx
+            .query_one(
+                "
+                select exists(
+                    select schema_name
+                    from information_schema.schemata
+                    where schema_name = $1
+                );",
+                &[&schema_name],
+            )
+            .unwrap()
+            .get(0);
+
+        if !schema_exists {
+            panic!("Tried to resume replay for {schema_name} but no existing instance found");
+        }
+
+        // Check height of existing schema matches
+        let schema_height: i32 = match tx
+            .query_opt(
+                &format!("select height from {schema_name}.erg order by 1 desc limit 1;"),
+                &[],
+            )
+            .unwrap()
+        {
+            Some(row) => row.get(0),
+            None => 0,
+        };
+        if schema_height != height {
+            panic!("Found existing instance of {schema_name} but height doesn't match");
+        }
     }
 
     /// Advance state to next `height`.
@@ -165,6 +249,13 @@ pub(super) mod replay {
     /// Assumes current state is at `height` - 1.
     pub fn step(tx: &mut Transaction, height: i32, replay_id: &str) {
         erg::replay::step(tx, height, replay_id);
+    }
+
+    /// Advance state to next `height`.
+    ///
+    /// Assumes current state is at `height` - 1.
+    pub fn step_with_age(tx: &mut Transaction, height: i32, replay_id: &str) {
+        erg::replay::step_with_age(tx, height, replay_id);
     }
 
     pub fn cleanup(tx: &mut Transaction, id: &str) {

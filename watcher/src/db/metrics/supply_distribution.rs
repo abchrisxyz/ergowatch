@@ -114,8 +114,7 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
     let mut tx = client.transaction()?;
 
     // Prepare replay tables
-    addresses::replay::cleanup(&mut tx, replay_id);
-    addresses::replay::prepare(&mut tx, sync_height, replay_id);
+    addresses::replay::prepare_or_resume(&mut tx, sync_height, replay_id);
 
     // Create top balance work tables
     tx.execute("drop table if exists mtr._top_address_balances_p2pk;", &[])?;

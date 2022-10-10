@@ -168,26 +168,19 @@ pub mod replay {
     /// Create an instance of the adr.erg table as it was at `height`.
     ///
     /// New table is created as {id}_adr.erg.
+    ///
+    /// Mean age timestamps cannot be calculated (cheaply), so set to zero.
+    /// Replay for age should always start at -1 and step from there.
     pub fn prepare(tx: &mut Transaction, height: i32, id: &str) {
         tx.execute(
             &format!(
                 "
                 create table {id}_adr.erg as
-                    with balances as (
-                        select address_id
-                            , sum(value) as value
-                        from adr.erg_diffs
-                        where height <= $1
-                        group by 1 having sum(value) > 0
-                    )
-                    select d.address_id
-                        , b.value
-                        , sum(d.value / b.value * h.timestamp) as mean_age_timestamp
-                    from adr.erg_diffs d
-                    join balances b on b.address_id = d.address_id
-                    join core.headers h on h.height = d.height
-                    where h.height <= $1
-                    group by 1, 2;"
+                    select address_id
+                        , sum(value) as value
+                    from adr.erg_diffs
+                    where height <= $1
+                    group by 1 having sum(value) > 0;"
             ),
             &[&height],
         )
@@ -210,11 +203,6 @@ pub mod replay {
         )
         .unwrap();
         tx.execute(
-            &format!("alter table {id}_adr.erg alter column mean_age_timestamp set not null;"),
-            &[],
-        )
-        .unwrap();
-        tx.execute(
             &format!("alter table {id}_adr.erg add check (value >= 0);"),
             &[],
         )
@@ -223,10 +211,78 @@ pub mod replay {
             .unwrap();
     }
 
+    /// Create empty instance of the adr.erg table.
+    ///
+    /// New table is created as {id}_adr.erg.
+    pub fn create_with_age(tx: &mut Transaction, id: &str) {
+        tx.execute(
+            &format!(
+                "
+                create table {id}_adr.erg (
+                    address_id bigint not null primary key,
+                    value bigint not null,
+                    mean_age_timestamp bigint not null,
+                    check (value >= 0)
+                );"
+            ),
+            &[],
+        )
+        .unwrap();
+
+        tx.execute(&format!("create index on {id}_adr.erg(value);"), &[])
+            .unwrap();
+    }
+
     /// Advance state of replay table {id}_adr.erg) to next `height`.
     ///
     /// Assumes current state of replay table is at `height` - 1.
     pub fn step(tx: &mut Transaction, height: i32, id: &str) {
+        // Update known addresses
+        tx.execute(
+            &format!(
+                "
+                with new_diffs as (
+                    select address_id
+                        , sum(value) as value
+                    from adr.erg_diffs
+                    where height = $1
+                    group by 1
+                )
+                update {id}_adr.erg a
+                set value = a.value + d.value
+                from new_diffs d
+                where d.address_id = a.address_id;"
+            ),
+            &[&height],
+        )
+        .unwrap();
+
+        // Insert new addresses
+        tx.execute(
+            &format!(
+                "
+                insert into {id}_adr.erg(address_id, value)
+                    select d.address_id
+                        , sum(d.value) as value
+                    from adr.erg_diffs d
+                    left join {id}_adr.erg b on b.address_id = d.address_id
+                    where d.height = $1
+                        and b.address_id is null
+                    group by 1 having sum(d.value) <> 0;"
+            ),
+            &[&height],
+        )
+        .unwrap();
+
+        // Delete zero balances
+        tx.execute(&format!("delete from {id}_adr.erg where value = 0;"), &[])
+            .unwrap();
+    }
+
+    /// Advance state of replay table {id}_adr.erg) to next `height`.
+    ///
+    /// Assumes current state of replay table is at `height` - 1.
+    pub fn step_with_age(tx: &mut Transaction, height: i32, id: &str) {
         // Update known addresses
         tx.execute(&format!(
             "
@@ -244,9 +300,13 @@ pub mod replay {
             update {id}_adr.erg a
             set value = a.value + d.value
                 , mean_age_timestamp = case 
-                    when a.value + d.value <> 0 then
-                        a.value * a.mean_age_timestamp / (a.value + d.value) + d.value * t.timestamp / (a.value + d.value)
-                    else 0
+                    --when a.value + d.value <> 0 then
+                    --    a.value * a.mean_age_timestamp / (a.value + d.value) + d.value * t.timestamp / (a.value + d.value)
+                    --else 0
+                    when d.value > 0 then
+                        a.value / (a.value + d.value) * a.mean_age_timestamp + d.value / (a.value + d.value) * t.timestamp
+                    when d.value = -a.value then 0
+                    else a.mean_age_timestamp
                 end
             from new_diffs d, timestamp t
             where d.address_id = a.address_id;"),
