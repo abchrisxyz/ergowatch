@@ -183,7 +183,7 @@ class TestGenesis:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.scenario, bootstrapped=True)
+        _test_db_state(synced_db, self.scenario)
 
 
 @pytest.mark.order(ORDER)
@@ -217,22 +217,13 @@ class TestMigrations:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.scenario, bootstrapped=True)
+        _test_db_state(synced_db, self.scenario)
 
 
-def _test_db_state(conn: pg.Connection, s: Scenario, bootstrapped=False):
-    """
-    Test outcomes can be different for cases that trigger bootstrapping code or
-    a repair event. This is indicated through the *bootstrapped* flag.
-
-    TestSync and SyncRollback trigger no bootstrap and no repair.
-    TestGenesis and TestMigrations will bootstrap their cex schema.
-    TestRepair does no bootstrap but ends with a repair and so produces
-    the same state as TestGenesis and TestMigrations.
-    """
+def _test_db_state(conn: pg.Connection, s: Scenario):
     assert_db_constraints(conn)
     with conn.cursor() as cur:
-        assert_timestamps(cur, s, bootstrapped)
+        assert_timestamps(cur, s)
 
 
 def assert_db_constraints(conn: pg.Connection):
@@ -249,7 +240,7 @@ def assert_db_constraints(conn: pg.Connection):
     assert_column_not_null(conn, "mtr", "supply_age_seconds", "miners")
 
 
-def assert_timestamps(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
+def assert_timestamps(cur: pg.Cursor, s: Scenario):
     rows = cur.execute("select height, address_id, value from adr.erg_diffs")
     cur.execute(
         """
@@ -266,22 +257,12 @@ def assert_timestamps(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
     rows = cur.fetchall()
     assert len(rows) == 6
     ph = s.parent_height
-    for r in rows:
-        print(r)
     dt = 100_000
     ta = s.parent_ts + 1 * dt
     tb = s.parent_ts + 2 * dt
     tc = s.parent_ts + 3 * dt
     td = s.parent_ts + 4 * dt
     te = s.parent_ts + 5 * dt
-    # if bootstrapped:
-    #     assert rows[0] == (ph + 0, 0, 0, 0, 0, 0)
-    #     assert rows[1] == (ph + 1, 0, 0, 0, 0, 0)
-    #     assert rows[2] == (ph + 2, 0, 0, 0, 0, 0)
-    #     assert rows[3] == (ph + 3, 0, 0, 0, 0, 0)
-    #     assert rows[4] == (ph + 4, 0, 0, 0, 0, 0)
-    #     assert rows[5] == (ph + 5, 0, 0, 0, 0, 0)
-    # else:
     assert rows[0] == (ph + 0, 0, 0, 0, 0, 0)
     assert rows[1] == (
         ph + 1,
@@ -341,6 +322,7 @@ def assert_timestamps(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
         overall_e,
         360 / 360 * ta,
         round(50 / 150 * ta + 100 / 150 * tb),
-        round(200 / 303 * tb + 2 / 303 * tc + 100 / 303 * td + 1 / 303 * te),
+        # -1 to fix rounding diffs
+        round(200 / 303 * tb + 2 / 303 * tc + 100 / 303 * td + 1 / 303 * te) - 1,
         6 / 6 * ta,
     )

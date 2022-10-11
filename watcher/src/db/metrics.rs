@@ -4,13 +4,14 @@
 mod address_counts;
 mod cexs;
 mod ergusd;
-mod supply_age;
+pub(super) mod supply_age;
 mod supply_composition;
 mod supply_distribution;
 mod transactions;
 pub mod utxos;
 mod volume;
 use crate::db::coingecko::Cache as CoinGeckoCache;
+use crate::db::Buffer;
 use crate::parsing::BlockData;
 use postgres::Client;
 use postgres::Transaction;
@@ -18,6 +19,7 @@ use postgres::Transaction;
 pub(super) fn include_block(
     tx: &mut Transaction,
     block: &BlockData,
+    buffer: &Buffer,
     cache: &mut Cache,
     cgo_cache: &CoinGeckoCache,
 ) -> anyhow::Result<()> {
@@ -29,7 +31,7 @@ pub(super) fn include_block(
     cexs::include(tx, block);
     address_counts::include(tx, block, &mut cache.address_counts);
     supply_composition::include(tx, block, &mut cache.supply_composition);
-    supply_age::include(tx, block);
+    supply_age::include(tx, block, &buffer.supply_age_diffs);
     supply_distribution::include(tx, block, &cache.address_counts);
     transactions::include(tx, block, cache);
     volume::include(tx, block, cache);

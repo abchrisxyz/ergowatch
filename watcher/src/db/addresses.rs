@@ -7,6 +7,7 @@ pub(super) mod erg_diffs;
 pub(super) mod tokens;
 pub(super) mod tokens_diffs;
 
+use super::metrics::supply_age::SupplyAgeDiffs as SAD;
 use crate::parsing::BlockData;
 use log::info;
 use postgres::types::Type;
@@ -14,12 +15,12 @@ use postgres::Client;
 use postgres::Transaction;
 use std::time::Instant;
 
-pub(super) fn include_block(tx: &mut Transaction, block: &BlockData) -> anyhow::Result<()> {
+pub(super) fn include_block(tx: &mut Transaction, block: &BlockData) -> anyhow::Result<SAD> {
     erg_diffs::include(tx, block);
-    erg::include(tx, block);
+    let supply_age_diffs = erg::include(tx, block);
     tokens_diffs::include(tx, block);
     tokens::include(tx, block);
-    Ok(())
+    Ok(supply_age_diffs)
 }
 
 pub(super) fn rollback_block(tx: &mut Transaction, block: &BlockData) -> anyhow::Result<()> {
@@ -150,6 +151,7 @@ fn set_constraints(tx: &mut Transaction) {
 
 pub(super) mod replay {
     use super::erg;
+    use crate::db::metrics::supply_age::SupplyAgeDiffs;
     use postgres::Transaction;
 
     /// Create an instance of this schema as it was at `height`.
@@ -254,8 +256,8 @@ pub(super) mod replay {
     /// Advance state to next `height`.
     ///
     /// Assumes current state is at `height` - 1.
-    pub fn step_with_age(tx: &mut Transaction, height: i32, replay_id: &str) {
-        erg::replay::step_with_age(tx, height, replay_id);
+    pub fn step_with_age(tx: &mut Transaction, height: i32, replay_id: &str) -> SupplyAgeDiffs {
+        erg::replay::step_with_age(tx, height, replay_id)
     }
 
     pub fn cleanup(tx: &mut Transaction, id: &str) {

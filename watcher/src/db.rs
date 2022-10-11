@@ -21,6 +21,7 @@ pub struct DB {
     bootstrapping_work_mem_kb: u32,
     repair_event: Option<repair::RepairEvent>,
     cache: Cache,
+    buffer: Buffer,
 }
 
 impl DB {
@@ -45,12 +46,17 @@ impl DB {
 
         core::include_block(&mut tx, block)?;
         unspent::include_block(&mut tx, block)?;
-        addresses::include_block(&mut tx, block)?;
+
+        // Tag any unseen cex addresses here
+        cexs::declaration::include_block(&mut tx, block, &mut self.cache.cexs)?;
+
+        self.buffer.supply_age_diffs = addresses::include_block(&mut tx, block)?;
         blocks::include_block(&mut tx, block, &mut self.cache.blocks)?;
         cexs::include_block(&mut tx, block, &mut self.cache.cexs)?;
         metrics::include_block(
             &mut tx,
             block,
+            &self.buffer,
             &mut self.cache.metrics,
             &self.cache.coingecko,
         )?;
@@ -69,6 +75,7 @@ impl DB {
         cexs::rollback_block(&mut tx, block, &mut self.cache.cexs)?;
         blocks::rollback_block(&mut tx, block, &mut self.cache.blocks)?;
         addresses::rollback_block(&mut tx, block)?;
+        cexs::declaration::rollback_block(&mut tx, block, &mut self.cache.cexs)?;
         unspent::rollback_block(&mut tx, block)?;
         core::rollback_block(&mut tx, block)?;
 
@@ -159,6 +166,7 @@ impl DB {
             conn_str,
             bootstrapping_work_mem_kb,
             repair_event: None,
+            buffer: Buffer::new(),
             cache: Cache::new(),
         }
     }
@@ -263,6 +271,23 @@ impl DB {
     pub fn load_cache(&mut self) {
         let mut client = Client::connect(&self.conn_str, NoTls).unwrap();
         self.cache.load(&mut client);
+    }
+}
+
+/// Keeps transient db state.
+///
+/// Sometimes, both old and new state is needed. The buffer is used
+/// to store old state of data depending on it.
+#[derive(Debug)]
+pub struct Buffer {
+    pub supply_age_diffs: metrics::supply_age::SupplyAgeDiffs,
+}
+
+impl Buffer {
+    pub fn new() -> Self {
+        Self {
+            supply_age_diffs: metrics::supply_age::SupplyAgeDiffs::new(),
+        }
     }
 }
 

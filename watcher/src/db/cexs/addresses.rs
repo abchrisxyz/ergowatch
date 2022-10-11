@@ -15,22 +15,15 @@ use postgres::Transaction;
 /// Find new deposit addresses
 ///
 /// Returns height of earliest tx involving newly found addresses.
-pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &mut Cache) -> Option<i32> {
-    if cache.unseen_main_addresses {
-        declare_main_addresses(tx, cache, block.height);
-    }
-    if cache.unseen_ignored_addresses {
-        declare_ignored_addresses(tx, cache, block.height);
-    }
+pub(super) fn include(tx: &mut Transaction, block: &BlockData) -> Option<i32> {
     spot_deposit_candidates(tx, block.height);
     insert_new_deposit_addresses(tx, block.height)
 }
 
 /// Remove deposit addresses spotted in block
-pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut Cache) {
+pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
     rollback_conflict_resolution_at_height(tx, block.height);
     delete_deposit_addresses_at_height(tx, block.height);
-    rollback_address_declarations(tx, cache, block.height);
 }
 
 /// Find out if there are any predefined main addresses without an id.
@@ -68,7 +61,7 @@ pub(super) fn any_unseen_ignored_addresses(tx: &mut Transaction) -> bool {
 }
 
 /// Check for unseen main addresses in current block.
-fn declare_main_addresses(tx: &mut Transaction, cache: &mut Cache, height: i32) {
+pub(super) fn declare_main_addresses(tx: &mut Transaction, cache: &mut Cache, height: i32) {
     let n_mod = tx
         .execute(
             "
@@ -92,7 +85,7 @@ fn declare_main_addresses(tx: &mut Transaction, cache: &mut Cache, height: i32) 
 }
 
 /// Check for unseen ignored addresses in current block.
-fn declare_ignored_addresses(tx: &mut Transaction, cache: &mut Cache, height: i32) {
+pub(super) fn declare_ignored_addresses(tx: &mut Transaction, cache: &mut Cache, height: i32) {
     let n_mod = tx
         .execute(
             "
@@ -114,7 +107,7 @@ fn declare_ignored_addresses(tx: &mut Transaction, cache: &mut Cache, height: i3
 }
 
 /// Undo main/ignored addresses declared in current block
-fn rollback_address_declarations(tx: &mut Transaction, cache: &mut Cache, height: i32) {
+pub(super) fn rollback_address_declarations(tx: &mut Transaction, cache: &mut Cache, height: i32) {
     // Main addresses
     tx.execute(
         "

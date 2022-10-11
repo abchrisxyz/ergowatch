@@ -2,20 +2,50 @@ use crate::parsing::BlockData;
 use log::debug;
 use log::info;
 use postgres::Client;
+use postgres::Transaction;
 use std::collections::HashMap;
 
 mod addresses;
 mod processing_log;
 mod supply;
 
-use postgres::Transaction;
+/// Adds address id's to cex address tables once known
+pub(super) mod declaration {
+    use super::addresses;
+    use super::Cache;
+    use crate::parsing::BlockData;
+    use postgres::Transaction;
+
+    pub fn include_block(
+        tx: &mut Transaction,
+        block: &BlockData,
+        cache: &mut Cache,
+    ) -> anyhow::Result<()> {
+        if cache.unseen_main_addresses {
+            addresses::declare_main_addresses(tx, cache, block.height);
+        }
+        if cache.unseen_ignored_addresses {
+            addresses::declare_ignored_addresses(tx, cache, block.height);
+        }
+        Ok(())
+    }
+
+    pub fn rollback_block(
+        tx: &mut Transaction,
+        block: &BlockData,
+        cache: &mut Cache,
+    ) -> anyhow::Result<()> {
+        addresses::rollback_address_declarations(tx, cache, block.height);
+        Ok(())
+    }
+}
 
 pub fn include_block(
     tx: &mut Transaction,
     block: &BlockData,
     cache: &mut Cache,
 ) -> anyhow::Result<()> {
-    let invalidation_height: Option<i32> = addresses::include(tx, block, cache);
+    let invalidation_height: Option<i32> = addresses::include(tx, block);
     processing_log::include(tx, block, invalidation_height);
     supply::include(tx, block, cache);
     Ok(())
@@ -27,7 +57,7 @@ pub fn rollback_block(
     cache: &mut Cache,
 ) -> anyhow::Result<()> {
     supply::rollback(tx, block, cache);
-    addresses::rollback(tx, block, cache);
+    addresses::rollback(tx, block);
     processing_log::rollback(tx, block);
     Ok(())
 }

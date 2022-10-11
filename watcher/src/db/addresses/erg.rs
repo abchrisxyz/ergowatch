@@ -1,12 +1,16 @@
+use crate::db::metrics::supply_age::SupplyAgeDiffs;
 use crate::parsing::BlockData;
 use postgres::Transaction;
 
-pub(super) fn include(tx: &mut Transaction, block: &BlockData) {
+pub(super) fn include(tx: &mut Transaction, block: &BlockData) -> SupplyAgeDiffs {
     let height = &block.height;
     let ts = &block.timestamp;
     tx.execute(UPDATE_BALANCES, &[height, &ts]).unwrap();
     tx.execute(INSERT_BALANCES, &[height, &ts]).unwrap();
+
+    let sad = SupplyAgeDiffs::get(tx, block.height, block.timestamp);
     tx.execute(DELETE_ZERO_BALANCES, &[]).unwrap();
+    sad
 }
 
 pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
@@ -53,7 +57,6 @@ pub(super) const UPDATE_BALANCES: &str = "
         , mean_age_timestamp = case 
             when d.value > 0 then
                 a.value / (a.value + d.value) * a.mean_age_timestamp + d.value / (a.value + d.value) * $2::bigint
-            when d.value = -a.value then 0
             else a.mean_age_timestamp
         end
     from new_diffs d
@@ -163,6 +166,7 @@ fn restore_spent_address(tx: &mut Transaction, address_id: i64, height: i32) {
 }
 
 pub mod replay {
+    use crate::db::metrics::supply_age::SupplyAgeDiffs as SAD;
     use postgres::Transaction;
 
     /// Create an instance of the adr.erg table as it was at `height`.
@@ -282,7 +286,7 @@ pub mod replay {
     /// Advance state of replay table {id}_adr.erg) to next `height`.
     ///
     /// Assumes current state of replay table is at `height` - 1.
-    pub fn step_with_age(tx: &mut Transaction, height: i32, id: &str) {
+    pub fn step_with_age(tx: &mut Transaction, height: i32, id: &str) -> SAD {
         // Update known addresses
         tx.execute(&format!(
             "
@@ -300,12 +304,8 @@ pub mod replay {
             update {id}_adr.erg a
             set value = a.value + d.value
                 , mean_age_timestamp = case 
-                    --when a.value + d.value <> 0 then
-                    --    a.value * a.mean_age_timestamp / (a.value + d.value) + d.value * t.timestamp / (a.value + d.value)
-                    --else 0
                     when d.value > 0 then
                         a.value / (a.value + d.value) * a.mean_age_timestamp + d.value / (a.value + d.value) * t.timestamp
-                    when d.value = -a.value then 0
                     else a.mean_age_timestamp
                 end
             from new_diffs d, timestamp t
@@ -336,8 +336,23 @@ pub mod replay {
         )
         .unwrap();
 
+        // Get timestamp of block h
+        let ts: i64 = tx
+            .query_one(
+                "
+            select timestamp from core.headers where height = $1;",
+                &[&height],
+            )
+            .unwrap()
+            .get(0);
+
+        assert_eq!(id, "mtr_sa");
+        let supply_age_diffs = SAD::get_mtr_sa(tx, height, ts);
+
         // Delete zero balances
         tx.execute(&format!("delete from {id}_adr.erg where value = 0;"), &[])
             .unwrap();
+
+        supply_age_diffs
     }
 }
