@@ -256,8 +256,13 @@ pub(super) mod replay {
     /// Advance state to next `height`.
     ///
     /// Assumes current state is at `height` - 1.
-    pub fn step_with_age(tx: &mut Transaction, height: i32, replay_id: &str) -> SupplyAgeDiffs {
-        erg::replay::step_with_age(tx, height, replay_id)
+    pub fn step_with_age(
+        tx: &mut Transaction,
+        height: i32,
+        timestamp: i64,
+        replay_id: &str,
+    ) -> SupplyAgeDiffs {
+        erg::replay::step_with_age(tx, height, timestamp, replay_id)
     }
 
     pub fn cleanup(tx: &mut Transaction, id: &str) {

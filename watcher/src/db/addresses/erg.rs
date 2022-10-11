@@ -285,8 +285,10 @@ pub mod replay {
 
     /// Advance state of replay table {id}_adr.erg) to next `height`.
     ///
+    /// `height`: next height
+    /// `timestamp`: timestamp of block at `height`
     /// Assumes current state of replay table is at `height` - 1.
-    pub fn step_with_age(tx: &mut Transaction, height: i32, id: &str) -> SAD {
+    pub fn step_with_age(tx: &mut Transaction, height: i32, timestamp: i64, id: &str) -> SAD {
         // Update known addresses
         tx.execute(&format!(
             "
@@ -336,18 +338,8 @@ pub mod replay {
         )
         .unwrap();
 
-        // Get timestamp of block h
-        let ts: i64 = tx
-            .query_one(
-                "
-            select timestamp from core.headers where height = $1;",
-                &[&height],
-            )
-            .unwrap()
-            .get(0);
-
         assert_eq!(id, "mtr_sa");
-        let supply_age_diffs = SAD::get_mtr_sa(tx, height, ts);
+        let supply_age_diffs = SAD::get_mtr_sa(tx, height, timestamp);
 
         // Delete zero balances
         tx.execute(&format!("delete from {id}_adr.erg where value = 0;"), &[])

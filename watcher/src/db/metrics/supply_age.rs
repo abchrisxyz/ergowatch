@@ -98,8 +98,9 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
     // then handle first height separately:
     if sync_height == -1 {
         let first_height = blocks[0].0;
+        let first_ts = blocks[0].1;
         let mut tx = client.transaction()?;
-        addresses::replay::step_with_age(&mut tx, first_height, replay_id);
+        addresses::replay::step_with_age(&mut tx, first_height, first_ts, replay_id);
         tx
             .execute(
                 "
@@ -143,9 +144,9 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
             ],
         )?;
 
-        for (height, _timestamp) in batch_blocks {
+        for (height, timestamp) in batch_blocks {
             // step replay
-            let sad = addresses::replay::step_with_age(&mut tx, *height, replay_id);
+            let sad = addresses::replay::step_with_age(&mut tx, *height, *timestamp, replay_id);
 
             // Insert snapshot
             tx.execute(
