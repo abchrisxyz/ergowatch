@@ -20,6 +20,7 @@ SCENARIO_DESCRIPTION = """
         >
         base-box2  950
         con1-box1   50
+        tres-box1    0
 
     //----------------------fork-of-b----------------------
     block-x // fork of block b to be ignored/rolled back
@@ -227,13 +228,13 @@ def assert_db_constraints(conn: pg.Connection):
 
 
 def assert_unspent_boxes(cur: pg.Cursor, s: Scenario):
-    # 4 headers: 1 parent + 3 from blocks
     cur.execute("select box_id from usp.boxes;")
     rows = cur.fetchall()
-    assert len(rows) == 5
+    assert len(rows) == 6
     box_ids = [r[0] for r in rows]
     assert s.id("base-box2") in box_ids
     assert s.id("con1-box2") in box_ids
+    assert s.id("tres-box1") in box_ids
     assert s.id("con2-box1") in box_ids
     assert s.id("pub1-box2") in box_ids
     assert s.id("pub2-box1") in box_ids

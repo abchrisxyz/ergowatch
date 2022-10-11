@@ -28,6 +28,7 @@ SCENARIO_DESCRIPTION = """
         >
         base-box2  900
         con1-box1  100
+        tres-box1    0
 
     //----------------------fork-of-b----------------------
     block-x

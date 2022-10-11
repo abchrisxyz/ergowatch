@@ -20,6 +20,7 @@ SCENARIO_DESCRIPTION = """
         >
         base-box2  950
         con1-box1   50
+        tres-box1    0
 
     //----------------------fork-of-b----------------------
     block-x // fork of block b to be ignored/rolled back:

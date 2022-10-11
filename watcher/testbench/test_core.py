@@ -28,6 +28,7 @@ SCENARIO_DESCRIPTION = """
         // coinbase tx:
         base-box1 1000
         >
+        tres-box1    0
         base-box2  950
         con1-box1   50
 
@@ -384,10 +385,10 @@ class TestSyncDeserError:
     desc = """
         block-a
         // coinbase tx:
-        base-box1 1000
+        base-box1 1001
         >
         base-box2  950
-        con1-box1   50
+        pub1-box1   50
     """
 
     parent_height = 599_999
@@ -655,18 +656,20 @@ def assert_addresses(cur: pg.Cursor, s: Scenario):
             , address
             , spot_height
             , p2pk
+            , miner
         from core.addresses
         order by 1;
     """
     )
     rows = cur.fetchall()
-    assert len(rows) == 6
-    assert rows[0] == (1, s.address("base"), s.parent_height + 0, False)
-    assert rows[1] == (2, s.address("con1"), s.parent_height + 1, False)
-    assert rows[2] == (3, s.address("con2"), s.parent_height + 2, False)
-    assert rows[3] == (4, s.address("pub1"), s.parent_height + 2, True)
-    assert rows[4] == (5, s.address("pub2"), s.parent_height + 3, True)
-    assert rows[5] == (6, s.address("fees"), s.parent_height + 3, False)
+    assert len(rows) == 7
+    assert rows[0] == (1, s.address("base"), s.parent_height + 0, False, False)
+    assert rows[1] == (2, s.address("tres"), s.parent_height + 1, False, False)
+    assert rows[2] == (3, s.address("con1"), s.parent_height + 1, False, False)
+    assert rows[3] == (4, s.address("con2"), s.parent_height + 2, False, False)
+    assert rows[4] == (5, s.address("pub1"), s.parent_height + 2, True, False)
+    assert rows[5] == (6, s.address("pub2"), s.parent_height + 3, True, False)
+    assert rows[6] == (7, s.address("fees"), s.parent_height + 3, False, False)
 
 
 def assert_inputs(cur: pg.Cursor, s: Scenario):
@@ -710,7 +713,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
     """
     )
     rows = cur.fetchall()
-    assert len(rows) == 9
+    assert len(rows) == 10
     bootstrap_tx_id = GENESIS_ID if s.parent_height == 0 else "bootstrap-tx"
     assert rows[0] == (
         s.parent_height + 0,
@@ -727,9 +730,9 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         "block-a",
         s.id("tx-a1"),
         0,
-        s.id("base-box2"),
-        950,
-        s.address("base-box2"),
+        s.id("tres-box1"),
+        0,
+        s.address("tres"),
         True,
     )
     assert rows[2] == (
@@ -737,12 +740,22 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         "block-a",
         s.id("tx-a1"),
         1,
+        s.id("base-box2"),
+        950,
+        s.address("base-box2"),
+        True,
+    )
+    assert rows[3] == (
+        s.parent_height + 1,
+        "block-a",
+        s.id("tx-a1"),
+        2,
         s.id("con1-box1"),
         50,
         s.address("con1-box1"),
         True,
     )
-    assert rows[3] == (
+    assert rows[4] == (
         s.parent_height + 2,
         "block-b",
         s.id("tx-b1"),
@@ -752,7 +765,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         s.address("con2-box1"),
         True,
     )
-    assert rows[4] == (
+    assert rows[5] == (
         s.parent_height + 2,
         "block-b",
         s.id("tx-b1"),
@@ -762,7 +775,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         s.address("pub1-box1"),
         True,
     )
-    assert rows[5] == (
+    assert rows[6] == (
         s.parent_height + 3,
         "block-c",
         s.id("tx-c1"),
@@ -772,7 +785,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         s.address("pub1-box2"),
         True,
     )
-    assert rows[6] == (
+    assert rows[7] == (
         s.parent_height + 3,
         "block-c",
         s.id("tx-c1"),
@@ -782,7 +795,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         s.address("pub2-box1"),
         True,
     )
-    assert rows[7] == (
+    assert rows[8] == (
         s.parent_height + 3,
         "block-c",
         s.id("tx-c1"),
@@ -792,7 +805,7 @@ def assert_outputs(cur: pg.Cursor, s: Scenario):
         s.address("fees-box1"),
         True,
     )
-    assert rows[8] == (
+    assert rows[9] == (
         s.parent_height + 3,
         "block-c",
         s.id("tx-c2"),

@@ -30,6 +30,7 @@ SCENARIO_DESCRIPTION = """
         base-box2  950
         con1-box1   45
         pub8-box1    5
+        tres-box1    0
         --
         pub8-box1 5
         >

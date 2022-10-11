@@ -20,6 +20,7 @@ SCENARIO_DESCRIPTION = """
         >
         base-box2  950
         con1-box1   50
+        tres-box1    0
 
     //----------------------fork-of-b----------------------
     block-x // fork of block b to be ignored/rolled back:
@@ -301,6 +302,6 @@ def assert_utxos(cur: pg.Cursor, s: Scenario):
     rows = cur.fetchall()
     assert len(rows) == 4
     assert rows[0] == (s.parent_height + 0, 1)  # initial state
-    assert rows[1] == (s.parent_height + 1, 2)  # spend 1 create 2 (+1)
-    assert rows[2] == (s.parent_height + 2, 3)  # spend 1 create 2 (+1)
-    assert rows[3] == (s.parent_height + 3, 5)  # spend 2 create 4 (+2)
+    assert rows[1] == (s.parent_height + 1, 3)  # spend 1 create 3 (+2)
+    assert rows[2] == (s.parent_height + 2, 4)  # spend 1 create 2 (+1)
+    assert rows[3] == (s.parent_height + 3, 6)  # spend 2 create 4 (+2)

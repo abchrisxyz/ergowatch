@@ -22,6 +22,7 @@ SCENARIO_DESCRIPTION = """
         >
         base-box2  950
         con1-box1   50
+        tres-box1    0
 
     block-b // minting a token and using registers:
         con1-box1   50
