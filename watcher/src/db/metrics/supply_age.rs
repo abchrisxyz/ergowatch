@@ -392,32 +392,32 @@ mod sql {
             select
                 -- p2pks (incl cex deposits)
                 case when s.p2pks + s.cex_deposits > 0 then
-                    (coalesce(prev_t.p2pks, 0) * (prev_s.p2pks + prev_s.cex_deposits) + $2::numeric)
+                    (prev_t.p2pks * (prev_s.p2pks + prev_s.cex_deposits) + $2::numeric)
                     / (s.p2pks + s.cex_deposits)
                 else 0
                 end as p2pks
                 
                 -- cexs main
                 , case when s.cex_main > 0 then
-                    (coalesce(prev_t.cexs, 0) * prev_s.cex_main + $3::numeric ) / s.cex_main
+                    (prev_t.cexs * prev_s.cex_main + $3::numeric ) / s.cex_main
                 else 0
                 end as cexs
                 
                 -- contracts
                 , case when s.contracts > 0 then
-                    (coalesce(prev_t.contracts, 0) * prev_s.contracts + $4::numeric) / s.contracts
+                    (prev_t.contracts * prev_s.contracts + $4::numeric) / s.contracts
                 else 0
                 end as contracts
 
                 -- miners
                 , case when s.miners > 0 then
-                    (coalesce(prev_t.miners, 0) * prev_s.miners + $5::numeric) / s.miners
+                    (prev_t.miners * prev_s.miners + $5::numeric) / s.miners
                 else 0
                 end as miners
     
             from mtr.supply_composition s
             join mtr.supply_composition prev_s on prev_s.height = $1 - 1
-            left join mtr.supply_age_timestamps prev_t on prev_t.height = $1 - 1 
+            join mtr.supply_age_timestamps prev_t on prev_t.height = $1 - 1 
             where s.height = $1
         )
         insert into mtr.supply_age_timestamps (height, overall, p2pks, cexs, contracts, miners)
