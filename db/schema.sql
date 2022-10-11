@@ -601,14 +601,14 @@ create table mtr.supply_age_timestamps (
 	contracts bigint,  -- excluding EF treasury
 	miners bigint      -- mining contrats
 );
--- Mean supply age in seconds
-create table mtr.supply_age_seconds (
+-- Mean supply age in days
+create table mtr.supply_age_days (
 	height int,
-	overall bigint,    -- all supply not in (re)emission contracts
-	p2pks bigint,      -- excluding main cex addresses
-	cexs bigint,       -- main cex addresses
-	contracts bigint,  -- excluding EF treasury
-	miners bigint      -- mining contracts
+	overall real,      -- all supply not in (re)emission contracts
+	p2pks real,        -- excluding main cex addresses
+	cexs real,         -- main cex addresses
+	contracts real,    -- excluding EF treasury
+	miners real        -- mining contracts
 );
 
 create table mtr.transactions(

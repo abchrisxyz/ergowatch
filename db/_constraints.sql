@@ -329,12 +329,12 @@ alter table mtr.supply_age_timestamps alter column cexs set not null;
 alter table mtr.supply_age_timestamps alter column contracts set not null;
 alter table mtr.supply_age_timestamps alter column miners set not null;
 -- Supply age seconds
-alter table mtr.supply_age_seconds add primary key(height);
-alter table mtr.supply_age_seconds alter column overall set not null;
-alter table mtr.supply_age_seconds alter column p2pks set not null;
-alter table mtr.supply_age_seconds alter column cexs set not null;
-alter table mtr.supply_age_seconds alter column contracts set not null;
-alter table mtr.supply_age_seconds alter column miners set not null;
+alter table mtr.supply_age_days add primary key(height);
+alter table mtr.supply_age_days alter column overall set not null;
+alter table mtr.supply_age_days alter column p2pks set not null;
+alter table mtr.supply_age_days alter column cexs set not null;
+alter table mtr.supply_age_days alter column contracts set not null;
+alter table mtr.supply_age_days alter column miners set not null;
 update mtr._log set supply_age_constraints_set = TRUE;
 
 -- Transactions

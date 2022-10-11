@@ -23,7 +23,7 @@ Ignoring all (re)-emission addresses
 
 pub(super) fn include(tx: &mut Transaction, block: &BlockData, sad: &SupplyAgeDiffs) {
     tx.execute(
-        sql::APPEND_SNAPSHOT,
+        sql::APPEND_TIMESTAMPS_SNAPSHOT,
         &[
             &block.height,
             &sad.p2pks,
@@ -33,12 +33,18 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData, sad: &SupplyAgeDi
         ],
     )
     .unwrap();
+
+    tx.execute(
+        sql::APPEND_DAYS_SNAPSHOT,
+        &[&block.height, &block.timestamp],
+    )
+    .unwrap();
 }
 
 pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
     tx.execute(sql::DELETE_SNAPSHOT_TIMESTAMPS, &[&block.height])
         .unwrap();
-    tx.execute(sql::DELETE_SNAPSHOT_SECONDS, &[&block.height])
+    tx.execute(sql::DELETE_SNAPSHOT_DAYS, &[&block.height])
         .unwrap();
 }
 
@@ -63,17 +69,18 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
         None => -1,
     };
 
-    let mut blocks: Vec<i32> = client
+    let mut blocks: Vec<(i32, i64)> = client
         .query(
             "
             select height
+                , timestamp
             from core.headers
             where height > $1;",
             &[&sync_height],
         )
         .unwrap()
         .iter()
-        .map(|r| r.get(0))
+        .map(|r| (r.get(0), r.get(1)))
         .collect();
 
     // Prepare replay tables
@@ -90,7 +97,7 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
     // If starting from scratch (i.e. not resuming a previous bootstrap session)
     // then handle first height separately:
     if sync_height == -1 {
-        let first_height = blocks[0];
+        let first_height = blocks[0].0;
         let mut tx = client.transaction()?;
         addresses::replay::step_with_age(&mut tx, first_height, replay_id);
         tx
@@ -101,6 +108,13 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
                 &[&first_height],
             )
             .unwrap();
+        tx.execute(
+            "
+                insert into mtr.supply_age_days (height, overall, p2pks, cexs, contracts, miners)
+                values ($1, 0., 0., 0., 0., 0.);",
+            &[&first_height],
+        )
+        .unwrap();
         tx.commit().unwrap();
         blocks.remove(0);
     }
@@ -118,7 +132,8 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
 
         // Prepare statements
         let stmt_insert_snapshot = tx.prepare_typed(
-            &sql::APPEND_SNAPSHOT.replace(" adr.erg ", &format!(" {replay_id}_adr.erg ")),
+            &sql::APPEND_TIMESTAMPS_SNAPSHOT
+                .replace(" adr.erg ", &format!(" {replay_id}_adr.erg ")),
             &[
                 Type::INT4,
                 Type::NUMERIC,
@@ -128,7 +143,7 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
             ],
         )?;
 
-        for height in batch_blocks {
+        for (height, _timestamp) in batch_blocks {
             // step replay
             let sad = addresses::replay::step_with_age(&mut tx, *height, replay_id);
 
@@ -148,6 +163,28 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
             timer.elapsed().as_secs_f32()
         );
     }
+
+    // Add snapshots in days
+    info!("Bootstrapping supply age metrics - calculating age in days");
+    client
+        .execute(
+            "
+            insert into mtr.supply_age_days (height, overall, p2pks, cexs, contracts, miners)
+                select h.height
+                    , ((h.timestamp - t.overall) / 86400000.)::real
+                    , ((h.timestamp - t.p2pks) / 86400000.)::real
+                    , ((h.timestamp - t.cexs) / 86400000.)::real
+                    , ((h.timestamp - t.contracts) / 86400000.)::real
+                    , ((h.timestamp - t.miners) / 86400000.)::real
+                from mtr.supply_age_timestamps t
+                join core.headers h on h.height = t.height
+                left join mtr.supply_age_days d on d.height = t.height
+                where d.height is null
+                order by 1;
+            ;",
+            &[],
+        )
+        .unwrap();
 
     // Cleanup replay tables
     let mut tx = client.transaction()?;
@@ -191,13 +228,13 @@ fn set_constraints(client: &mut Client) {
         "alter table mtr.supply_age_timestamps alter column cexs set not null;",
         "alter table mtr.supply_age_timestamps alter column contracts set not null;",
         "alter table mtr.supply_age_timestamps alter column miners set not null;",
-        "alter table mtr.supply_age_seconds add primary key(height);",
-        "alter table mtr.supply_age_seconds alter column height set not null;",
-        "alter table mtr.supply_age_seconds alter column overall set not null;",
-        "alter table mtr.supply_age_seconds alter column p2pks set not null;",
-        "alter table mtr.supply_age_seconds alter column cexs set not null;",
-        "alter table mtr.supply_age_seconds alter column contracts set not null;",
-        "alter table mtr.supply_age_seconds alter column miners set not null;",
+        "alter table mtr.supply_age_days add primary key(height);",
+        "alter table mtr.supply_age_days alter column height set not null;",
+        "alter table mtr.supply_age_days alter column overall set not null;",
+        "alter table mtr.supply_age_days alter column p2pks set not null;",
+        "alter table mtr.supply_age_days alter column cexs set not null;",
+        "alter table mtr.supply_age_days alter column contracts set not null;",
+        "alter table mtr.supply_age_days alter column miners set not null;",
         "update mtr._log set supply_age_constraints_set = TRUE;",
     ];
     let mut tx = client.transaction().unwrap();
@@ -272,12 +309,7 @@ impl SupplyAgeDiffs {
 }
 
 mod sql {
-    pub(super) const DELETE_SNAPSHOT_TIMESTAMPS: &str =
-        "delete from mtr.supply_age_timestamps where height= $1;";
-    pub(super) const DELETE_SNAPSHOT_SECONDS: &str =
-        "delete from mtr.supply_age_seconds where height= $1;";
-
-    /// Unscaled age differences
+    /// Unscaled age differences in ms
     ///
     /// $1: height of target block
     /// $2: timestamp (ms) of target block
@@ -311,7 +343,7 @@ mod sql {
         ;
         ";
 
-    /// Unscaled age differences, from replay balances
+    /// Unscaled age differences in ms, from replay balances
     ///
     /// $1: height of target block
     /// $2: timestamp (ms) of target block
@@ -354,7 +386,7 @@ mod sql {
     /// $5: miner diffs
     ///
     /// Assumes balances represent state at `height`.
-    pub(super) const APPEND_SNAPSHOT: &str = "
+    pub(super) const APPEND_TIMESTAMPS_SNAPSHOT: &str = "
         with new_age_timestamps as (
             select
                 -- p2pks (incl cex deposits)
@@ -403,4 +435,27 @@ mod sql {
         from new_age_timestamps n
         join mtr.supply_composition s on s.height = $1;
         ";
+
+    /// Adds a record mtr.supply_age_days
+    ///
+    /// $1: height of target block
+    /// $2: timestamp of target block
+    ///
+    /// Assumes mtr.supply_age_days has a record for `height`.
+    pub(super) const APPEND_DAYS_SNAPSHOT: &str = "
+        insert into mtr.supply_age_days (height, overall, p2pks, cexs, contracts, miners)
+        select $1
+            , (($2 - overall) / 86400000.)::real
+            , (($2 - p2pks) / 86400000.)::real
+            , (($2 - cexs) / 86400000.)::real
+            , (($2 - contracts) / 86400000.)::real
+            , (($2 - miners) / 86400000.)::real
+        from mtr.supply_age_timestamps
+        where height = $1;
+        ";
+
+    pub(super) const DELETE_SNAPSHOT_TIMESTAMPS: &str =
+        "delete from mtr.supply_age_timestamps where height= $1;";
+    pub(super) const DELETE_SNAPSHOT_DAYS: &str =
+        "delete from mtr.supply_age_days where height= $1;";
 }

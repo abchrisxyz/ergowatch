@@ -18,13 +18,13 @@ pub(super) fn apply(tx: &mut Transaction) -> anyhow::Result<()> {
     )?;
     tx.execute(
         "
-        create table mtr.supply_age_seconds (
+        create table mtr.supply_age_days (
             height int,
-            overall bigint,
-            p2pks bigint,
-            cexs bigint,
-            contracts bigint,
-            miners bigint
+            overall real,
+            p2pks real,
+            cexs real,
+            contracts real,
+            miners real
         );",
         &[],
     )?;
