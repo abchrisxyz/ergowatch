@@ -38,7 +38,7 @@ pub(super) fn repair(tx: &mut Transaction, height: i32) {
     // Get changes in address counts by balance
     let mut diffs = get_diffs(tx, height);
 
-    // Don't exclude the possibil;ity of repairs going back to
+    // Don't exclude the possibility of repairs going back to
     // treasury rewards era and append possible reward to diff.
     diffs.treasury += emission::treasury_reward_at_height(height as i64);
 
@@ -70,7 +70,7 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
         Some(h) => h,
         None => -1,
     };
-    let blocks: Vec<i32> = client
+    let mut blocks: Vec<i32> = client
         .query(
             "
             select height
@@ -85,6 +85,27 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
 
     // Init cache
     let mut cache = Cache::load(client);
+
+    // Handle genesis block differently because treasury deposit
+    // at height 0 is still entirely locked.
+    if blocks[0] == 0 {
+        let height = 0i32;
+        let mut tx = client.transaction().unwrap();
+        let mut diffs: Record = tx.query_one(sql::GET_DIFFS_AT, &[&height]).unwrap().into();
+
+        // Overwrite treasury diff as still entirely locked
+        diffs.treasury = 0;
+
+        // Update cache
+        cache.height = height;
+        cache.record += diffs;
+
+        // Insert record
+        insert_record(&mut tx, height, &cache.record);
+
+        tx.commit().unwrap();
+        blocks.remove(0);
+    }
 
     // Bootstrapping will be performed in batches of 1000
     let batch_size = 1000;
@@ -119,10 +140,10 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
         tx.commit()?;
 
         info!(
-            "Bootstrapping supply composition - batch {} / {} (processed in {}s)",
+            "Bootstrapping supply composition - batch {} / {} (processed in {:.2}s)",
             ibatch + 1,
             nb_batches,
-            timer.elapsed().as_secs()
+            timer.elapsed().as_secs_f32()
         );
     }
 
@@ -297,6 +318,9 @@ fn get_diffs(tx: &mut Transaction, height: i32) -> Record {
 }
 
 mod sql {
+    /// Supply diffs by category
+    ///
+    /// $1: height
     pub(super) const GET_DIFFS_AT: &str = "
         select coalesce(sum(value) filter (where a.p2pk and c.address_id is null), 0)::bigint as d_p2pk
             , coalesce(sum(value) filter (where a.p2pk and c.type = 'main'), 0)::bigint as d_cex_m
