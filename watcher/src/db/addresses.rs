@@ -230,19 +230,32 @@ pub(super) mod replay {
             panic!("Tried to resume replay for {schema_name} but no existing instance found");
         }
 
-        // Check height of existing schema matches
-        let schema_height: i32 = match tx
-            .query_opt(
-                &format!("select height from {schema_name}.erg order by 1 desc limit 1;"),
+        // Verify existing instance is indeed at `height` by
+        // recalculating *_adr.erg (only balances, no age timestamps) and comparing.
+        // Number of records and balance for each address should match.
+        let check_id = format!("{replay_id}_check");
+        tx.execute(&format!("create schema {check_id}_adr;"), &[])
+            .unwrap();
+        erg::replay::prepare(tx, height, &check_id);
+
+        let check: bool = tx
+            .query_one(
+                &format!(
+                    "
+                    select count(*) = 0 or bool_and(c.value is not null and c.value = b.value)
+                    from {schema_name}.erg b
+                    left join {check_id}_adr.erg c on c.address_id = b.address_id;"
+                ),
                 &[],
             )
             .unwrap()
-        {
-            Some(row) => row.get(0),
-            None => 0,
-        };
-        if schema_height != height {
-            panic!("Found existing instance of {schema_name} but height doesn't match");
+            .get(0);
+
+        tx.execute(&format!("drop schema {check_id}_adr cascade;"), &[])
+            .unwrap();
+
+        if !check {
+            panic!("Found existing instance of {schema_name} but height doesn't match")
         }
     }
 
