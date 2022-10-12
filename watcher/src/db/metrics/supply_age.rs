@@ -392,26 +392,26 @@ mod sql {
             select
                 -- p2pks (incl cex deposits)
                 case when s.p2pks + s.cex_deposits > 0 then
-                    (prev_t.p2pks * (prev_s.p2pks + prev_s.cex_deposits) + $2::numeric)
+                    (prev_t.p2pks::numeric * (prev_s.p2pks + prev_s.cex_deposits) + $2::numeric)
                     / (s.p2pks + s.cex_deposits)
                 else 0
                 end as p2pks
                 
                 -- cexs main
                 , case when s.cex_main > 0 then
-                    (prev_t.cexs * prev_s.cex_main + $3::numeric ) / s.cex_main
+                    (prev_t.cexs::numeric * prev_s.cex_main + $3::numeric ) / s.cex_main
                 else 0
                 end as cexs
                 
                 -- contracts
                 , case when s.contracts > 0 then
-                    (prev_t.contracts * prev_s.contracts + $4::numeric) / s.contracts
+                    (prev_t.contracts::numeric * prev_s.contracts + $4::numeric) / s.contracts
                 else 0
                 end as contracts
 
                 -- miners
                 , case when s.miners > 0 then
-                    (prev_t.miners * prev_s.miners + $5::numeric) / s.miners
+                    (prev_t.miners::numeric * prev_s.miners + $5::numeric) / s.miners
                 else 0
                 end as miners
     
