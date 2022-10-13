@@ -15,11 +15,12 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &mut Cache
     let diffs = get_diffs(tx, block.height);
 
     // New snapshots = previous snapshot + diffs
-    cache.height = block.height;
-    cache.record += diffs;
+    cache.prev = cache.curr;
+    cache.curr.height = block.height;
+    cache.curr.composition += diffs;
 
     // Insert new record
-    insert_record(tx, block.height, &cache.record)
+    insert_record(tx, &cache.curr);
 }
 
 pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut Cache) {
@@ -27,16 +28,18 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut Cach
     tx.execute(sql::DELETE_RECORD_AT, &[&block.height]).unwrap();
 
     // Update cache
-    cache.height -= 1;
-    cache.record = match tx.query_opt(sql::GET_LATEST_RECORD, &[]).unwrap() {
+    cache.curr = cache.prev;
+    cache.prev = match tx.query_opt(sql::GET_PREVIOUS_RECORD, &[]).unwrap() {
         Some(row) => row.into(),
         None => Record::new(),
-    }
+    };
+    assert_eq!(cache.curr.height, block.height - 1);
+    assert_eq!(cache.prev.height, cache.curr.height - 1);
 }
 
 pub(super) fn repair(tx: &mut Transaction, height: i32) {
     // Get changes in address counts by balance
-    let mut diffs = get_diffs(tx, height);
+    let mut diffs: Composition = get_diffs(tx, height);
 
     // Don't exclude the possibility of repairs going back to
     // treasury rewards era and append possible reward to diff.
@@ -49,7 +52,7 @@ pub(super) fn repair(tx: &mut Transaction, height: i32) {
         .into();
 
     // Update record with new values
-    update_record(tx, height, &(prev + diffs));
+    update_record(tx, height, &(prev.composition + diffs));
 }
 
 pub fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
@@ -84,24 +87,26 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
         .collect();
 
     // Init cache
-    let mut cache = Cache::load(client);
+    // The prev record is not needed during bootstrapping, so use a single record as cache,
+    // not the actual Cache type.
+    let mut cache: Record = Cache::load(client).curr;
 
     // Handle genesis block differently because treasury deposit
     // at height 0 is still entirely locked.
     if blocks[0] == 0 {
         let height = 0i32;
         let mut tx = client.transaction().unwrap();
-        let mut diffs: Record = tx.query_one(sql::GET_DIFFS_AT, &[&height]).unwrap().into();
+        let mut diffs: Composition = tx.query_one(sql::GET_DIFFS_AT, &[&height]).unwrap().into();
 
         // Overwrite treasury diff as still entirely locked
         diffs.treasury = 0;
 
         // Update cache
         cache.height = height;
-        cache.record += diffs;
+        cache.composition += diffs;
 
         // Insert record
-        insert_record(&mut tx, height, &cache.record);
+        insert_record(&mut tx, &cache);
 
         tx.commit().unwrap();
         blocks.remove(0);
@@ -123,7 +128,7 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
 
         for height in batch_blocks {
             // Get diffs
-            let mut diffs: Record = tx.query_one(&diffs_stmt, &[height]).unwrap().into();
+            let mut diffs: Composition = tx.query_one(&diffs_stmt, &[height]).unwrap().into();
 
             // Treasury funds are unlocked, not transferred, so they won't show up in balance diffs.
             // Adding them here instead.
@@ -131,10 +136,10 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
 
             // Update cache
             cache.height = *height;
-            cache.record += diffs;
+            cache.composition += diffs;
 
             // Insert record
-            insert_record(&mut tx, *height, &cache.record);
+            insert_record(&mut tx, &cache);
         }
 
         tx.commit()?;
@@ -198,7 +203,7 @@ fn set_constraints(client: &mut Client) {
     tx.commit().unwrap();
 }
 
-fn insert_record(tx: &mut Transaction, height: i32, rec: &Record) {
+fn insert_record(tx: &mut Transaction, rec: &Record) {
     tx.execute(
         "
         insert into mtr.supply_composition (
@@ -211,19 +216,19 @@ fn insert_record(tx: &mut Transaction, height: i32, rec: &Record) {
             treasury
         ) values ($1, $2, $3, $4, $5, $6, $7);",
         &[
-            &height,
-            &rec.p2pks,
-            &rec.cex_main,
-            &rec.cex_deposits,
-            &rec.contracts,
-            &rec.miners,
-            &rec.treasury,
+            &rec.height,
+            &rec.composition.p2pks,
+            &rec.composition.cex_main,
+            &rec.composition.cex_deposits,
+            &rec.composition.contracts,
+            &rec.composition.miners,
+            &rec.composition.treasury,
         ],
     )
     .unwrap();
 }
 
-fn update_record(tx: &mut Transaction, height: i32, rec: &Record) {
+fn update_record(tx: &mut Transaction, height: i32, composition: &Composition) {
     tx.execute(
         &format!(
             "
@@ -238,19 +243,77 @@ fn update_record(tx: &mut Transaction, height: i32, rec: &Record) {
         ),
         &[
             &height,
-            &rec.p2pks,
-            &rec.cex_main,
-            &rec.cex_deposits,
-            &rec.contracts,
-            &rec.miners,
-            &rec.treasury,
+            &composition.p2pks,
+            &composition.cex_main,
+            &composition.cex_deposits,
+            &composition.contracts,
+            &composition.miners,
+            &composition.treasury,
         ],
     )
     .unwrap();
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 pub struct Record {
+    pub height: i32,
+    pub composition: Composition,
+}
+
+impl Record {
+    pub fn new() -> Self {
+        Self {
+            height: 0,
+            composition: Composition::new(),
+        }
+    }
+
+    /// Get records from `h_ge` to `h_le` included
+    ///
+    /// `h_first`: height of first record
+    /// `h_last`: height of last record (>= h_first)
+    pub fn get_range(client: &mut Transaction, h_first: i32, h_last: i32) -> Vec<Self> {
+        let rows = client
+            .query(sql::GET_RECORD_RANGE, &[&h_first, &h_last])
+            .unwrap();
+        rows.iter().map(|r| Record::from(r)).collect()
+    }
+}
+
+impl From<Row> for Record {
+    fn from(row: Row) -> Self {
+        Self {
+            height: row.get(0),
+            composition: Composition {
+                p2pks: row.get(1),
+                cex_main: row.get(2),
+                cex_deposits: row.get(3),
+                contracts: row.get(4),
+                miners: row.get(5),
+                treasury: row.get(6),
+            },
+        }
+    }
+}
+
+impl From<&Row> for Record {
+    fn from(row: &Row) -> Self {
+        Self {
+            height: row.get(0),
+            composition: Composition {
+                p2pks: row.get(1),
+                cex_main: row.get(2),
+                cex_deposits: row.get(3),
+                contracts: row.get(4),
+                miners: row.get(5),
+                treasury: row.get(6),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Composition {
     pub p2pks: i64,
     pub cex_main: i64,
     pub cex_deposits: i64,
@@ -259,7 +322,7 @@ pub struct Record {
     pub treasury: i64,
 }
 
-impl Record {
+impl Composition {
     pub fn new() -> Self {
         Self {
             p2pks: 0,
@@ -272,7 +335,7 @@ impl Record {
     }
 }
 
-impl std::ops::Add for Record {
+impl std::ops::Add for Composition {
     type Output = Self;
 
     fn add(self, other: Self) -> Self {
@@ -287,7 +350,7 @@ impl std::ops::Add for Record {
     }
 }
 
-impl std::ops::AddAssign for Record {
+impl std::ops::AddAssign for Composition {
     fn add_assign(&mut self, other: Self) {
         *self = Self {
             p2pks: self.p2pks + other.p2pks,
@@ -300,9 +363,9 @@ impl std::ops::AddAssign for Record {
     }
 }
 
-impl From<Row> for Record {
-    fn from(row: Row) -> Record {
-        Record {
+impl From<Row> for Composition {
+    fn from(row: Row) -> Self {
+        Self {
             p2pks: row.get(0),
             cex_main: row.get(1),
             cex_deposits: row.get(2),
@@ -313,8 +376,36 @@ impl From<Row> for Record {
     }
 }
 
-fn get_diffs(tx: &mut Transaction, height: i32) -> Record {
+fn get_diffs(tx: &mut Transaction, height: i32) -> Composition {
     tx.query_one(sql::GET_DIFFS_AT, &[&height]).unwrap().into()
+}
+
+#[derive(Debug)]
+pub struct Cache {
+    pub curr: Record,
+    pub prev: Record,
+}
+
+impl Cache {
+    pub(super) fn new() -> Self {
+        Self {
+            curr: Record::new(),
+            prev: Record::new(),
+        }
+    }
+
+    pub(super) fn load(client: &mut Client) -> Self {
+        Self {
+            curr: match client.query_opt(sql::GET_LATEST_RECORD, &[]).unwrap() {
+                Some(row) => row.into(),
+                None => Record::new(),
+            },
+            prev: match client.query_opt(sql::GET_PREVIOUS_RECORD, &[]).unwrap() {
+                Some(row) => row.into(),
+                None => Record::new(),
+            },
+        }
+    }
 }
 
 mod sql {
@@ -345,7 +436,8 @@ mod sql {
         "delete from mtr.supply_composition where height = $1";
 
     pub(super) const GET_LATEST_RECORD: &str = "
-        select p2pks
+        select height 
+            , p2pks
             , cex_main
             , cex_deposits
             , contracts
@@ -355,8 +447,38 @@ mod sql {
         order by height desc limit 1;
     ";
 
+    pub(super) const GET_PREVIOUS_RECORD: &str = "
+        select height
+            , p2pks
+            , cex_main
+            , cex_deposits
+            , contracts
+            , miners
+            , treasury
+        from mtr.supply_composition
+        order by height desc limit 1 offset 1;
+    ";
+
+    /// Get rows from height to height
+    ///
+    /// $1: first height
+    /// $2: last height
+    pub(super) const GET_RECORD_RANGE: &str = "
+        select height
+            , p2pks
+            , cex_main
+            , cex_deposits
+            , contracts
+            , miners
+            , treasury
+        from mtr.supply_composition
+        where height >= $1 and height <= $2
+        order by 1;
+    ";
+
     pub(super) const GET_RECORD_AT: &str = "
-        select p2pks
+        select height
+            , p2pks
             , cex_main
             , cex_deposits
             , contracts
@@ -367,46 +489,14 @@ mod sql {
     ";
 }
 
-#[derive(Debug)]
-pub struct Cache {
-    pub height: i32,
-    pub record: Record,
-}
-
-impl Cache {
-    pub(super) fn new() -> Self {
-        Self {
-            height: 0,
-            record: Record::new(),
-        }
-    }
-
-    pub(super) fn load(client: &mut Client) -> Self {
-        Self {
-            height: match client
-                .query_one("select max(height) from mtr.supply_composition", &[])
-                .unwrap()
-                .get(0)
-            {
-                Some(h) => h,
-                None => 0,
-            },
-            record: match client.query_opt(sql::GET_LATEST_RECORD, &[]).unwrap() {
-                Some(row) => row.into(),
-                None => Record::new(),
-            },
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::Record;
+    use super::Composition;
     use pretty_assertions::assert_eq;
 
     #[test]
     fn test_record_add() -> () {
-        let a = Record {
+        let a = Composition {
             p2pks: 10,
             cex_main: 20,
             cex_deposits: 30,
@@ -414,7 +504,7 @@ mod tests {
             miners: 50,
             treasury: 60,
         };
-        let b = Record {
+        let b = Composition {
             p2pks: 1,
             cex_main: 2,
             cex_deposits: 3,
@@ -422,7 +512,7 @@ mod tests {
             miners: 5,
             treasury: 6,
         };
-        let expected = Record {
+        let expected = Composition {
             p2pks: 11,
             cex_main: 22,
             cex_deposits: 33,
@@ -435,7 +525,7 @@ mod tests {
 
     #[test]
     fn test_record_addassign() -> () {
-        let mut a = Record {
+        let mut a = Composition {
             p2pks: 10,
             cex_main: 20,
             cex_deposits: 30,
@@ -443,7 +533,7 @@ mod tests {
             miners: 50,
             treasury: 60,
         };
-        let b = Record {
+        let b = Composition {
             p2pks: 1,
             cex_main: 2,
             cex_deposits: 3,
@@ -451,7 +541,7 @@ mod tests {
             miners: 5,
             treasury: 6,
         };
-        let expected = Record {
+        let expected = Composition {
             p2pks: 11,
             cex_main: 22,
             cex_deposits: 33,
