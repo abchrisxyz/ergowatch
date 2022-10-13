@@ -31,7 +31,13 @@ pub(super) fn include_block(
     cexs::include(tx, block);
     address_counts::include(tx, block, &mut cache.address_counts);
     supply_composition::include(tx, block, &mut cache.supply_composition);
-    supply_age::include(tx, block, &buffer.supply_age_diffs);
+    supply_age::include(
+        tx,
+        block,
+        &mut cache.supply_age,
+        &cache.supply_composition,
+        &buffer.supply_age_diffs,
+    );
     supply_distribution::include(tx, block, &cache.address_counts);
     transactions::include(tx, block, cache);
     volume::include(tx, block, cache);
@@ -52,7 +58,7 @@ pub(super) fn rollback_block(
     volume::rollback(tx, block);
     transactions::rollback(tx, block);
     supply_distribution::rollback(tx, block);
-    supply_age::rollback(tx, block);
+    supply_age::rollback(tx, block, &mut cache.supply_age);
     supply_composition::rollback(tx, block, &mut cache.supply_composition);
     address_counts::rollback(tx, block, &mut cache.address_counts);
     cexs::rollback(tx, block);
@@ -85,6 +91,7 @@ pub struct Cache {
     pub address_counts: address_counts::Cache,
     pub ergusd: ergusd::Cache,
     pub supply_composition: supply_composition::Cache,
+    pub supply_age: supply_age::Cache,
     pub utxos: i64,
     // Heights x days prior to current last block
     height_1d_ago: i32,
@@ -98,6 +105,7 @@ impl Cache {
             address_counts: address_counts::Cache::new(),
             ergusd: ergusd::Cache::new(),
             supply_composition: supply_composition::Cache::new(),
+            supply_age: supply_age::Cache::new(),
             utxos: 0,
             height_1d_ago: 0,
             height_7d_ago: 0,
@@ -110,6 +118,7 @@ impl Cache {
             address_counts: address_counts::Cache::load(client),
             ergusd: ergusd::Cache::load(client),
             supply_composition: supply_composition::Cache::load(client),
+            supply_age: supply_age::Cache::load(client),
             utxos: utxos::get_utxo_count(client),
             height_1d_ago: load_height_days_ago(client, 1),
             height_7d_ago: load_height_days_ago(client, 7),

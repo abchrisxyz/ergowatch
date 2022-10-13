@@ -1,14 +1,17 @@
-// use super::supply_composition::Cache as SupplyCompositionCache;
-/// Mean age of circulating supply
+use super::supply_composition::Cache as SupplyCompositionCache;
+use super::supply_composition::Record as SupplyCompositionRecord;
+/// Mean age of emitted supply
 use crate::db::addresses;
 use crate::parsing::BlockData;
 use log::info;
 use postgres::types::Type;
 use postgres::Client;
+use postgres::GenericClient;
 use postgres::Transaction;
+use rust_decimal::prelude::FromPrimitive;
+use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
 use std::time::Instant;
-
 /*
 Mean age timestamp of circulating supply can be updated incrementaly at each block like so:
 
@@ -21,15 +24,58 @@ Ignoring all (re)-emission addresses
     t(h) = t(h-1) + dt
 */
 
-pub(super) fn include(tx: &mut Transaction, block: &BlockData, sad: &SupplyAgeDiffs) {
+pub(super) fn include(
+    tx: &mut Transaction,
+    block: &BlockData,
+    age_cache: &mut Cache,
+    sc_cache: &SupplyCompositionCache,
+    sad: &SupplyAgeDiffs,
+) {
+    // Decimal version of age timestamps
+    let t_p2pks = Decimal::from_i64(age_cache.timestamps.p2pks).unwrap();
+    let t_cexs = Decimal::from_i64(age_cache.timestamps.cexs).unwrap();
+    let t_cons = Decimal::from_i64(age_cache.timestamps.contracts).unwrap();
+    let t_miners = Decimal::from_i64(age_cache.timestamps.miners).unwrap();
+
+    // Decimal version of supply composition
+    let sc = sc_cache.curr.composition;
+    let s_p2pks = Decimal::from_i64(sc.p2pks + sc.cex_deposits).unwrap();
+    let s_cexs = Decimal::from_i64(sc.cex_main).unwrap();
+    let s_cons = Decimal::from_i64(sc.contracts).unwrap();
+    let s_miners = Decimal::from_i64(sc.miners).unwrap();
+
+    // Decimal version of previous supply composition
+    let sc = sc_cache.prev.composition;
+    let prev_s_p2pks = Decimal::from_i64(sc.p2pks + sc.cex_deposits).unwrap();
+    let prev_s_cexs = Decimal::from_i64(sc.cex_main).unwrap();
+    let prev_s_cons = Decimal::from_i64(sc.contracts).unwrap();
+    let prev_s_miners = Decimal::from_i64(sc.miners).unwrap();
+
+    let p2pks = progress_timestamp(t_p2pks, s_p2pks, prev_s_p2pks, sad.p2pks);
+    let cexs = progress_timestamp(t_cexs, s_cexs, prev_s_cexs, sad.cexs);
+    let cons = progress_timestamp(t_cons, s_cons, prev_s_cons, sad.contracts);
+    let miners = progress_timestamp(t_miners, s_miners, prev_s_miners, sad.miners);
+
+    let overall: Decimal = (p2pks * s_p2pks + cexs * s_cexs + cons * s_cons + miners * s_miners)
+        / (s_p2pks + s_cexs + s_cons + s_miners);
+
+    let timestamps = Timestamps {
+        overall: overall.round().to_i64().unwrap(),
+        p2pks: p2pks.round().to_i64().unwrap(),
+        cexs: cexs.round().to_i64().unwrap(),
+        contracts: cons.round().to_i64().unwrap(),
+        miners: miners.round().to_i64().unwrap(),
+    };
+
     tx.execute(
-        sql::APPEND_TIMESTAMPS_SNAPSHOT,
+        sql::INSERT_TIMESTAMPS_SNAPSHOT,
         &[
             &block.height,
-            &sad.p2pks,
-            &sad.cexs,
-            &sad.contracts,
-            &sad.miners,
+            &timestamps.overall,
+            &timestamps.p2pks,
+            &timestamps.cexs,
+            &timestamps.contracts,
+            &timestamps.miners,
         ],
     )
     .unwrap();
@@ -39,13 +85,23 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData, sad: &SupplyAgeDi
         &[&block.height, &block.timestamp],
     )
     .unwrap();
+
+    // Update cache
+    age_cache.height = block.height;
+    age_cache.timestamps = timestamps;
 }
 
-pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
+pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut Cache) {
     tx.execute(sql::DELETE_SNAPSHOT_TIMESTAMPS, &[&block.height])
         .unwrap();
     tx.execute(sql::DELETE_SNAPSHOT_DAYS, &[&block.height])
         .unwrap();
+
+    // Update cache
+    let new_cache = Cache::load(tx);
+    cache.height = new_cache.height;
+    cache.timestamps = new_cache.timestamps;
+    assert_eq!(cache.height, block.height - 1);
 }
 
 pub fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
@@ -125,6 +181,9 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
     let batches = blocks.chunks(batch_size);
     let nb_batches = batches.len();
 
+    // Init cache
+    let mut timestamps = Cache::load(client).timestamps;
+
     for (ibatch, batch_blocks) in batches.enumerate() {
         let timer = Instant::now();
         let mut tx = client.transaction()?;
@@ -133,26 +192,97 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
 
         // Prepare statements
         let stmt_insert_snapshot = tx.prepare_typed(
-            &sql::APPEND_TIMESTAMPS_SNAPSHOT
-                .replace(" adr.erg ", &format!(" {replay_id}_adr.erg ")),
+            &sql::INSERT_TIMESTAMPS_SNAPSHOT,
             &[
                 Type::INT4,
-                Type::NUMERIC,
-                Type::NUMERIC,
-                Type::NUMERIC,
-                Type::NUMERIC,
+                Type::INT8,
+                Type::INT8,
+                Type::INT8,
+                Type::INT8,
+                Type::INT8,
             ],
         )?;
 
-        for (height, timestamp) in batch_blocks {
+        // Preload supply composition data
+        // For each height to be boostrapped, need record at h and h-1, so start at h-1
+        let first_h: i32 = batch_blocks.first().unwrap().0 - 1;
+        let last_h: i32 = batch_blocks.last().unwrap().0;
+        let sc_recs = SupplyCompositionRecord::get_range(&mut tx, first_h, last_h);
+        assert_eq!(sc_recs[0].height, first_h);
+        assert_eq!(sc_recs.len() as i32, last_h - first_h + 1);
+
+        for (i, (height, timestamp)) in batch_blocks.iter().enumerate() {
             // step replay
             let sad = addresses::replay::step_with_age(&mut tx, *height, *timestamp, replay_id);
 
-            // Insert snapshot
+            // Supply composition
+            let sc_prev = sc_recs[i];
+            let sc_curr = sc_recs[i + 1];
+
+            // p2pks (including cex deposit addresses)
+            let p2pks: Decimal = progress_timestamp_i64(
+                timestamps.p2pks,
+                sc_curr.composition.p2pks + sc_curr.composition.cex_deposits,
+                sc_prev.composition.p2pks + sc_prev.composition.cex_deposits,
+                sad.p2pks,
+            );
+
+            // Main exchage addresses
+            let cexs: Decimal = progress_timestamp_i64(
+                timestamps.cexs,
+                sc_curr.composition.cex_main,
+                sc_prev.composition.cex_main,
+                sad.cexs,
+            );
+
+            // Contracts
+            let cons: Decimal = progress_timestamp_i64(
+                timestamps.contracts,
+                sc_curr.composition.contracts,
+                sc_prev.composition.contracts,
+                sad.contracts,
+            );
+
+            // Miners
+            let miners: Decimal = progress_timestamp_i64(
+                timestamps.miners,
+                sc_curr.composition.miners,
+                sc_prev.composition.miners,
+                sad.miners,
+            );
+
+            // Overall from other terms
+            let p2pk_supply =
+                Decimal::from_i64(sc_curr.composition.p2pks + sc_curr.composition.cex_deposits)
+                    .unwrap();
+            let cexs_supply = Decimal::from_i64(sc_curr.composition.cex_main).unwrap();
+            let cons_supply = Decimal::from_i64(sc_curr.composition.contracts).unwrap();
+            let mins_supply = Decimal::from_i64(sc_curr.composition.miners).unwrap();
+            let overall = (p2pks * p2pk_supply
+                + cexs * cexs_supply
+                + cons * cons_supply
+                + miners * mins_supply)
+                / (p2pk_supply + cexs_supply + cons_supply + mins_supply);
+
+            // Update cache
+            timestamps.overall = overall.round().to_i64().unwrap();
+            timestamps.p2pks = p2pks.round().to_i64().unwrap();
+            timestamps.cexs = cexs.round().to_i64().unwrap();
+            timestamps.contracts = cons.round().to_i64().unwrap();
+            timestamps.miners = miners.round().to_i64().unwrap();
+
             tx.execute(
                 &stmt_insert_snapshot,
-                &[height, &sad.p2pks, &sad.cexs, &sad.contracts, &sad.miners],
-            )?;
+                &[
+                    &height,
+                    &timestamps.overall,
+                    &timestamps.p2pks,
+                    &timestamps.cexs,
+                    &timestamps.contracts,
+                    &timestamps.miners,
+                ],
+            )
+            .unwrap();
         }
 
         tx.commit()?;
@@ -245,26 +375,90 @@ fn set_constraints(client: &mut Client) {
     tx.commit().unwrap();
 }
 
-// struct Record {
-//     pub secs_all: i64,
-//     pub secs_p2pk: i64,
-//     pub secs_cexs: i64,
-//     pub secs_contracts_: i64,
-//     pub secs_miners_: i64,
-// }
+/// Calculate new age timestamp
+///
+/// `ts`: last age timestamp to be updated
+/// `supply`: current supply
+/// `prev_supply`: previous supply
+/// `diff`: raw age diff (i.e. nanoERG*ms)
+fn progress_timestamp(
+    ts: Decimal,
+    supply: Decimal,
+    prev_supply: Decimal,
+    diff: Decimal,
+) -> Decimal {
+    if supply > Decimal::ZERO {
+        (ts * prev_supply + diff) / supply
+    } else {
+        Decimal::ZERO
+    }
+}
 
-// impl From<Row> for Record {
-//     fn from(row: Row) -> Record {
-//         Record {
-//             secs_: row.get(0),
-//             cex_main: row.get(1),
-//             cex_deposits: row.get(2),
-//             contracts: row.get(3),
-//             miners: row.get(4),
-//             treasury: row.get(5),
-//         }
-//     }
-// }
+fn progress_timestamp_i64(ts: i64, supply: i64, prev_supply: i64, diff: Decimal) -> Decimal {
+    if supply > 0 {
+        let ts = Decimal::from_i64(ts).unwrap();
+        let prev_supply = Decimal::from_i64(prev_supply).unwrap();
+        let supply = Decimal::from_i64(supply).unwrap();
+        (ts * prev_supply + diff) / supply
+    } else {
+        Decimal::ZERO
+    }
+}
+
+#[derive(Debug)]
+pub struct Cache {
+    pub height: i32,
+    timestamps: Timestamps,
+}
+
+impl Cache {
+    pub fn new() -> Self {
+        Self {
+            height: 0,
+            timestamps: Timestamps::new(),
+        }
+    }
+
+    pub(super) fn load(client: &mut impl GenericClient) -> Self {
+        match client
+            .query_opt(sql::GET_LATEST_TIMESTAMPS_RECORD, &[])
+            .unwrap()
+        {
+            Some(row) => Self {
+                height: row.get(0),
+                timestamps: Timestamps {
+                    overall: row.get(1),
+                    p2pks: row.get(2),
+                    cexs: row.get(3),
+                    contracts: row.get(4),
+                    miners: row.get(5),
+                },
+            },
+            None => Self::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Timestamps {
+    pub overall: i64,
+    pub p2pks: i64,
+    pub cexs: i64,
+    pub contracts: i64,
+    pub miners: i64,
+}
+
+impl Timestamps {
+    pub fn new() -> Self {
+        Self {
+            overall: 0,
+            p2pks: 0,
+            cexs: 0,
+            contracts: 0,
+            miners: 0,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct SupplyAgeDiffs {
@@ -310,6 +504,17 @@ impl SupplyAgeDiffs {
 }
 
 mod sql {
+    /// Latest row in mtr.supply_age_timestamps
+    pub(super) const GET_LATEST_TIMESTAMPS_RECORD: &str = "
+        select height
+            , overall
+            , p2pks
+            , cexs
+            , contracts
+            , miners
+        from mtr.supply_age_timestamps
+        order by height desc limit 1;";
+
     /// Unscaled age differences in ms
     ///
     /// $1: height of target block
@@ -378,64 +583,19 @@ mod sql {
         ;
         ";
 
-    /// Insert new snapshot for given height.
+    /// Insert new record
     ///
     /// $1: height of target block
-    /// $2: p2pk diffs
-    /// $3: main cex diffs
-    /// $4: contract diffs
-    /// $5: miner diffs
+    /// $2: overall diffs
+    /// $3: p2pk diffs
+    /// $4: main cex diffs
+    /// $5: contract diffs
+    /// $6: miner diffs
     ///
     /// Assumes balances represent state at `height`.
-    pub(super) const APPEND_TIMESTAMPS_SNAPSHOT: &str = "
-        with new_age_timestamps as (
-            select
-                -- p2pks (incl cex deposits)
-                case when s.p2pks + s.cex_deposits > 0 then
-                    (prev_t.p2pks::numeric * (prev_s.p2pks + prev_s.cex_deposits) + $2::numeric)
-                    / (s.p2pks + s.cex_deposits)
-                else 0
-                end as p2pks
-                
-                -- cexs main
-                , case when s.cex_main > 0 then
-                    (prev_t.cexs::numeric * prev_s.cex_main + $3::numeric ) / s.cex_main
-                else 0
-                end as cexs
-                
-                -- contracts
-                , case when s.contracts > 0 then
-                    (prev_t.contracts::numeric * prev_s.contracts + $4::numeric) / s.contracts
-                else 0
-                end as contracts
-
-                -- miners
-                , case when s.miners > 0 then
-                    (prev_t.miners::numeric * prev_s.miners + $5::numeric) / s.miners
-                else 0
-                end as miners
-    
-            from mtr.supply_composition s
-            join mtr.supply_composition prev_s on prev_s.height = $1 - 1
-            join mtr.supply_age_timestamps prev_t on prev_t.height = $1 - 1 
-            where s.height = $1
-        )
+    pub(super) const INSERT_TIMESTAMPS_SNAPSHOT: &str = "
         insert into mtr.supply_age_timestamps (height, overall, p2pks, cexs, contracts, miners)
-        select $1
-            , (
-                (n.p2pks * (s.p2pks + s.cex_deposits)
-                    + n.cexs * s.cex_main
-                    + n.contracts * s.contracts
-                    + n.miners * s.miners
-                ) / (s.p2pks + s.cex_main + s.cex_deposits + s.contracts + s.miners)
-            )::bigint
-            , n.p2pks::bigint
-            , n.cexs::bigint
-            , n.contracts::bigint
-            , n.miners::bigint
-        from new_age_timestamps n
-        join mtr.supply_composition s on s.height = $1;
-        ";
+        values ($1, $2, $3, $4, $5, $6);";
 
     /// Adds a record mtr.supply_age_days
     ///

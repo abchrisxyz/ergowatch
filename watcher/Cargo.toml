@@ -17,7 +17,7 @@ ergotree-ir = "0.17.0"
 base16 = "0.2.1"
 anyhow = "1.0.53"
 clap = {version="3.0.13", features=["derive", "cargo"]}
-rust_decimal = {version="1.26.1", features=["db-postgres"]}
+rust_decimal = {version="1.26", features=["db-postgres"]}
 
 [dev-dependencies]
 pretty_assertions = "0.7.2"
