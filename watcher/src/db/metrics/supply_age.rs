@@ -56,8 +56,11 @@ pub(super) fn include(
     let cons = progress_timestamp(t_cons, s_cons, prev_s_cons, sad.contracts);
     let miners = progress_timestamp(t_miners, s_miners, prev_s_miners, sad.miners);
 
-    let overall: Decimal = (p2pks * s_p2pks + cexs * s_cexs + cons * s_cons + miners * s_miners)
-        / (s_p2pks + s_cexs + s_cons + s_miners);
+    let supply = s_p2pks + s_cexs + s_cons + s_miners;
+    let overall: Decimal = p2pks / supply * s_p2pks
+        + cexs / supply * s_cexs
+        + cons / supply * s_cons
+        + miners / supply * s_miners;
 
     let timestamps = Timestamps {
         overall: overall.round().to_i64().unwrap(),
@@ -258,11 +261,11 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
             let cexs_supply = Decimal::from_i64(sc_curr.composition.cex_main).unwrap();
             let cons_supply = Decimal::from_i64(sc_curr.composition.contracts).unwrap();
             let mins_supply = Decimal::from_i64(sc_curr.composition.miners).unwrap();
-            let overall = (p2pks * p2pk_supply
-                + cexs * cexs_supply
-                + cons * cons_supply
-                + miners * mins_supply)
-                / (p2pk_supply + cexs_supply + cons_supply + mins_supply);
+            let supply = p2pk_supply + cexs_supply + cons_supply + mins_supply;
+            let overall = p2pks / supply * p2pk_supply
+                + cexs / supply * cexs_supply
+                + cons / supply * cons_supply
+                + miners / supply * mins_supply;
 
             // Update cache
             timestamps.overall = overall.round().to_i64().unwrap();
