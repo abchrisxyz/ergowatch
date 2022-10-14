@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 25);
+insert into ew.revision (major, minor) values (3, 26);
 
 create table ew.repairs (
 	singleton int primary key default 1,
@@ -227,7 +227,8 @@ insert into cex.cexs (id, name, text_id) values
 	(1, 'Coinex', 'coinex'),
 	(2, 'Gate.io', 'gate'),
 	(3, 'KuCoin', 'kucoin'),
-	(4, 'ProBit', 'probit')
+	(4, 'ProBit', 'probit'),
+	(5, 'TradeOgre', 'tradeogre')
 ;
 
 create type cex.t_address_type as enum ('main', 'deposit');
@@ -384,7 +385,11 @@ insert into cex.main_addresses_list (cex_id, address) values
 	(3, '9iNt6wfxSc3DSaBVp22E7g993dwKUCvbGdHoEjxF8SRqj35oXvT'),
 	
 	-- ProBit https://discord.com/channels/668903786361651200/896711052736233482/964541753162096680
-	(4, '9eg2Rz3tGogzLaVZhG1ycPj1dJtN4Jn8ySa2mnVLJyVJryb13QB');
+	(4, '9eg2Rz3tGogzLaVZhG1ycPj1dJtN4Jn8ySa2mnVLJyVJryb13QB'),
+
+	-- TradeOgre
+	(5, '9fs99SejQxDjnjwrZ13YMZZ3fwMEVXFewpWWj63nMhZ6zDf2gif');
+	
 
 insert into cex.ignored_addresses_list (address) values
 	-- Flagged as Gate deposit address.
