@@ -11,6 +11,7 @@ from fixtures.db import temp_db_rev0_class_scoped
 from fixtures.db import unconstrained_db_class_scoped
 from utils import assert_column_not_null, run_watcher
 from utils import assert_pk
+from utils import assert_index_def
 
 ORDER = 14
 
@@ -257,6 +258,28 @@ def _test_db_state(conn: pg.Connection, s: Scenario):
 def assert_db_constraints(conn: pg.Connection):
     # Utxos
     assert_pk(conn, "mtr", "utxos", ["height"])
+
+    # Daily timestamps
+    assert_pk(conn, "mtr", "timestamps_daily", ["timestamp"])
+    assert_column_not_null(conn, "mtr", "timestamps_daily", "height")
+    assert_column_not_null(conn, "mtr", "timestamps_daily", "timestamp")
+    assert_index_def(
+        conn,
+        "mtr",
+        "timestamps_daily",
+        "CREATE INDEX timestamps_daily_height_idx ON mtr.timestamps_daily USING brin (height)",
+    )
+
+    # Hourly timestamps
+    assert_pk(conn, "mtr", "timestamps_hourly", ["timestamp"])
+    assert_column_not_null(conn, "mtr", "timestamps_hourly", "height")
+    assert_column_not_null(conn, "mtr", "timestamps_hourly", "timestamp")
+    assert_index_def(
+        conn,
+        "mtr",
+        "timestamps_hourly",
+        "CREATE INDEX timestamps_hourly_height_idx ON mtr.timestamps_hourly USING brin (height)",
+    )
 
     # Transactions
     assert_pk(conn, "mtr", "transactions", ["height"])

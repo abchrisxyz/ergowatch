@@ -223,6 +223,18 @@ alter table cex.supply add check (deposit >= 0);
 -------------------------------------------------------------------------------
 -- Metrics
 -------------------------------------------------------------------------------
+-- Timestamps - daily
+alter table mtr.timestamps_daily add primary key(timestamp);
+alter table mtr.timestamps_daily alter column height set not null;
+alter table mtr.timestamps_daily alter column timestamp set not null;
+create index on mtr.timestamps_daily using brin(height);
+-- Timestamps - hourly
+alter table mtr.timestamps_hourly add primary key(timestamp);
+alter table mtr.timestamps_hourly alter column height set not null;
+alter table mtr.timestamps_hourly alter column timestamp set not null;
+create index on mtr.timestamps_hourly using brin(height);
+update mtr._log set timestamps_constraints_set = TRUE;
+
 -- ERG/USD
 alter table mtr.ergusd add primary key(height);
 alter table mtr.ergusd alter column height set not null;

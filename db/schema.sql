@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 26);
+insert into ew.revision (major, minor) values (3, 27);
 
 create table ew.repairs (
 	singleton int primary key default 1,
@@ -458,11 +458,23 @@ create table mtr._log (
 	supply_composition_constraints_set bool not null default FALSE,
 	supply_distribution_bootstrapped bool not null default FALSE,
 	supply_distribution_constraints_set bool not null default FALSE,
+	timestamps_constraints_set bool not null default FALSE,
 	transactions_constraints_set bool not null default FALSE,
 	volume_constraints_set bool not null default FALSE,
 	check(singleton = 1)
 );
 insert into mtr._log(singleton) values (1);
+
+
+-- Chain height at daily and hourly timestamps, including latest available height
+create table mtr.timestamps_daily (
+	height int,
+	timestamp bigint
+);
+create table mtr.timestamps_hourly (
+	height int,
+	timestamp bigint
+);
 
 -- ERG/USD value used at each height.
 -- Most values will be interpolated from cgo.ergusd.

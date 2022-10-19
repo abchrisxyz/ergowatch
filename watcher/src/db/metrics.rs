@@ -7,9 +7,11 @@ mod ergusd;
 pub(super) mod supply_age;
 mod supply_composition;
 mod supply_distribution;
+mod timestamps;
 mod transactions;
 pub mod utxos;
 mod volume;
+
 use crate::db::coingecko::Cache as CoinGeckoCache;
 use crate::db::Buffer;
 use crate::parsing::BlockData;
@@ -39,6 +41,7 @@ pub(super) fn include_block(
         &buffer.supply_age_diffs,
     );
     supply_distribution::include(tx, block, &cache.address_counts);
+    timestamps::include(tx, block, &mut cache.timestamps);
     transactions::include(tx, block, cache);
     volume::include(tx, block, cache);
 
@@ -57,6 +60,7 @@ pub(super) fn rollback_block(
 ) -> anyhow::Result<()> {
     volume::rollback(tx, block);
     transactions::rollback(tx, block);
+    timestamps::rollback(tx, block, &mut cache.timestamps);
     supply_distribution::rollback(tx, block);
     supply_age::rollback(tx, block, &mut cache.supply_age);
     supply_composition::rollback(tx, block, &mut cache.supply_composition);
@@ -81,6 +85,7 @@ pub(super) fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result
     supply_composition::bootstrap(client, work_mem_kb)?;
     supply_age::bootstrap(client, work_mem_kb)?;
     supply_distribution::bootstrap(client, work_mem_kb)?;
+    timestamps::bootstrap(client, work_mem_kb)?;
     transactions::bootstrap(client, work_mem_kb)?;
     volume::bootstrap(client, work_mem_kb)?;
     Ok(())
@@ -92,6 +97,7 @@ pub struct Cache {
     pub ergusd: ergusd::Cache,
     pub supply_composition: supply_composition::Cache,
     pub supply_age: supply_age::Cache,
+    pub timestamps: timestamps::Cache,
     pub utxos: i64,
     // Heights x days prior to current last block
     height_1d_ago: i32,
@@ -106,6 +112,7 @@ impl Cache {
             ergusd: ergusd::Cache::new(),
             supply_composition: supply_composition::Cache::new(),
             supply_age: supply_age::Cache::new(),
+            timestamps: timestamps::Cache::new(),
             utxos: 0,
             height_1d_ago: 0,
             height_7d_ago: 0,
@@ -119,6 +126,7 @@ impl Cache {
             ergusd: ergusd::Cache::load(client),
             supply_composition: supply_composition::Cache::load(client),
             supply_age: supply_age::Cache::load(client),
+            timestamps: timestamps::Cache::load(client),
             utxos: utxos::get_utxo_count(client),
             height_1d_ago: load_height_days_ago(client, 1),
             height_7d_ago: load_height_days_ago(client, 7),
