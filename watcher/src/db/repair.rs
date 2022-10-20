@@ -303,7 +303,7 @@ fn init(client: &mut Client) -> Result<(), RepairInitError> {
     match tx.execute("insert into ew.repairs (started) select now();", &[]) {
         Ok(_) => (),
         Err(err) => {
-            if let Some(&postgres::error::SqlState::DUPLICATE_SCHEMA) = err.code() {
+            if let Some(&postgres::error::SqlState::UNIQUE_VIOLATION) = err.code() {
                 return Err(RepairInitError::OtherRunning);
             }
             panic!("{:?}", err);
