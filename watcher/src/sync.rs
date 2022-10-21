@@ -11,6 +11,8 @@ use crate::session::Session;
 pub fn sync_and_track(session: &mut Session) -> Result<(), &'static str> {
     info!("Synchronizing with node");
 
+    session.db.purge_or_resume(session.resume_repair);
+
     loop {
         let mut node_height = get_node_height_blocking(session);
 
@@ -19,7 +21,7 @@ pub fn sync_and_track(session: &mut Session) -> Result<(), &'static str> {
             if (session.head.height) % session.repair_interval == 0 {
                 info!("Starting repair session");
                 let max_height = session.head.height - session.repair_offset;
-                session.db.start_repair_event(max_height as i32);
+                session.db.start_new_repair_event(max_height as i32);
             }
 
             // -x --exit option, exit when synced

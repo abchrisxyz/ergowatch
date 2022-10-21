@@ -13,6 +13,7 @@ def run_watcher(
     timeout=30,
     log_file: str = None,
     allow_migrations: bool = False,
+    resume_repair: bool = False,
 ) -> subprocess.CompletedProcess:
     exe = str(
         Path(__file__).parent.parent.absolute() / Path(f"target/{target}/watcher")
@@ -21,6 +22,8 @@ def run_watcher(
     args.append("--exit")
     if allow_migrations:
         args.append("-m")
+    if resume_repair:
+        args.append("--resume-repair")
 
     env = dict(
         os.environ,

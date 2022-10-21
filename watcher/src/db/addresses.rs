@@ -279,7 +279,25 @@ pub(super) mod replay {
     }
 
     pub fn cleanup(tx: &mut Transaction, id: &str) {
-        tx.execute(&format!("drop schema if exists {id}_adr cascade;"), &[])
+        let schema_name = format!("{id}_adr");
+        if tx
+            .query_one(
+                "
+                select exists(
+                    select schema_name
+                    from information_schema.schemata
+                    where schema_name = $1
+                )",
+                &[&schema_name],
+            )
+            .unwrap()
+            .get(0)
+        {
+            tx.execute(
+                &format!("drop schema if exists {schema_name} cascade;"),
+                &[],
+            )
             .unwrap();
+        }
     }
 }

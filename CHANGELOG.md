@@ -2,21 +2,18 @@
 
 ## v0.5.0-dev - UNRELEASED
 
-BREAKING CHANGES - requires manual db migration (no resync needed):
+BREAKING CHANGES - requires a full db resync
 
-```
-update ew.revision set major = 3;
-
-create table ew.repairs (
-	singleton int primary key default 1,
-	started timestamp not null,
-	check(singleton = 1)
-);
-```
 
 ### New features
 
 [Issue 58](https://github.com/abchrisxyz/ergowatch/issues/58) - Added address counts by minimal balance
+
+Added -r option to resume interrupted repair sessions.
+
+### Fixed
+
+Fixed panics on repair conflicts.
 
 
 ## v0.4.3 - 2022-09-26

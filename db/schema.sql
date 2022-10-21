@@ -8,12 +8,21 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 27);
+insert into ew.revision (major, minor) values (3, 28);
 
 create table ew.repairs (
 	singleton int primary key default 1,
 	started timestamp not null,
-	check(singleton = 1)
+	-- Repair range of current session
+	from_height int not null,
+	last_height int not null,
+	-- Next height to be processed.
+	-- Allows to pick up where we left after a shutdown.
+	next_height int not null,
+	check(singleton = 1),
+	check(last_height >= from_height),
+	check(next_height >= from_height),
+	check(next_height <= last_height)
 );
 
 

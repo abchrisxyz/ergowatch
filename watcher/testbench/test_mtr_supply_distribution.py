@@ -242,7 +242,12 @@ class TestRepair:
                 # Simulate an interupted repair,
                 # Should be cleaned up at startup.
                 with conn.cursor() as cur:
-                    cur.execute("insert into ew.repairs (started) select now();")
+                    cur.execute(
+                        """
+                        insert into ew.repairs (started, from_height, last_height, next_height)
+                        select now(), 0, 0, 0;
+                        """
+                    )
                     cur.execute("create schema repair_adr;")
                 conn.commit()
 
@@ -250,7 +255,7 @@ class TestRepair:
             cp = run_watcher(temp_cfg)
             assert cp.returncode == 0
             assert "Including block block-e" in cp.stdout.decode()
-            assert "Repairing 5 blocks (600001 to 600005)" in cp.stdout.decode()
+            assert "Repairing heights 600001 to 600005 (5 blocks)" in cp.stdout.decode()
             assert "Done repairing heights 600001 to 600005" in cp.stdout.decode()
 
             with pg.connect(temp_db_class_scoped) as conn:

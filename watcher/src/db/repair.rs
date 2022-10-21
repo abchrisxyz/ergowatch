@@ -60,10 +60,8 @@ enum Response {
 
 #[derive(Debug)]
 pub struct RepairEvent {
-    /// First height to repair
-    fr_height: i32,
-    /// Last height to repair
-    to_height: i32,
+    /// Repair session settings
+    range: RepairRange,
     /// DB connection string
     conn_str: String,
     /// Used to track spawn thread
@@ -72,6 +70,23 @@ pub struct RepairEvent {
     tx: Option<mpsc::Sender<Message>>,
     /// MPSC sender to spawn thread
     rx: Option<mpsc::Receiver<Response>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RepairRange {
+    /// First height to repair
+    first_height: i32,
+    /// Last height to repair
+    last_height: i32,
+}
+
+impl RepairRange {
+    pub fn new(first_height: i32, last_height: i32) -> Self {
+        Self {
+            first_height,
+            last_height,
+        }
+    }
 }
 
 impl RepairEvent {
@@ -88,8 +103,7 @@ impl RepairEvent {
         }
         let conn_str = String::from(&self.conn_str);
         // Copy height params to be moved into thread
-        let fr = self.fr_height;
-        let to = self.to_height;
+        let range = self.range;
         // Prepare message passing channels
         let (tx1, rx1) = mpsc::channel();
         let (tx2, rx2) = mpsc::channel();
@@ -102,7 +116,8 @@ impl RepairEvent {
         thread::spawn(move || {
             let _t = tracer;
             debug!("Repair thread started");
-            start(conn_str, fr, to, rx1, tx2).unwrap();
+            // start(conn_str, fr, to, prepare_replay, rx1, tx2).unwrap();
+            start(conn_str, range, rx1, tx2).unwrap();
         });
     }
 
@@ -204,28 +219,66 @@ impl RepairEvent {
 }
 
 impl DB {
-    pub fn start_repair_event(&mut self, max_height: i32) {
-        debug!("Starting repair event");
+    /// Start a new repair session
+    ///
+    /// Initializes a new session and starts it.
+    pub fn start_new_repair_event(&mut self, max_height: i32) {
+        debug!("Starting new repair event");
         let mut client = Client::connect(&self.conn_str, NoTls).unwrap();
-        match init(&mut client) {
+        let start_height = match cexs::repair::get_start_height(&mut client, max_height) {
+            Some(h) => h,
+            None => {
+                info!("No pending repairs");
+                return;
+            }
+        };
+        match init(&mut client, start_height, max_height) {
             Ok(()) => (),
             Err(RepairInitError::OtherRunning) => {
                 warn!("Tried to start a repair event but previous one is still running. Consider using a larger repair interval.");
                 return;
             }
         };
-        let start_height = match cexs::repair::get_start_height(&mut client, max_height) {
-            Some(h) => h,
-            None => {
-                info!("No pending repairs");
-                cleanup(&mut client);
-                self.repair_event = None;
-                return;
-            }
+        self.start_repair_event(RepairRange::new(start_height, max_height));
+    }
+
+    /// Cleanup existing session or resume it if `resume` is true.
+    ///
+    /// Does nothing if there aren't any stopped repair sessions.
+    pub fn purge_or_resume(&mut self, resume: bool) {
+        // Can only ever be called at startup, where no repairs are running yet
+        assert!(self.repair_event.is_none());
+
+        let mut client = Client::connect(&self.conn_str, NoTls).unwrap();
+
+        // Check for interrupted session settings
+        let repair_range: Option<RepairRange> = match client
+            .query_opt("select next_height, last_height from ew.repairs;", &[])
+            .unwrap()
+        {
+            Some(row) => Some(RepairRange::new(row.get(0), row.get(1))),
+            None => None,
         };
+
+        if resume {
+            // Resume session if any
+            match repair_range {
+                Some(range) => {
+                    info!("Resuming existing repair session");
+                    self.start_repair_event(range);
+                }
+                None => info!("No repair session to resume"),
+            }
+        } else if repair_range.is_some() {
+            info!("Cleaning up interrupted repair session");
+            cleanup(&mut client);
+        };
+    }
+
+    fn start_repair_event(&mut self, range: RepairRange) {
+        debug!("Starting repair event");
         let mut e = RepairEvent {
-            fr_height: start_height,
-            to_height: max_height,
+            range,
             conn_str: String::from(&self.conn_str),
             tracer: None,
             tx: None,
@@ -247,7 +300,7 @@ impl DB {
     /// Returns true if a repair event is running and set to process given height.
     pub fn is_repairing_height(&self, height: i32) -> bool {
         if let Some(e) = &self.repair_event {
-            return e.to_height >= height;
+            return e.range.last_height >= height;
         }
         false
     }
@@ -286,21 +339,29 @@ impl DB {
         }
     }
 
-    /// Abort any running repairs
-    pub fn cleanup_interrupted_repair(&self) {
+    /// Drop existing replay tables
+    pub fn drop_replay_tables(&self) {
         let mut client = Client::connect(&self.conn_str, NoTls).unwrap();
-        cleanup(&mut client);
+        let mut tx = client.transaction().unwrap();
+        drop_replay_tables(&mut tx);
+        tx.commit().unwrap();
     }
 }
 
 /// Initialize a repair session on the db side.
 ///
 /// Will fail if another repair session is running.
-fn init(client: &mut Client) -> Result<(), RepairInitError> {
+fn init(client: &mut Client, start_height: i32, max_height: i32) -> Result<(), RepairInitError> {
+    info!("Creating a repair session for blocks {start_height} to {max_height}");
     let mut tx = client.transaction().unwrap();
     // Lock repair session (prevents others from starting)
     // Log creation timestamp - usefull for debugging
-    match tx.execute("insert into ew.repairs (started) select now();", &[]) {
+    match tx.execute(
+        "
+        insert into ew.repairs (started, from_height, last_height, next_height)
+        select now(), $1, $2, $1;",
+        &[&start_height, &max_height],
+    ) {
         Ok(_) => (),
         Err(err) => {
             if let Some(&postgres::error::SqlState::UNIQUE_VIOLATION) = err.code() {
@@ -314,18 +375,27 @@ fn init(client: &mut Client) -> Result<(), RepairInitError> {
 }
 
 /// Start a previously prepared repair session
+///
+/// `fr`: Height of first block to be repaired
+/// `to`: Height of last block to be repaired
+/// `prepare_replay`: Create replay tables or not
+///     
 fn start(
     conn_str: String,
-    fr: i32,
-    to: i32,
+    range: RepairRange,
     channel_rx: mpsc::Receiver<Message>,
     channel_tx: mpsc::Sender<Response>,
 ) -> anyhow::Result<()> {
-    info!("Repairing {} blocks ({} to {})", to - fr + 1, fr, to);
+    info!(
+        "[thread] Repairing heights {} to {} ({} blocks))",
+        range.first_height,
+        range.last_height,
+        range.last_height - range.first_height + 1
+    );
     let mut client = Client::connect(&conn_str, NoTls).unwrap();
 
     // Load caches of state just prior to start height
-    let mut cex_cache = cexs::Cache::load_at(&mut client, fr - 1);
+    let mut cex_cache = cexs::Cache::load_at(&mut client, range.first_height - 1);
 
     // Mark non-invalidating blocks as processed
     let mut tx = client.transaction()?;
@@ -333,39 +403,43 @@ fn start(
     tx.commit().unwrap();
 
     // Prepare work tables
+    info!("[thread] Preparing replay tables");
     let mut tx = client.transaction()?;
-    prepare(&mut tx, fr - 1);
+    prepare(&mut tx, range.first_height - 1);
     tx.commit().unwrap();
 
     // Counter to log exact number of repaired heights.
     let mut processed_heights_counter = 0;
 
-    for h in fr..to + 1 {
+    info!("[thread] Starting repairs");
+    for h in range.first_height..range.last_height + 1 {
         // Check for incoming messages
         match channel_rx.try_recv() {
             // Abort repair session
             Ok(Message::Abort) => {
-                info!("Repair session received abort signal");
+                info!("[thread] Repair session received abort signal");
                 break;
             }
             // Pause repair session and wait for next message
             Ok(Message::Pause) => {
-                info!("Repair session received pause signal");
+                info!("[thread] Repair session received pause signal");
                 channel_tx.send(Response::Paused).unwrap();
                 match wait_for_message(&channel_rx) {
                     Message::Abort => break,
                     Message::Pause => {
-                        panic!("Repair session received pause signal while already paused");
+                        panic!(
+                            "[thread] Repair session received pause signal while already paused"
+                        );
                     }
                     Message::Resume => {
-                        info!("Repair session received resume signal");
+                        info!("[thread] Repair session received resume signal");
                         channel_tx.send(Response::Resumed).unwrap();
                     }
                 };
             }
             // Should not happen
             Ok(Message::Resume) => {
-                warn!("Repair sessions received resume signal while already running")
+                warn!("[thread] Repair sessions received resume signal while already running")
             }
             // No messages, continue repair session
             Err(_) => (),
@@ -380,21 +454,36 @@ fn start(
         metrics::repair(&mut tx, h);
         cexs::repair::set_height_pending_to_processed(&mut tx, h);
 
+        // Log progress
+        let next_height = h + 1;
+        // Last iteration sets next_height > to
+        if next_height != range.last_height + 1 {
+            tx.execute("update ew.repairs set next_height = $1+1;", &[&h])?;
+        }
+
         // Commit as we progress
         tx.commit().unwrap();
         processed_heights_counter += 1;
     }
 
+    info!("[thread] Cleaning up repair session");
     cleanup(&mut client);
 
-    assert_eq!(processed_heights_counter, to + 1 - fr);
-    info!("Done repairing heights {} to {}", fr, to);
+    assert_eq!(
+        processed_heights_counter,
+        range.last_height + 1 - range.first_height
+    );
+    info!(
+        "[thread] Done repairing heights {} to {}",
+        range.first_height, range.last_height
+    );
 
     Ok(())
 }
 
 /// Create work tables for repair session.
 fn prepare(tx: &mut Transaction, at_height: i32) {
+    debug!("Preparing replay tables for repair session");
     addresses::replay::prepare(tx, at_height, REPLAY_ID);
 }
 
@@ -407,14 +496,8 @@ fn step(tx: &mut Transaction, next_height: i32) {
 fn cleanup(client: &mut Client) {
     debug!("Cleaning up repair session");
     let mut tx = client.transaction().unwrap();
-    let any_repairs: bool = tx
-        .query_one("select exists(select * from ew.repairs);", &[])
-        .unwrap()
-        .get(0);
-    if any_repairs {
-        addresses::replay::cleanup(&mut tx, REPLAY_ID);
-        tx.execute("truncate table ew.repairs;", &[]).unwrap();
-    }
+    drop_replay_tables(&mut tx);
+    tx.execute("truncate table ew.repairs;", &[]).unwrap();
     tx.commit().unwrap();
 }
 
@@ -425,4 +508,8 @@ fn wait_for_message(rx: &mpsc::Receiver<Message>) -> Message {
             return msg;
         };
     }
+}
+
+fn drop_replay_tables(tx: &mut Transaction) {
+    addresses::replay::cleanup(tx, REPLAY_ID);
 }
