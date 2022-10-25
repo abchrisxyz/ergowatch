@@ -387,7 +387,7 @@ fn start(
     channel_tx: mpsc::Sender<Response>,
 ) -> anyhow::Result<()> {
     info!(
-        "[thread] Repairing heights {} to {} ({} blocks))",
+        "[thread] Repairing heights {} to {} ({} blocks)",
         range.first_height,
         range.last_height,
         range.last_height - range.first_height + 1
