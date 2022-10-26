@@ -629,7 +629,7 @@ create table mtr.supply_composition_summary (
 );
 
 -- Circulating supply distribution
-------------------------------------------------------------------------------- 
+-------------------------------------------------------------------------------
 
 -- Circulating supply on p2pk addresses excluding main exchange addresses
 create table mtr.supply_on_top_addresses_p2pk (
@@ -658,6 +658,37 @@ create table mtr.supply_on_top_addresses_miners (
 	top_10 bigint
 );
 
+create table mtr.supply_on_top_addresses_p2pk_summary (
+	label text not null primary key,
+	current bigint not null,
+	diff_1d bigint not null,
+	diff_1w bigint not null,
+	diff_4w bigint not null,
+	diff_6m bigint not null,
+	diff_1y bigint not null
+);
+
+create table mtr.supply_on_top_addresses_contracts_summary (
+	label text not null primary key,
+	current bigint not null,
+	diff_1d bigint not null,
+	diff_1w bigint not null,
+	diff_4w bigint not null,
+	diff_6m bigint not null,
+	diff_1y bigint not null
+);
+
+create table mtr.supply_on_top_addresses_miners_summary (
+	label text not null primary key,
+	current bigint not null,
+	diff_1d bigint not null,
+	diff_1w bigint not null,
+	diff_4w bigint not null,
+	diff_6m bigint not null,
+	diff_1y bigint not null
+);
+
+-- TODO: deprecate as replaced by mtr.supply_composition
 -- Supply across all cex's, at each height.
 create table mtr.cex_supply (
 	height int,

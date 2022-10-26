@@ -10,6 +10,11 @@ use postgres::Transaction;
 use std::time::Instant;
 
 use super::address_counts::Cache as AddressCountsCache;
+use super::heights::Cache as HeightsCache;
+use super::utils::bootstrap_change_summary;
+use super::utils::refresh_change_summary;
+
+const SUMMARY_COLUMNS: &[&'static str] = &["top_1_prc", "top_1k", "top_100", "top_10"];
 
 pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &AddressCountsCache) {
     // Calculate rank of 1st percentiles
@@ -45,6 +50,12 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
         &[&block.height],
     )
     .unwrap();
+}
+
+pub(super) fn refresh_summary(tx: &mut Transaction, hc: &HeightsCache) {
+    refresh_change_summary(tx, hc, "mtr.supply_on_top_addresses_p2pk", &SUMMARY_COLUMNS);
+    refresh_change_summary(tx, hc, "mtr.supply_on_top_addresses_contracts", &SUMMARY_COLUMNS);
+    refresh_change_summary(tx, hc, "mtr.supply_on_top_addresses_miners", &SUMMARY_COLUMNS);
 }
 
 pub(super) fn repair(tx: &mut Transaction, height: i32) {
@@ -218,13 +229,20 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
         );
     }
 
-    // Cleanup replay and work tables
     let mut tx = client.transaction()?;
+    
+    // Summary tables
+    bootstrap_change_summary(&mut tx, "mtr.supply_on_top_addresses_p2pk", &SUMMARY_COLUMNS);
+    bootstrap_change_summary(&mut tx, "mtr.supply_on_top_addresses_contracts", &SUMMARY_COLUMNS);
+    bootstrap_change_summary(&mut tx, "mtr.supply_on_top_addresses_miners", &SUMMARY_COLUMNS);
+
+    // Cleanup replay and work tables
     addresses::replay::cleanup(&mut tx, replay_id);
     
     tx.execute("drop table mtr._top_address_balances_p2pk;", &[])?;
     tx.execute("drop table mtr._top_address_balances_contracts;", &[])?;
     tx.execute("drop table mtr._top_address_balances_miners;", &[])?;
+
     tx.commit()?;
     
     client.execute(

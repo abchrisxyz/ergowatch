@@ -106,6 +106,7 @@ fn refresh_change_summaries(tx: &mut Transaction, heights: &heights::Cache) {
     address_counts::refresh_summary(tx, heights);
     supply_composition::refresh_summary(tx, heights);
     supply_age::refresh_summary(tx, heights);
+    supply_distribution::refresh_summary(tx, heights);
 }
 
 #[derive(Debug)]

@@ -1,4 +1,5 @@
 use super::heights::Cache as HeightsCache;
+use log::info;
 use postgres::Transaction;
 
 pub(super) fn refresh_change_summary(
@@ -20,6 +21,7 @@ pub(super) fn bootstrap_change_summary(
     metrics_table: &str,
     columns: &[&str],
 ) {
+    info!("Generating change summary for {metrics_table}");
     let hc = HeightsCache::load(tx);
     insert_change_summary(tx, &hc, metrics_table, columns);
 }

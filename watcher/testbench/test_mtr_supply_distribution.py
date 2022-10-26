@@ -161,7 +161,7 @@ class TestGenesis:
     Start with empty, unconstrained db.
     """
 
-    scenario = Scenario(SCENARIO_DESCRIPTION, 0, 1234560000000)
+    scenario = Scenario(SCENARIO_DESCRIPTION, 0, Scenario.GENESIS_TIMESTAMP + 100_000)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, unconstrained_db_class_scoped):
@@ -271,6 +271,9 @@ def _test_db_state(conn: pg.Connection, s: Scenario):
         assert_supply_distribution_p2pk(cur, s)
         assert_supply_distribution_contracts(cur, s)
         assert_supply_distribution_miners(cur, s)
+        assert_summary_p2pk(cur, s)
+        assert_summary_contracts(cur, s)
+        assert_summary_miners(cur, s)
 
 
 def assert_db_constraints(conn: pg.Connection):
@@ -354,3 +357,49 @@ def assert_supply_distribution_miners(cur: pg.Cursor, s: Scenario):
     assert rows[3] == (ph + 3, 6, 6, 6, 6)
     assert rows[4] == (ph + 4, 6, 6, 6, 6)
     assert rows[5] == (ph + 5, 6, 6, 6, 6)
+
+
+def assert_summary_p2pk(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        """
+        select label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
+        from mtr.supply_on_top_addresses_p2pk_summary  ;
+        """
+    )
+    rows = cur.fetchall()
+    print(rows)
+    assert len(rows) == 4
+    assert rows[0] == ("top_1_prc", 200, 200, 200, 200, 200, 200)
+    assert rows[1] == ("top_1k", 400, 400, 400, 400, 400, 400)
+    assert rows[2] == ("top_100", 400, 400, 400, 400, 400, 400)
+    assert rows[3] == ("top_10", 400, 400, 400, 400, 400, 400)
+
+
+def assert_summary_contracts(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        """
+        select label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
+        from mtr.supply_on_top_addresses_contracts_summary  ;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 4
+    assert rows[0] == ("top_1_prc", 202, 202, 202, 202, 202, 202)
+    assert rows[1] == ("top_1k", 303, 303, 303, 303, 303, 303)
+    assert rows[2] == ("top_100", 303, 303, 303, 303, 303, 303)
+    assert rows[3] == ("top_10", 303, 303, 303, 303, 303, 303)
+
+
+def assert_summary_miners(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        """
+        select label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
+        from mtr.supply_on_top_addresses_miners_summary  ;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 4
+    assert rows[0] == ("top_1_prc", 6, 6, 6, 6, 6, 6)
+    assert rows[1] == ("top_1k", 6, 6, 6, 6, 6, 6)
+    assert rows[2] == ("top_100", 6, 6, 6, 6, 6, 6)
+    assert rows[3] == ("top_10", 6, 6, 6, 6, 6, 6)
