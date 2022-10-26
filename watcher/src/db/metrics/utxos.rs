@@ -1,8 +1,13 @@
+use super::heights::Cache as HeightsCache;
+use super::utils::bootstrap_change_summary;
+use super::utils::refresh_change_summary;
 use super::Cache;
 use crate::parsing::BlockData;
 use log::info;
 use postgres::Client;
 use postgres::Transaction;
+
+const SUMMARY_COLUMNS: &[&'static str] = &["value"];
 
 pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &mut Cache) {
     // New value is cached value plus diff
@@ -18,7 +23,11 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut Cach
     tx.execute(DELETE_SNAPSHOT, &[&block.height]).unwrap();
 }
 
-pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
+pub(super) fn refresh_summary(tx: &mut Transaction, hc: &HeightsCache) {
+    refresh_change_summary(tx, hc, "mtr.utxos", &SUMMARY_COLUMNS);
+}
+
+pub(super) fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
     if is_bootstrapped(tx) {
         return Ok(());
     }
@@ -58,6 +67,7 @@ pub fn bootstrap(tx: &mut Transaction) -> anyhow::Result<()> {
     )?;
     tx.execute("alter table mtr.utxos set logged;", &[])?;
     set_constraints(tx);
+    bootstrap_change_summary(tx, "mtr.utxos", &SUMMARY_COLUMNS);
     Ok(())
 }
 

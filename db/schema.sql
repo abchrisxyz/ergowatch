@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 28);
+insert into ew.revision (major, minor) values (3, 29);
 
 create table ew.repairs (
 	singleton int primary key default 1,
@@ -510,6 +510,16 @@ create table mtr.utxos (
 	value bigint
 );
 
+create table mtr.utxos_summary (
+	label text not null primary key,
+	current bigint not null,
+	diff_1d bigint not null,
+	diff_1w bigint not null,
+	diff_4w bigint not null,
+	diff_6m bigint not null,
+	diff_1y bigint not null
+);
+
 -- Address counts by balance
 ------------------------------------------------------------------------------- 
 create table mtr.address_counts_by_balance_p2pk (
@@ -553,6 +563,34 @@ create table mtr.address_counts_by_balance_miners (
 	ge_10k bigint,
 	ge_100k bigint,
 	ge_1m bigint
+);
+
+create table mtr.address_counts_by_balance_p2pk_summary (
+	label text not null primary key,
+	current bigint not null,
+	diff_1d bigint not null,
+	diff_1w bigint not null,
+	diff_4w bigint not null,
+	diff_6m bigint not null,
+	diff_1y bigint not null
+);
+create table mtr.address_counts_by_balance_contracts_summary (
+	label text not null primary key,
+	current bigint not null,
+	diff_1d bigint not null,
+	diff_1w bigint not null,
+	diff_4w bigint not null,
+	diff_6m bigint not null,
+	diff_1y bigint not null
+);
+create table mtr.address_counts_by_balance_miners_summary (
+	label text not null primary key,
+	current bigint not null,
+	diff_1d bigint not null,
+	diff_1w bigint not null,
+	diff_4w bigint not null,
+	diff_6m bigint not null,
+	diff_1y bigint not null
 );
 
 

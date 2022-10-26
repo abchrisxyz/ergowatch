@@ -251,6 +251,7 @@ def _test_db_state(conn: pg.Connection, s: Scenario):
     assert_db_constraints(conn)
     with conn.cursor() as cur:
         assert_utxos(cur, s)
+        assert_utxos_summary(cur, s)
         assert_transactions(cur, s)
         assert_volume(cur, s)
 
@@ -328,3 +329,16 @@ def assert_utxos(cur: pg.Cursor, s: Scenario):
     assert rows[1] == (s.parent_height + 1, 3)  # spend 1 create 3 (+2)
     assert rows[2] == (s.parent_height + 2, 4)  # spend 1 create 2 (+1)
     assert rows[3] == (s.parent_height + 3, 6)  # spend 2 create 4 (+2)
+
+
+def assert_utxos_summary(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        """
+        select label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
+        from mtr.utxos_summary
+        order by 1;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 1
+    assert rows[0] == ("value", 6, 5, 5, 5, 5, 5)

@@ -1,4 +1,7 @@
 /// Adcress counts by balance
+use super::heights::Cache as HeightsCache;
+use super::utils::bootstrap_change_summary;
+use super::utils::refresh_change_summary;
 use crate::db::addresses;
 use crate::parsing::BlockData;
 use log::info;
@@ -13,6 +16,11 @@ const P2PK: bool = true;
 const CONTRACTS: bool = false;
 const NOT_MINER: bool = false;
 const MINER: bool = true;
+
+const SUMMARY_COLUMNS: &[&'static str] = &[
+    "total", "ge_0p001", "ge_0p01", "ge_0p1", "ge_1", "ge_10", "ge_100", "ge_1k", "ge_10k",
+    "ge_100k", "ge_1m",
+];
 
 pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &mut Cache) {
     // Get changes in address counts by balance
@@ -63,6 +71,27 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut Cach
         &[&block.height],
     )
     .unwrap();
+}
+
+pub(super) fn refresh_summary(tx: &mut Transaction, hc: &HeightsCache) {
+    refresh_change_summary(
+        tx,
+        hc,
+        "mtr.address_counts_by_balance_p2pk",
+        &SUMMARY_COLUMNS,
+    );
+    refresh_change_summary(
+        tx,
+        hc,
+        "mtr.address_counts_by_balance_contracts",
+        &SUMMARY_COLUMNS,
+    );
+    refresh_change_summary(
+        tx,
+        hc,
+        "mtr.address_counts_by_balance_miners",
+        &SUMMARY_COLUMNS,
+    );
 }
 
 pub fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
@@ -177,9 +206,27 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
         );
     }
 
-    // Cleanup replay tables
+    // Summary tables
     let mut tx = client.transaction()?;
+    bootstrap_change_summary(
+        &mut tx,
+        "mtr.address_counts_by_balance_p2pk",
+        &SUMMARY_COLUMNS,
+    );
+    bootstrap_change_summary(
+        &mut tx,
+        "mtr.address_counts_by_balance_contracts",
+        &SUMMARY_COLUMNS,
+    );
+    bootstrap_change_summary(
+        &mut tx,
+        "mtr.address_counts_by_balance_miners",
+        &SUMMARY_COLUMNS,
+    );
+
+    // Cleanup replay tables
     addresses::replay::cleanup(&mut tx, replay_id);
+
     tx.commit()?;
 
     client.execute(

@@ -4,11 +4,13 @@
 mod address_counts;
 mod cexs;
 mod ergusd;
+mod heights;
 pub(super) mod supply_age;
 mod supply_composition;
 mod supply_distribution;
 mod timestamps;
 mod transactions;
+mod utils;
 pub mod utxos;
 mod volume;
 
@@ -28,6 +30,7 @@ pub(super) fn include_block(
     cache.height_1d_ago = get_height_days_ago(tx, 1, block.timestamp, cache.height_1d_ago);
     cache.height_7d_ago = get_height_days_ago(tx, 7, block.timestamp, cache.height_7d_ago);
     cache.height_28d_ago = get_height_days_ago(tx, 28, block.timestamp, cache.height_28d_ago);
+    heights::include(tx, block, &mut cache.heights);
     ergusd::include(tx, block, &mut cache.ergusd, cgo_cache);
     utxos::include(tx, block, cache);
     cexs::include(tx, block);
@@ -44,6 +47,8 @@ pub(super) fn include_block(
     timestamps::include(tx, block, &mut cache.timestamps);
     transactions::include(tx, block, cache);
     volume::include(tx, block, cache);
+
+    refresh_change_summaries(tx, &cache.heights);
 
     if ergusd::pending_update(&cache.ergusd, cgo_cache) {
         // Update ergusd values
@@ -71,6 +76,11 @@ pub(super) fn rollback_block(
     cache.height_1d_ago = load_height_days_ago_at(tx, 1, block.height - 1);
     cache.height_7d_ago = load_height_days_ago_at(tx, 7, block.height - 1);
     cache.height_28d_ago = load_height_days_ago_at(tx, 28, block.height - 1);
+
+    // Restore heights, then refresh summaries
+    heights::rollback(tx, block, &mut cache.heights);
+    refresh_change_summaries(tx, &cache.heights);
+
     Ok(())
 }
 
@@ -91,10 +101,16 @@ pub(super) fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result
     Ok(())
 }
 
+fn refresh_change_summaries(tx: &mut Transaction, heights: &heights::Cache) {
+    utxos::refresh_summary(tx, heights);
+    address_counts::refresh_summary(tx, heights);
+}
+
 #[derive(Debug)]
 pub struct Cache {
     pub address_counts: address_counts::Cache,
     pub ergusd: ergusd::Cache,
+    pub heights: heights::Cache,
     pub supply_composition: supply_composition::Cache,
     pub supply_age: supply_age::Cache,
     pub timestamps: timestamps::Cache,
@@ -110,6 +126,7 @@ impl Cache {
         Self {
             address_counts: address_counts::Cache::new(),
             ergusd: ergusd::Cache::new(),
+            heights: heights::Cache::new(),
             supply_composition: supply_composition::Cache::new(),
             supply_age: supply_age::Cache::new(),
             timestamps: timestamps::Cache::new(),
@@ -124,6 +141,7 @@ impl Cache {
         Self {
             address_counts: address_counts::Cache::load(client),
             ergusd: ergusd::Cache::load(client),
+            heights: heights::Cache::load(client),
             supply_composition: supply_composition::Cache::load(client),
             supply_age: supply_age::Cache::load(client),
             timestamps: timestamps::Cache::load(client),
@@ -191,8 +209,8 @@ fn load_height_days_ago_at(tx: &mut Transaction, days: i64, height: i32) -> i32 
 /// Return height of first block in `days` day window prior to `timestamp`
 ///
 /// `days`: time window size in days
-/// `timestamp`: timestamp of current block (i.e. end of target 24h window)
-/// `prev_value`: start height of previous 24h window
+/// `timestamp`: timestamp of current block (i.e. end of target window)
+/// `prev_value`: start height of previous window
 fn get_height_days_ago(tx: &mut Transaction, days: i64, timestamp: i64, prev_value: i32) -> i32 {
     tx.query_one(
         "

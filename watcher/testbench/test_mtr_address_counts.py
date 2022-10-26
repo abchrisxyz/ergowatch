@@ -160,7 +160,7 @@ class TestGenesis:
     Start with empty, unconstrained db.
     """
 
-    scenario = Scenario(SCENARIO_DESCRIPTION, 0, 1234560000000)
+    scenario = Scenario(SCENARIO_DESCRIPTION, 0, Scenario.GENESIS_TIMESTAMP + 100_000)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, unconstrained_db_class_scoped):
@@ -222,6 +222,9 @@ def _test_db_state(conn: pg.Connection, s: Scenario):
         assert_p2pk_counts(cur, s)
         assert_contract_counts(cur, s)
         assert_miner_counts(cur, s)
+        assert_p2pk_summary(cur, s)
+        assert_contracts_summary(cur, s)
+        assert_miners_summary(cur, s)
 
 
 def assert_db_constraints(conn: pg.Connection):
@@ -349,7 +352,73 @@ def assert_miner_counts(cur: pg.Cursor, s: Scenario):
     rows = cur.fetchall()
     assert len(rows) == 5
     assert rows[0] == (s.parent_height + 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-    assert rows[1] == (s.parent_height + 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0)
-    assert rows[2] == (s.parent_height + 2, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0)
-    assert rows[3] == (s.parent_height + 3, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0)
-    assert rows[4] == (s.parent_height + 4, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0)
+    assert rows[1] == (s.parent_height + 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0)
+    assert rows[2] == (s.parent_height + 2, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0)
+    assert rows[3] == (s.parent_height + 3, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0)
+    assert rows[4] == (s.parent_height + 4, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0)
+
+
+def assert_p2pk_summary(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        """
+        select label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
+        from mtr.address_counts_by_balance_p2pk_summary;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 11
+    assert rows[0] == ("total", 5, 5, 5, 5, 5, 5)
+    assert rows[1] == ("ge_0p001", 5, 5, 5, 5, 5, 5)
+    assert rows[2] == ("ge_0p01", 4, 4, 4, 4, 4, 4)
+    assert rows[3] == ("ge_0p1", 4, 4, 4, 4, 4, 4)
+    assert rows[4] == ("ge_1", 4, 4, 4, 4, 4, 4)
+    assert rows[5] == ("ge_10", 4, 4, 4, 4, 4, 4)
+    assert rows[6] == ("ge_100", 4, 4, 4, 4, 4, 4)
+    assert rows[7] == ("ge_1k", 3, 3, 3, 3, 3, 3)
+    assert rows[8] == ("ge_10k", 3, 3, 3, 3, 3, 3)
+    assert rows[9] == ("ge_100k", 2, 2, 2, 2, 2, 2)
+    assert rows[10] == ("ge_1m", 0, 0, 0, 0, 0, 0)
+
+
+def assert_contracts_summary(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        """
+        select label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
+        from mtr.address_counts_by_balance_contracts_summary;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 11
+    assert rows[0] == ("total", 2, 2, 2, 2, 2, 2)
+    assert rows[1] == ("ge_0p001", 2, 2, 2, 2, 2, 2)
+    assert rows[2] == ("ge_0p01", 2, 2, 2, 2, 2, 2)
+    assert rows[3] == ("ge_0p1", 2, 2, 2, 2, 2, 2)
+    assert rows[4] == ("ge_1", 2, 2, 2, 2, 2, 2)
+    assert rows[5] == ("ge_10", 2, 2, 2, 2, 2, 2)
+    assert rows[6] == ("ge_100", 2, 2, 2, 2, 2, 2)
+    assert rows[7] == ("ge_1k", 2, 2, 2, 2, 2, 2)
+    assert rows[8] == ("ge_10k", 1, 1, 1, 1, 1, 1)
+    assert rows[9] == ("ge_100k", 0, 0, 0, 0, 0, 0)
+    assert rows[10] == ("ge_1m", 0, 0, 0, 0, 0, 0)
+
+
+def assert_miners_summary(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        """
+        select label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
+        from mtr.address_counts_by_balance_miners_summary;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 11
+    assert rows[0] == ("total", 1, 1, 1, 1, 1, 1)
+    assert rows[1] == ("ge_0p001", 1, 1, 1, 1, 1, 1)
+    assert rows[2] == ("ge_0p01", 1, 1, 1, 1, 1, 1)
+    assert rows[3] == ("ge_0p1", 1, 1, 1, 1, 1, 1)
+    assert rows[4] == ("ge_1", 1, 1, 1, 1, 1, 1)
+    assert rows[5] == ("ge_10", 0, 0, 0, 0, 0, 0)
+    assert rows[6] == ("ge_100", 0, 0, 0, 0, 0, 0)
+    assert rows[7] == ("ge_1k", 0, 0, 0, 0, 0, 0)
+    assert rows[8] == ("ge_10k", 0, 0, 0, 0, 0, 0)
+    assert rows[9] == ("ge_100k", 0, 0, 0, 0, 0, 0)
+    assert rows[10] == ("ge_1m", 0, 0, 0, 0, 0, 0)
