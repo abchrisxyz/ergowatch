@@ -33,7 +33,7 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &mut Cache
     // Insert new snapshots
     insert_p2pk_record(tx, block.height, p2pk_counts);
     insert_contract_record(tx, block.height, contract_counts);
-    insert_miner_record(tx, block.height, contract_counts);
+    insert_miner_record(tx, block.height, miner_counts);
 }
 
 pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut Cache) {

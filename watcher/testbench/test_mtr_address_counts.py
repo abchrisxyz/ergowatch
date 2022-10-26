@@ -221,6 +221,7 @@ def _test_db_state(conn: pg.Connection, s: Scenario):
     with conn.cursor() as cur:
         assert_p2pk_counts(cur, s)
         assert_contract_counts(cur, s)
+        assert_miner_counts(cur, s)
 
 
 def assert_db_constraints(conn: pg.Connection):
