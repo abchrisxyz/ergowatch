@@ -1,3 +1,4 @@
 psycopg>=3.0.8
 pytest
+pytest-asyncio
 pytest-order
