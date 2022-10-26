@@ -39,6 +39,7 @@ class TestList:
             "gate",
             "kucoin",
             "probit",
+            "tradeogre",
         ]
 
 

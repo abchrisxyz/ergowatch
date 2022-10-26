@@ -17,8 +17,8 @@ ADDR = {
 }
 
 ADDR_SQL = (
-    "insert into core.addresses (id, address, spot_height) values "
-    + ",".join([f"({i+1}, '{addr}', 1)" for i, addr in enumerate(ADDR)])
+    "insert into core.addresses (id, address, spot_height, p2pk, miner) values "
+    + ",".join([f"({i+1}, '{addr}', 1, True, False)" for i, addr in enumerate(ADDR)])
     + ";"
 )
 
@@ -28,12 +28,14 @@ def client():
     sql = f"""
         {ADDR_SQL}
         
-        insert into adr.erg (address_id, value) values        ({ADDR['addr1']}, 4000),
-        ({ADDR['addr2']}, 2000),
-        ({ADDR['addr3']}, 1000),
-        ({ADDR['addr4']}, 5000);
+        insert into adr.erg (address_id, value, mean_age_timestamp) values
+        ({ADDR['addr1']}, 4000, 0),
+        ({ADDR['addr2']}, 2000, 0),
+        ({ADDR['addr3']}, 1000, 0),
+        ({ADDR['addr4']}, 5000, 0);
 
-        insert into adr.tokens (address_id, token_id, value) values        ({ADDR['addr1']}, '{TOKEN_A}', 400),
+        insert into adr.tokens (address_id, token_id, value) values
+        ({ADDR['addr1']}, '{TOKEN_A}', 400),
         ({ADDR['addr1']}, '{TOKEN_B}', 800),
         ({ADDR['addr2']}, '{TOKEN_A}', 200),
         ({ADDR['addr3']}, '{TOKEN_A}', 100),

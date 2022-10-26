@@ -14,26 +14,30 @@ TOKEN_X = "validxtokenxidxofxnonxexistingxtokenxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 def client():
     coinex_main = "9fowPvQ2GXdmhD2bN54EL9dRnio3kBQGyrD3fkbHwuTXD6z1wBU"
     sql = f"""
-        insert into core.addresses (id, address, spot_height) values
-        (1, 'addr1', 10),
-        (2, 'addr2', 20),
-        (3, '{coinex_main}', 30);
+        insert into core.addresses (id, address, spot_height, p2pk, miner) values
+        (1, 'addr1', 10, True, False),
+        (2, 'addr2', 20, True, False),
+        (3, '{coinex_main}', 30, True, False);
 
-        insert into adr.erg_diffs (address_id, height, tx_id, value) values        (1, 10, 'tx_1',   5000),
+        insert into adr.erg_diffs (address_id, height, tx_id, value) values
+        (1, 10, 'tx_1',   5000),
         (1, 20, 'tx_2',  -2000),
         (2, 20, 'tx_2',   2000),
         (1, 30, 'tx_3',   1000);
 
-        insert into adr.erg (address_id, value) values        (1, 4000),
-        (2, 2000);
+        insert into adr.erg (address_id, value, mean_age_timestamp) values
+        (1, 4000, 0),
+        (2, 2000, 0);
 
-        insert into adr.tokens_diffs (address_id, token_id, height, tx_id, value) values        (1, '{TOKEN_A}', 10, 'tx_1',   500),
+        insert into adr.tokens_diffs (address_id, token_id, height, tx_id, value) values
+        (1, '{TOKEN_A}', 10, 'tx_1',   500),
         (1, '{TOKEN_B}', 10, 'tx_1',   800),
         (1, '{TOKEN_A}', 20, 'tx_2',  -200),
         (2, '{TOKEN_A}', 20, 'tx_2',   200),
         (1, '{TOKEN_A}', 30, 'tx_3',   100);
 
-        insert into adr.tokens (address_id, token_id, value) values        (1, '{TOKEN_A}', 400),
+        insert into adr.tokens (address_id, token_id, value) values
+        (1, '{TOKEN_A}', 400),
         (1, '{TOKEN_B}', 800),
         (2, '{TOKEN_A}', 200);
 

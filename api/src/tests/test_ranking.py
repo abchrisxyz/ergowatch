@@ -20,8 +20,13 @@ ADDR = {
 }
 
 ADDR_SQL = (
-    "insert into core.addresses (id, address, spot_height) values "
-    + ",".join([f"({i+1}, '{addr}', 1)" for i, addr in enumerate(ADDR)])
+    "insert into core.addresses (id, address, spot_height, p2pk, miner) values "
+    + ",".join(
+        [
+            f"({i+1}, '{addr}', 1, {'contract' in addr}, False)"
+            for i, addr in enumerate(ADDR)
+        ]
+    )
     + ";"
 )
 
@@ -31,17 +36,18 @@ def client():
     sql = f"""
         {ADDR_SQL}
 
-        insert into adr.erg (address_id, value) values        ({ADDR['9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       5000000),
-        ({ADDR['9addr2axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       4000000),
-        ({ADDR['9addr2bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       4000000),
-        ({ADDR['9addr4xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       3000000),
-        ({ADDR['9addr5axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       2000000),
-        ({ADDR['9addr5bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       2000000),
-        ({ADDR['9addr7xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       1000000),
-        ({ADDR['1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},   10000000000),
-        ({ADDR['9contract2xshorterthan51chars']},                         20000000000),
-        ({ADDR['9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx']}, 30000000000),
-        ({ADDR['4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},      4000000);
+        insert into adr.erg (address_id, value, mean_age_timestamp) values
+        ({ADDR['9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       5000000, 0),
+        ({ADDR['9addr2axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       4000000, 0),
+        ({ADDR['9addr2bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       4000000, 0),
+        ({ADDR['9addr4xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       3000000, 0),
+        ({ADDR['9addr5axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       2000000, 0),
+        ({ADDR['9addr5bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       2000000, 0),
+        ({ADDR['9addr7xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       1000000, 0),
+        ({ADDR['1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},   10000000000, 0),
+        ({ADDR['9contract2xshorterthan51chars']},                         20000000000, 0),
+        ({ADDR['9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx']}, 30000000000, 0),
+        ({ADDR['4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},      4000000, 0);
     """
     with MockDB(sql=sql) as db_name:
         with TestClient(app) as client:
