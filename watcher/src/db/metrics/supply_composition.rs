@@ -1,6 +1,9 @@
 /// Supply composition
 ///
 /// Emitted supply on various address types.
+use super::heights::Cache as HeightsCache;
+use super::utils::bootstrap_change_summary;
+use super::utils::refresh_change_summary;
 use crate::emission;
 use crate::parsing::BlockData;
 use log::info;
@@ -9,6 +12,15 @@ use postgres::Client;
 use postgres::Row;
 use postgres::Transaction;
 use std::time::Instant;
+
+const SUMMARY_COLUMNS: &[&'static str] = &[
+    "p2pks",
+    "cex_main",
+    "cex_deposits",
+    "contracts",
+    "miners",
+    "treasury",
+];
 
 pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &mut Cache) {
     // Get changes in address counts by balance
@@ -35,6 +47,10 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut Cach
     };
     assert_eq!(cache.curr.height, block.height - 1);
     assert_eq!(cache.prev.height, cache.curr.height - 1);
+}
+
+pub(super) fn refresh_summary(tx: &mut Transaction, hc: &HeightsCache) {
+    refresh_change_summary(tx, hc, "mtr.supply_composition", &SUMMARY_COLUMNS);
 }
 
 pub(super) fn repair(tx: &mut Transaction, height: i32) {
@@ -151,6 +167,11 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
             timer.elapsed().as_secs_f32()
         );
     }
+
+    // Summary tables
+    let mut tx = client.transaction()?;
+    bootstrap_change_summary(&mut tx, "mtr.supply_composition", &SUMMARY_COLUMNS);
+    tx.commit()?;
 
     client.execute(
         "update mtr._log set supply_composition_bootstrapped = TRUE;",

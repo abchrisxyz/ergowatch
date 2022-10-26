@@ -104,6 +104,7 @@ pub(super) fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result
 fn refresh_change_summaries(tx: &mut Transaction, heights: &heights::Cache) {
     utxos::refresh_summary(tx, heights);
     address_counts::refresh_summary(tx, heights);
+    supply_composition::refresh_summary(tx, heights);
 }
 
 #[derive(Debug)]

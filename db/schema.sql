@@ -618,6 +618,15 @@ create table mtr.supply_composition (
 	treasury bigint
 );
 
+create table mtr.supply_composition_summary (
+	label text not null primary key,
+	current bigint not null,
+	diff_1d bigint not null,
+	diff_1w bigint not null,
+	diff_4w bigint not null,
+	diff_6m bigint not null,
+	diff_1y bigint not null
+);
 
 -- Circulating supply distribution
 ------------------------------------------------------------------------------- 

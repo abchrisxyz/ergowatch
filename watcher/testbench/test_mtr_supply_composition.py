@@ -163,7 +163,7 @@ class TestGenesis:
     Start with empty, unconstrained db.
     """
 
-    scenario = Scenario(SCENARIO_DESCRIPTION, 0, 1234560000000)
+    scenario = Scenario(SCENARIO_DESCRIPTION, 0, Scenario.GENESIS_TIMESTAMP + 100_000)
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, unconstrained_db_class_scoped):
@@ -228,7 +228,7 @@ class TestRepair:
 
     # Start one block later so last block has height multiple of 5
     # and trigger a repair event.
-    scenario = Scenario(SCENARIO_DESCRIPTION, 199_999 + 1, 1234560000000)
+    scenario = Scenario(SCENARIO_DESCRIPTION, 199_999 + 1, 1234560000000, name="repair")
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, temp_db_class_scoped):
@@ -282,6 +282,7 @@ def _test_db_state(conn: pg.Connection, s: Scenario, bootstrapped=False):
     assert_db_constraints(conn)
     with conn.cursor() as cur:
         assert_supply_composition(cur, s, bootstrapped)
+        assert_summary(cur, s, bootstrapped)
 
 
 def assert_db_constraints(conn: pg.Connection):
@@ -311,12 +312,11 @@ def assert_supply_composition(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
     rows = cur.fetchall()
     assert len(rows) == 6
     ph = s.parent_height
-    tr = 75 * 10**8  # 7.5 ERG treasury reward
+    tr = initial_treasury_reward()
     if bootstrapped:
         # Treasury reward in first block is zero for h = 0
         # but will be non-zero otherwise
-        # pr stands for parent reward
-        pr = 0 if ph == 0 else tr
+        pr = parent_reward(ph)
         assert rows[0] == (ph + 0, 0, 0, 0, 0, 0, pr)
         assert rows[1] == (ph + 1, 600, 50, 100, 0, 10, 50 + pr + 1 * tr)
         assert rows[2] == (ph + 2, 400, 150, 0, 200, 10, 50 + pr + 2 * tr)
@@ -330,3 +330,48 @@ def assert_supply_composition(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
         assert rows[3] == (ph + 3, 500, 150, -100, 202, 6, 50)
         assert rows[4] == (ph + 4, 500, 150, -100, 302, 6, 50)
         assert rows[5] == (ph + 5, 500, 150, -100, 303, 6, 50)
+
+
+def assert_summary(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
+    # Repair scenario would need one more block to refresh summaries.
+    # Other scenario's already cover that aspect, so safe to skip here.
+    if s.name == "repair":
+        return
+
+    cur.execute(
+        """
+        select label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
+        from mtr.supply_composition_summary;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 6
+    ph = s.parent_height
+    tr = initial_treasury_reward()
+
+    if bootstrapped:
+        pr = parent_reward(ph)
+        assert rows[0] == ("p2pks", 400, 400, 400, 400, 400, 400)
+        assert rows[1] == ("cex_main", 150, 150, 150, 150, 150, 150)
+        assert rows[2] == ("cex_deposits", 0, 0, 0, 0, 0, 0)
+        assert rows[3] == ("contracts", 303, 303, 303, 303, 303, 303)
+        assert rows[4] == ("miners", 6, 6, 6, 6, 6, 6)
+        t = 50 + pr + 5 * tr
+        assert rows[5] == ("treasury", t, t - pr, t - pr, t - pr, t - pr, t - pr)
+    else:
+        assert rows[0] == ("p2pks", 500, 500, 500, 500, 500, 500)
+        assert rows[1] == ("cex_main", 150, 150, 150, 150, 150, 150)
+        assert rows[2] == ("cex_deposits", -100, -100, -100, -100, -100, -100)
+        assert rows[3] == ("contracts", 303, 303, 303, 303, 303, 303)
+        assert rows[4] == ("miners", 6, 6, 6, 6, 6, 6)
+        assert rows[5] == ("treasury", 50, 50, 50, 50, 50, 50)
+
+
+def initial_treasury_reward() -> int:
+    return 75 * 10**8  # 7.5 ERG treasury reward
+
+
+def parent_reward(parent_height: int) -> int:
+    # Treasury reward in first block is zero for h = 0
+    # but will be non-zero otherwise
+    return 0 if parent_height == 0 else initial_treasury_reward()

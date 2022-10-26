@@ -26,12 +26,14 @@ class Scenario:
         parent_height: int,
         first_ts: int,
         main_only: bool = False,
+        name: str = "",
     ):
         """
         `desc`: scenario description string
         `parent_height`: height of last block before first scenario block
         `first_ts`: timestamp of first scenario block
         `main_only`: ignore blocks not part of main chain
+        `name`: optional label
         """
         self._desc = desc
         self._parent_height = parent_height
@@ -41,6 +43,7 @@ class Scenario:
             parent_height + 1,
             first_ts,
         )
+        self.name = name
         if main_only:
             self._drop_fork_blocks()
         # Add genesis box to id map
