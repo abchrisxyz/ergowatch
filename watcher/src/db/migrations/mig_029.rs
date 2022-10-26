@@ -4,7 +4,7 @@
 use postgres::Transaction;
 
 pub(super) fn apply(tx: &mut Transaction) -> anyhow::Result<()> {
-    let tables = vec![
+    let bigint_tables = vec![
         "utxos_summary",
         "address_counts_by_balance_p2pk_summary",
         "address_counts_by_balance_contracts_summary",
@@ -12,7 +12,7 @@ pub(super) fn apply(tx: &mut Transaction) -> anyhow::Result<()> {
         "supply_composition_summary",
     ];
 
-    for table in tables {
+    for table in bigint_tables {
         tx.execute(
             &format!(
                 "
@@ -29,5 +29,22 @@ pub(super) fn apply(tx: &mut Transaction) -> anyhow::Result<()> {
             &[],
         )?;
     }
+
+    // Real tables
+    tx.execute(
+        &format!(
+            "
+            create table mtr.supply_age_days_summary (
+                label text not null primary key,
+                current real not null,
+                diff_1d real not null,
+                diff_1w real not null,
+                diff_4w real not null,
+                diff_6m real not null,
+                diff_1y real not null
+            );"
+        ),
+        &[],
+    )?;
     Ok(())
 }

@@ -1,5 +1,6 @@
 import pytest
 import psycopg as pg
+from typing import List
 
 from fixtures.api import MockApi, ApiUtil
 from fixtures.scenario import Scenario
@@ -162,7 +163,9 @@ class TestGenesis:
     Start with empty, unconstrained db.
     """
 
-    scenario = Scenario(SCENARIO_DESCRIPTION, 0, 1234560000000)
+    scenario = Scenario(
+        SCENARIO_DESCRIPTION, 0, Scenario.GENESIS_TIMESTAMP + 100_000, name="genesis"
+    )
 
     @pytest.fixture(scope="class")
     def synced_db(self, temp_cfg, unconstrained_db_class_scoped):
@@ -224,6 +227,7 @@ def _test_db_state(conn: pg.Connection, s: Scenario):
     with conn.cursor() as cur:
         assert_timestamps(cur, s)
         assert_days(cur, s)
+        assert_days_summary(cur, s)
 
 
 def assert_db_constraints(conn: pg.Connection):
@@ -291,7 +295,7 @@ def assert_timestamps(cur: pg.Cursor, s: Scenario):
     # produced by watcher. This is because the above assumes erg is
     # spend from all addresses while it is only spent from min1:
     overall_c = round(760 / 758 * overall_b - 4 / 758 * ta + 2 / 758 * tc)
-    assert overall_c == 1234560040106
+    assert overall_c == (1234560040106 if s.name != "genesis" else 1561978940106)
     assert rows[3] == (
         ph + 3,
         overall_c,
@@ -302,10 +306,10 @@ def assert_timestamps(cur: pg.Cursor, s: Scenario):
     )
     # In block d circulating supply goes from 758 to 858
     overall_d = round(758 / 858 * overall_c + 100 / 858 * td)
-    assert overall_d == 1234560070397
+    assert overall_d == (1234560070397 if s.name != "genesis" else 1561978970397)
     # Correct for rounding diffs between python and pg
     overall_d -= 1
-    assert overall_d == 1234560070396
+    assert overall_d == (1234560070396 if s.name != "genesis" else 1561978970396)
     assert rows[4] == (
         ph + 4,
         overall_d,
@@ -316,7 +320,7 @@ def assert_timestamps(cur: pg.Cursor, s: Scenario):
     )
     # In block e circulating supply goes from 858 to 859
     overall_e = round(858 / 859 * overall_d + 1 / 859 * te)
-    assert overall_e == 1234560070780
+    assert overall_e == (1234560070780 if s.name != "genesis" else 1561978970780)
     assert rows[5] == (
         ph + 5,
         overall_e,
@@ -330,24 +334,7 @@ def assert_timestamps(cur: pg.Cursor, s: Scenario):
 
 def assert_days(cur: pg.Cursor, s: Scenario):
     # Read age timestamps
-    rows = cur.execute(
-        """
-        select height
-            , overall
-            , p2pks
-            , cexs
-            , contracts
-            , miners
-        from mtr.supply_age_timestamps
-        order by 1;
-        """
-    )
-    rows = cur.fetchall()
-    age_tss = [list(r) for r in rows]
-
-    def d(ts1: int, ts2: int) -> float:
-        "Returns diff between timestamps in days"
-        return (ts1 - ts2) / 86400_000.0
+    age_tss = read_age_timestamps(cur)
 
     # Read days
     cur.execute(
@@ -373,17 +360,82 @@ def assert_days(cur: pg.Cursor, s: Scenario):
     te = s.parent_ts + 5 * dt
     assert rows[0] == (ph + 0, 0.0, 0.0, 0.0, 0.0, 0.0)
     assert rows[1] == pytest.approx(
-        [ph + 1] + [d(ta, age_tss[1][i]) for i in range(1, 6)]
+        [ph + 1] + [ts_diff_in_days(ta, age_tss[1][i]) for i in range(1, 6)]
     )
     assert rows[2] == pytest.approx(
-        [ph + 2] + [d(tb, age_tss[2][i]) for i in range(1, 6)]
+        [ph + 2] + [ts_diff_in_days(tb, age_tss[2][i]) for i in range(1, 6)]
     )
     assert rows[3] == pytest.approx(
-        [ph + 3] + [d(tc, age_tss[3][i]) for i in range(1, 6)]
+        [ph + 3] + [ts_diff_in_days(tc, age_tss[3][i]) for i in range(1, 6)]
     )
     assert rows[4] == pytest.approx(
-        [ph + 4] + [d(td, age_tss[4][i]) for i in range(1, 6)]
+        [ph + 4] + [ts_diff_in_days(td, age_tss[4][i]) for i in range(1, 6)]
     )
     assert rows[5] == pytest.approx(
-        [ph + 5] + [d(te, age_tss[5][i]) for i in range(1, 6)]
+        [ph + 5] + [ts_diff_in_days(te, age_tss[5][i]) for i in range(1, 6)]
     )
+
+
+def assert_days_summary(cur: pg.Cursor, s: Scenario):
+    # Read age timestamps
+    age_tss = read_age_timestamps(cur)
+
+    cur.execute(
+        """
+        select label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
+        from mtr.supply_age_days_summary;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 5
+
+    dt = 100_000
+    te = s.parent_ts + 5 * dt
+    # Age in days after last block
+    days = [ts_diff_in_days(te, age_tss[5][i]) for i in range(1, 6)]
+
+    assert rows[0][0] == "overall"
+    assert rows[0][1:] == pytest.approx(
+        (days[0], days[0], days[0], days[0], days[0], days[0])
+    )
+    assert rows[1][0] == "p2pks"
+    assert rows[1][1:] == pytest.approx(
+        (days[1], days[1], days[1], days[1], days[1], days[1])
+    )
+    assert rows[2][0] == "cexs"
+    assert rows[2][1:] == pytest.approx(
+        (days[2], days[2], days[2], days[2], days[2], days[2])
+    )
+    assert rows[3][0] == "contracts"
+    assert rows[3][1:] == pytest.approx(
+        (days[3], days[3], days[3], days[3], days[3], days[3])
+    )
+    assert rows[4][0] == "miners"
+    assert rows[4][1:] == pytest.approx(
+        (days[4], days[4], days[4], days[4], days[4], days[4])
+    )
+
+
+def read_age_timestamps(cur: pg.Cursor) -> List[List[int]]:
+    """
+    Returns table of age timestamps as list of rows.
+    """
+    rows = cur.execute(
+        """
+        select height
+            , overall
+            , p2pks
+            , cexs
+            , contracts
+            , miners
+        from mtr.supply_age_timestamps
+        order by 1;
+        """
+    )
+    rows = cur.fetchall()
+    return [list(r) for r in rows]
+
+
+def ts_diff_in_days(ts1: int, ts2: int) -> float:
+    """Returns diff between timestamps in days"""
+    return (ts1 - ts2) / 86400_000.0

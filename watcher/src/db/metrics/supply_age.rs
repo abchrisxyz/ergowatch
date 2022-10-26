@@ -1,6 +1,9 @@
+/// Mean age of emitted supply
+use super::heights::Cache as HeightsCache;
 use super::supply_composition::Cache as SupplyCompositionCache;
 use super::supply_composition::Record as SupplyCompositionRecord;
-/// Mean age of emitted supply
+use super::utils::bootstrap_change_summary;
+use super::utils::refresh_change_summary;
 use crate::db::addresses;
 use crate::parsing::BlockData;
 use log::info;
@@ -23,6 +26,8 @@ Ignoring all (re)-emission addresses
     abs(D) always <= C, so dt always >= 0
     t(h) = t(h-1) + dt
 */
+
+const SUMMARY_COLUMNS: &[&'static str] = &["overall", "p2pks", "cexs", "contracts", "miners"];
 
 pub(super) fn include(
     tx: &mut Transaction,
@@ -105,6 +110,10 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut Cach
     cache.height = new_cache.height;
     cache.timestamps = new_cache.timestamps;
     assert_eq!(cache.height, block.height - 1);
+}
+
+pub(super) fn refresh_summary(tx: &mut Transaction, hc: &HeightsCache) {
+    refresh_change_summary(tx, hc, "mtr.supply_age_days", &SUMMARY_COLUMNS);
 }
 
 pub fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
@@ -320,8 +329,11 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
         )
         .unwrap();
 
-    // Cleanup replay tables
+    // Summary tables
     let mut tx = client.transaction()?;
+    bootstrap_change_summary(&mut tx, "mtr.supply_age_days", &SUMMARY_COLUMNS);
+
+    // Cleanup replay tables
     addresses::replay::cleanup(&mut tx, replay_id);
     tx.commit()?;
 

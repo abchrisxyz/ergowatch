@@ -665,6 +665,9 @@ create table mtr.cex_supply (
 	deposit bigint
 );
 
+-- Supply age
+-------------------------------------------------------------------------------
+
 -- Mean age timestamp of supply
 create table mtr.supply_age_timestamps (
 	height int,
@@ -682,6 +685,16 @@ create table mtr.supply_age_days (
 	cexs real,         -- main cex addresses
 	contracts real,    -- excluding EF treasury
 	miners real        -- mining contracts
+);
+
+create table mtr.supply_age_days_summary (
+	label text not null primary key,
+	current real not null,
+	diff_1d real not null,
+	diff_1w real not null,
+	diff_4w real not null,
+	diff_6m real not null,
+	diff_1y real not null
 );
 
 create table mtr.transactions(
