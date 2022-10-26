@@ -253,7 +253,9 @@ def _test_db_state(conn: pg.Connection, s: Scenario):
         assert_utxos(cur, s)
         assert_utxos_summary(cur, s)
         assert_transactions(cur, s)
+        assert_transactions_summary(cur, s)
         assert_volume(cur, s)
+        assert_volume_summary(cur, s)
 
 
 def assert_db_constraints(conn: pg.Connection):
@@ -309,6 +311,20 @@ def assert_transactions(cur: pg.Cursor, s: Scenario):
     assert rows[3] == (s.parent_height + 3, 5, 1, 0)  # +2 txs
 
 
+def assert_transactions_summary(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        """
+        select label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
+        from mtr.transactions_summary;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 3
+    assert rows[0] == ("daily_1d", 5, 4, 4, 4, 4, 4)
+    assert rows[1] == ("daily_7d", 1, 1, 1, 1, 1, 1)
+    assert rows[2] == ("daily_28d", 0, 0, 0, 0, 0, 0)
+
+
 def assert_volume(cur: pg.Cursor, s: Scenario):
     cur.execute(
         "select height, daily_1d, daily_7d, daily_28d from mtr.volume order by 1;"
@@ -319,6 +335,20 @@ def assert_volume(cur: pg.Cursor, s: Scenario):
     assert rows[1] == (s.parent_height + 1, 0, 0, 0)
     assert rows[2] == (s.parent_height + 2, 50, 7, 2)
     assert rows[3] == (s.parent_height + 3, 55, 8, 2)
+
+
+def assert_volume_summary(cur: pg.Cursor, s: Scenario):
+    cur.execute(
+        """
+        select label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
+        from mtr.volume_summary;
+        """
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 3
+    assert rows[0] == ("daily_1d", 55, 55, 55, 55, 55, 55)
+    assert rows[1] == ("daily_7d", 8, 8, 8, 8, 8, 8)
+    assert rows[2] == ("daily_28d", 2, 2, 2, 2, 2, 2)
 
 
 def assert_utxos(cur: pg.Cursor, s: Scenario):
@@ -335,8 +365,7 @@ def assert_utxos_summary(cur: pg.Cursor, s: Scenario):
     cur.execute(
         """
         select label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
-        from mtr.utxos_summary
-        order by 1;
+        from mtr.utxos_summary;
         """
     )
     rows = cur.fetchall()

@@ -1,8 +1,14 @@
-use super::Cache;
 use crate::parsing::BlockData;
 use log::info;
 use postgres::Client;
 use postgres::Transaction;
+
+use super::heights::Cache as HeightsCache;
+use super::utils::bootstrap_change_summary;
+use super::utils::refresh_change_summary;
+use super::Cache;
+
+const SUMMARY_COLUMNS: &[&'static str] = &["daily_1d", "daily_7d", "daily_28d"];
 
 pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &Cache) {
     tx.execute(
@@ -19,6 +25,10 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &Cache) {
 
 pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
     tx.execute(sql::DELETE_SNAPSHOT, &[&block.height]).unwrap();
+}
+
+pub(super) fn refresh_summary(tx: &mut Transaction, hc: &HeightsCache) {
+    refresh_change_summary(tx, hc, "mtr.transactions", &SUMMARY_COLUMNS);
 }
 
 pub fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
@@ -81,6 +91,10 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
         ",
         &[],
     )?;
+
+    // Summary table
+    bootstrap_change_summary(&mut tx, "mtr.transactions", &SUMMARY_COLUMNS);
+
     tx.execute("alter table mtr.transactions set logged;", &[])?;
     tx.execute("drop table tmp_txs;", &[])?;
     tx.commit()?;

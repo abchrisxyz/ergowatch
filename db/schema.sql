@@ -593,7 +593,6 @@ create table mtr.address_counts_by_balance_miners_summary (
 	diff_1y bigint not null
 );
 
-
 -- Supply composition
 ------------------------------------------------------------------------------- 
 -- Emitted supply by address type
@@ -728,6 +727,9 @@ create table mtr.supply_age_days_summary (
 	diff_1y real not null
 );
 
+-- Transaction counts
+-------------------------------------------------------------------------------
+
 create table mtr.transactions(
 	height int,
 	daily_1d bigint,    -- txs/day over past 24h
@@ -735,9 +737,33 @@ create table mtr.transactions(
 	daily_28d bigint    -- txs/day over past 4 weeks
 );
 
+create table mtr.transactions_summary (
+	label text not null primary key,
+	current bigint not null,
+	diff_1d bigint not null,
+	diff_1w bigint not null,
+	diff_4w bigint not null,
+	diff_6m bigint not null,
+	diff_1y bigint not null
+);
+
+
+-- Transfer volume
+-------------------------------------------------------------------------------
+
 create table mtr.volume(
 	height int,
 	daily_1d bigint,    -- daily volume over past 24h
 	daily_7d bigint,    -- daily volume over past 7 days
 	daily_28d bigint    -- daily volume over past 4 weeks
+);
+
+create table mtr.volume_summary (
+	label text not null primary key,
+	current bigint not null,
+	diff_1d bigint not null,
+	diff_1w bigint not null,
+	diff_4w bigint not null,
+	diff_6m bigint not null,
+	diff_1y bigint not null
 );

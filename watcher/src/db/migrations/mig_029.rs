@@ -13,6 +13,8 @@ pub(super) fn apply(tx: &mut Transaction) -> anyhow::Result<()> {
         "supply_on_top_addresses_p2pk_summary",
         "supply_on_top_addresses_contracts_summary",
         "supply_on_top_addresses_miners_summary",
+        "transactions_summary",
+        "volume_summary",
     ];
 
     for table in bigint_tables {
