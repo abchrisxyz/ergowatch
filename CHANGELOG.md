@@ -4,12 +4,13 @@
 
 BREAKING CHANGES - requires a full db resync
 
-
 ### New features
 
 [Issue 58](https://github.com/abchrisxyz/ergowatch/issues/58) - Added address counts by minimal balance
 
 Added -r option to resume interrupted repair sessions.
+
+Tracking new exchanges (TradeOgre and Huobi)
 
 ### Fixed
 

@@ -397,13 +397,14 @@ def assert_cex_ids(cur: pg.Cursor):
         """
     )
     rows = cur.fetchall()
-    assert len(rows) == 5
+    assert len(rows) == 6
     assert rows == [
         (1, "Coinex", "coinex"),
         (2, "Gate.io", "gate"),
         (3, "KuCoin", "kucoin"),
         (4, "ProBit", "probit"),
         (5, "TradeOgre", "tradeogre"),
+        (6, "Huobi", "huobi"),
     ]
 
 
@@ -417,7 +418,7 @@ def assert_main_addresses_list(cur: pg.Cursor):
         """
     )
     rows = cur.fetchall()
-    assert len(rows) == 11
+    assert len(rows) == 12
 
     # Coinex
     assert (1, "9fowPvQ2GXdmhD2bN54EL9dRnio3kBQGyrD3fkbHwuTXD6z1wBU") in rows
@@ -435,6 +436,8 @@ def assert_main_addresses_list(cur: pg.Cursor):
     assert (4, "9eg2Rz3tGogzLaVZhG1ycPj1dJtN4Jn8ySa2mnVLJyVJryb13QB") in rows
     # TradeOgre
     assert (5, "9fs99SejQxDjnjwrZ13YMZZ3fwMEVXFewpWWj63nMhZ6zDf2gif") in rows
+    # Huobi
+    assert (6, "9feMGM1qwNG8NnNuk3pz4yeCGm59s2RbjFnS7DxwUxCbzUrNnJw") in rows
 
 
 def assert_ignored_addresses_list(cur: pg.Cursor):

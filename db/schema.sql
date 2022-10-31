@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 29);
+insert into ew.revision (major, minor) values (3, 30);
 
 create table ew.repairs (
 	singleton int primary key default 1,
@@ -237,8 +237,8 @@ insert into cex.cexs (id, name, text_id) values
 	(2, 'Gate.io', 'gate'),
 	(3, 'KuCoin', 'kucoin'),
 	(4, 'ProBit', 'probit'),
-	(5, 'TradeOgre', 'tradeogre')
-;
+	(5, 'TradeOgre', 'tradeogre'),
+	(6, 'Huobi', 'huobi');
 
 create type cex.t_address_type as enum ('main', 'deposit');
 
@@ -309,7 +309,7 @@ create table cex.addresses_conflicts (
 	height (the earliest height of deposit txs).
 	
 	New blocks are added with status 'pending', indicating they haven't
-	been processed in a repait event yet.
+	been processed in a repair event yet.
 
 	When an unprocessed block is rolled back, its deposit addresses
 	are removed from cex.addresses and it is itself removed from this table.
@@ -397,7 +397,10 @@ insert into cex.main_addresses_list (cex_id, address) values
 	(4, '9eg2Rz3tGogzLaVZhG1ycPj1dJtN4Jn8ySa2mnVLJyVJryb13QB'),
 
 	-- TradeOgre
-	(5, '9fs99SejQxDjnjwrZ13YMZZ3fwMEVXFewpWWj63nMhZ6zDf2gif');
+	(5, '9fs99SejQxDjnjwrZ13YMZZ3fwMEVXFewpWWj63nMhZ6zDf2gif'),
+
+	-- Huobi
+	(6, '9feMGM1qwNG8NnNuk3pz4yeCGm59s2RbjFnS7DxwUxCbzUrNnJw');
 	
 
 insert into cex.ignored_addresses_list (address) values
