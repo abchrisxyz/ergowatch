@@ -11,7 +11,7 @@ The distance between `fr` and `to` should not exceed 1000 times the resolution s
 
 If `r` is omitted, default `block` level is used.
 
-If none of `fr` and `to` are specified, returns last `24h`, `1h` or `block` level record, according to `r`.
+If none of `fr` and `to` are specified, returns last `block` level record, `r` has no effect here.
 
 If `fr` is specified without `to`, returns records since `fr`, up to max of window size.
 
