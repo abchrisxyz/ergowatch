@@ -40,11 +40,12 @@ Rules of thumb:
  - all token values expressed in integer form
  - all timestamps in milliseconds since unix epoch (same as node api)
  
-Most endpoints will accept a `?token_id=` query parameter to return data relating to a given token instead of ERG itself.
+Some endpoints will accept a `?token_id=` query parameter to return data relating to a given token instead of ERG itself.
 
-[Swagger]({root_path}/docs) | [ReDoc]({root_path}/redoc)
-
-[Release notes](https://github.com/abchrisxyz/ergowatch/blob/master/CHANGELOG.md)
+[Swagger]({root_path}/docs)
+| [ReDoc]({root_path}/redoc)
+| [Release notes](https://github.com/abchrisxyz/ergowatch/blob/master/CHANGELOG.md)
+| [Terms of Service]("http://ergo.watch/apis/")
 """
 # TODO: explain history vs series
 
@@ -99,7 +100,6 @@ app = FastAPI(
     title="ErgoWatch",
     version="0.5.0-dev",
     description=description,
-    terms_of_service="http://ergo.watch/apis/",
     openapi_tags=tags_metadata,
     root_path=root_path,
 )
