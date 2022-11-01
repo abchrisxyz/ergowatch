@@ -40,6 +40,7 @@ class TestList:
             "kucoin",
             "probit",
             "tradeogre",
+            "huobi",
         ]
 
 
