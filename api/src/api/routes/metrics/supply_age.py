@@ -8,10 +8,12 @@ from fastapi import Request
 from pydantic import BaseModel
 
 router = r = APIRouter()
+summary_router = s = APIRouter()
 
-from . import GENESIS_TIMESTAMP
+from . import GENESIS_TIMESTAMP, SUMMARY_FIELDS
 from . import TimeResolution
 from . import TimeWindowLimits
+from . import MetricsSummaryRecord
 
 
 class SupplyAgeSeries(BaseModel):
@@ -143,3 +145,20 @@ async def _get_fr_to(request: Request, fr: int, to: int, r: TimeResolution):
         "contracts": [r["contracts"] for r in rows],
         "miners": [r["miners"] for r in rows],
     }
+
+
+@s.get("", response_model=List[MetricsSummaryRecord], summary=" ")
+async def change_summary(request: Request):
+    query = f"""
+        select label
+            , current
+            , diff_1d
+            , diff_1w
+            , diff_4w
+            , diff_6m
+            , diff_1y
+        from mtr.supply_age_days_summary;
+    """
+    async with request.app.state.db.acquire() as conn:
+        rows = await conn.fetch(query)
+    return [{f: r[f] for f in SUMMARY_FIELDS} for r in rows]

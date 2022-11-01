@@ -7,10 +7,12 @@ from fastapi import Request
 from pydantic import BaseModel
 
 router = r = APIRouter()
+summary_router = s = APIRouter()
 
-from . import GENESIS_TIMESTAMP
+from . import GENESIS_TIMESTAMP, SUMMARY_FIELDS
 from . import TimeResolution
 from . import TimeWindowLimits
+from . import MetricsSummaryRecord
 
 
 class AddressType(str, Enum):
@@ -143,3 +145,20 @@ async def _get_fr_to(
         "top_10": [r["top_10"] for r in rows],
         "circ_supply": [r["circulating_supply"] for r in rows],
     }
+
+
+@s.get("/{address_type}", response_model=List[MetricsSummaryRecord], summary=" ")
+async def change_summary(request: Request, address_type: AddressType):
+    query = f"""
+        select label
+            , current
+            , diff_1d
+            , diff_1w
+            , diff_4w
+            , diff_6m
+            , diff_1y
+        from mtr.supply_on_top_addresses_{address_type}_summary;
+    """
+    async with request.app.state.db.acquire() as conn:
+        rows = await conn.fetch(query)
+    return [{f: r[f] for f in SUMMARY_FIELDS} for r in rows]

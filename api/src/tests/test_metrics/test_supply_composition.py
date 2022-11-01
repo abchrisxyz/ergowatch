@@ -90,6 +90,12 @@ def client():
         ({BLOCK_HS[3]}, {to_sql(BLOCK_VALS[3])}),
         ({BLOCK_HS[4]}, {to_sql(BLOCK_VALS[4])}),
         ({BLOCK_HS[5]}, {to_sql(BLOCK_VALS[5])});
+
+        insert into mtr.supply_composition_summary(
+            label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
+        ) values
+            ('label_1', 1, 2, 3, 4, 5, 6),
+            ('label_2', 10, 20, 30, 40, 50, 60);
     """
     with MockDB(sql=sql) as _:
         with TestClient(app) as client:
@@ -276,3 +282,29 @@ def test_default_r_is_block(client):
         "miners": [LAST_VAL[4]],
         "treasury": [LAST_VAL[5]],
     }
+
+
+def test_summary(client):
+    url = f"/metrics/summary/supply/composition"
+    response = client.get(url)
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "label": "label_1",
+            "current": 1,
+            "diff_1d": 2,
+            "diff_1w": 3,
+            "diff_4w": 4,
+            "diff_6m": 5,
+            "diff_1y": 6,
+        },
+        {
+            "label": "label_2",
+            "current": 10,
+            "diff_1d": 20,
+            "diff_1w": 30,
+            "diff_4w": 40,
+            "diff_6m": 50,
+            "diff_1y": 60,
+        },
+    ]

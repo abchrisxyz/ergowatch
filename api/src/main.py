@@ -12,6 +12,7 @@ try:
     from api.routes.tokens import tokens_router
     from api.routes.status import status_router
     from api.routes.metrics import metrics_router
+    from api.routes.metrics import metrics_summary_router
     from api.routes.exchanges import exchanges_router
     from api.routes.lists import lists_router
     from api.routes.utils import utils_router
@@ -24,6 +25,7 @@ except ImportError:
     from .api.routes.tokens import tokens_router
     from .api.routes.status import status_router
     from .api.routes.metrics import metrics_router
+    from .api.routes.metrics import metrics_summary_router
     from .api.routes.exchanges import exchanges_router
     from .api.routes.lists import lists_router
     from .api.routes.utils import utils_router
@@ -80,6 +82,10 @@ tags_metadata = [
         },
     },
     {
+        "name": "metrics summaries",
+        "description": "Summary of changes over past day, week, month, half year and year",
+    },
+    {
         "name": "tokens",
         "description": "Token specific data",
     },
@@ -124,6 +130,9 @@ app.include_router(contracts_router, prefix="/contracts", tags=["contracts"])
 app.include_router(exchanges_router, prefix="/exchanges", tags=["exchanges"])
 app.include_router(lists_router, prefix="/lists", tags=["lists"])
 app.include_router(metrics_router, prefix="/metrics", tags=["metrics"])
+app.include_router(
+    metrics_summary_router, prefix="/metrics/summary", tags=["metrics summaries"]
+)
 app.include_router(p2pk_router, prefix="/p2pk", tags=["p2pk"])
 app.include_router(tokens_router, prefix="/tokens", tags=["tokens"])
 app.include_router(utils_router, prefix="/utils", tags=["utils"])

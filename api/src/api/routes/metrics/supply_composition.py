@@ -1,4 +1,3 @@
-from enum import Enum
 from textwrap import dedent
 from typing import List
 from fastapi import APIRouter
@@ -8,10 +7,12 @@ from fastapi import Request
 from pydantic import BaseModel
 
 router = r = APIRouter()
+summary_router = s = APIRouter()
 
-from . import GENESIS_TIMESTAMP
+from . import GENESIS_TIMESTAMP, SUMMARY_FIELDS
 from . import TimeResolution
 from . import TimeWindowLimits
+from . import MetricsSummaryRecord
 
 
 class SupplyCompositionSeries(BaseModel):
@@ -22,6 +23,15 @@ class SupplyCompositionSeries(BaseModel):
     contracts: List[int]
     miners: List[int]
     treasury: List[int]
+
+
+class MetricsSummary(BaseModel):
+    p2pks: MetricsSummaryRecord
+    cex_main: MetricsSummaryRecord
+    cex_deposits: MetricsSummaryRecord
+    contracts: MetricsSummaryRecord
+    miners: MetricsSummaryRecord
+    treasury: MetricsSummaryRecord
 
 
 @r.get(
@@ -153,3 +163,24 @@ async def _get_fr_to(request: Request, fr: int, to: int, r: TimeResolution):
         "miners": [r["miners"] for r in rows],
         "treasury": [r["treasury"] for r in rows],
     }
+
+
+@s.get(
+    "",
+    response_model=List[MetricsSummaryRecord],
+    summary=" ",
+)
+async def change_summary(request: Request):
+    query = f"""
+        select label
+            , current
+            , diff_1d
+            , diff_1w
+            , diff_4w
+            , diff_6m
+            , diff_1y
+        from mtr.supply_composition_summary;
+    """
+    async with request.app.state.db.acquire() as conn:
+        rows = await conn.fetch(query)
+    return [{f: r[f] for f in SUMMARY_FIELDS} for r in rows]

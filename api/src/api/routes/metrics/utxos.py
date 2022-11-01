@@ -1,14 +1,17 @@
+from typing import List
 from fastapi import APIRouter
 from fastapi import HTTPException
 from fastapi import Query
 from fastapi import Request
 
 router = r = APIRouter()
+summary_router = s = APIRouter()
 
-from . import GENESIS_TIMESTAMP
+from . import GENESIS_TIMESTAMP, SUMMARY_FIELDS
 from . import TimeResolution
 from . import TimeWindowLimits
 from . import MetricsSeries
+from . import MetricsSummaryRecord
 
 
 @r.get(
@@ -97,3 +100,20 @@ async def _count_fr_to(request: Request, fr: int, to: int, r: TimeResolution):
         "timestamps": [r["timestamp"] for r in rows],
         "values": [r["value"] for r in rows],
     }
+
+
+@s.get("", response_model=List[MetricsSummaryRecord], summary=" ")
+async def change_summary(request: Request):
+    query = f"""
+        select label
+            , current
+            , diff_1d
+            , diff_1w
+            , diff_4w
+            , diff_6m
+            , diff_1y
+        from mtr.utxos_summary;
+    """
+    async with request.app.state.db.acquire() as conn:
+        rows = await conn.fetch(query)
+    return [{f: r[f] for f in SUMMARY_FIELDS} for r in rows]
