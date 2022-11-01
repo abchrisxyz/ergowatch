@@ -17,6 +17,8 @@ TEXT2ID = {
     "gate": 2,
     "kucoin": 3,
     "probit": 4,
+    "tradeogre": 5,
+    "huobi": 6,
 }
 
 
@@ -25,6 +27,8 @@ class Exchange(str, Enum):
     gate = "gate"
     kucoin = "kucoin"
     probit = "probit"
+    tradeogre = "tradeogre"
+    huobi = "huobi"
 
 
 class ExchangeSupply(BaseModel):
