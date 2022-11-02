@@ -1,21 +1,40 @@
 # Changelog
 
-## v0.5.0-dev - UNRELEASED
+## v0.5.0 - 2022-11-02
 
 BREAKING CHANGES - requires a full db resync
 
 ### New features
 
-[Issue 58](https://github.com/abchrisxyz/ergowatch/issues/58) - Added address counts by minimal balance
-
 Added -r option to resume interrupted repair sessions.
 
 Tracking new exchanges (TradeOgre and Huobi)
 
+[Issue 38](https://github.com/abchrisxyz/ergowatch/issues/38) - Sync CoinGecko ERG/USD data
+
+[Issue 43](https://github.com/abchrisxyz/ergowatch/issues/43) - Added supply age metrics
+
+[Issue 57](https://github.com/abchrisxyz/ergowatch/issues/57) - Track address level supply age (no api yet)
+
+[Issue 58](https://github.com/abchrisxyz/ergowatch/issues/58) - Added address counts by minimal balance
+
+[Issue 67](https://github.com/abchrisxyz/ergowatch/issues/67) - Added supply distribution metrics
+
+[Issue 68](https://github.com/abchrisxyz/ergowatch/issues/68) - Added transaction metrics
+
+[Issue 69](https://github.com/abchrisxyz/ergowatch/issues/69) - Added volume metrics
+
+Added supply composition metrics
+
+Added metrics summaries
+
+### Changed
+
+Calls to `/metrics` api's now always include latest available record if time window spans latest timestamp, regardless of `r` value. See [time_windows.md](https://github.com/abchrisxyz/ergowatch/blob/master/api/src/api/routes/metrics/time_windows.md).
+
 ### Fixed
 
 Fixed panics on repair conflicts.
-
 
 ## v0.4.3 - 2022-09-26
 
