@@ -45,7 +45,7 @@ Some endpoints will accept a `?token_id=` query parameter to return data relatin
 [Swagger]({root_path}/docs)
 | [ReDoc]({root_path}/redoc)
 | [Release notes](https://github.com/abchrisxyz/ergowatch/blob/master/CHANGELOG.md)
-| [Terms of Service]("http://ergo.watch/apis/")
+| [Terms of Service](https://ergo.watch/apis/)
 """
 # TODO: explain history vs series
 
