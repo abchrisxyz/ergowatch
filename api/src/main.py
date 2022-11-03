@@ -30,8 +30,10 @@ except ImportError:
     from .api.routes.lists import lists_router
     from .api.routes.utils import utils_router
 
-root_path = "/" if "DEVMODE" in os.environ else "/api/v0"
-print(root_path)
+root_path = "/"
+if "FASTAPI_ROOT_PATH" in os.environ:
+    root_path = os.environ["FASTAPI_ROOT_PATH"]
+
 description = f"""
 ErgoWatch API docs.
 

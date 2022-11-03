@@ -52,6 +52,8 @@ services:
       POSTGRES_HOST: db
       POSTGRES_DB: ergo
       POSTGRES_USER: ergo
+      # If serving the api behind a reverse proxy with a prefix, set the prefix here
+      FASTAPI_ROOT_PATH: ""
     env_file:
       # Defines POSTGRES_PASSWORD
       - ./db/db.secret
