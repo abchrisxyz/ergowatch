@@ -7,7 +7,7 @@ Ergo blockchain stats & monitoring.
 
 ErgoWatch consists of a chain indexer (the "watcher") and an API exposing indexed data.
 
-API docs available at https://ergo.watch/api/v0/docs.
+API docs available at https://api.ergo.watch/docs.
 
 If looking for the frontend of https://ergo.watch see https://github.com/abchrisxyz/ergowatch-ui.
 
