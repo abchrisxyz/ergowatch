@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.1 - UNRELEASED
+
+### Changed
+
+Removed hard-coded API response CORS headers. 
+
+
 ## v0.5.0 - 2022-11-02
 
 BREAKING CHANGES - requires a full db resync
