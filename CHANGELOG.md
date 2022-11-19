@@ -2,6 +2,10 @@
 
 ## v0.5.1 - UNRELEASED
 
+### New Features
+
+Added `/repairs` endpoint exposing repair sessions info
+
 ### Changed
 
 Removed hard-coded API response CORS headers. 
