@@ -314,11 +314,11 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
             "
             insert into mtr.supply_age_days (height, overall, p2pks, cexs, contracts, miners)
                 select h.height
-                    , ((h.timestamp - t.overall) / 86400000.)::real
-                    , ((h.timestamp - t.p2pks) / 86400000.)::real
-                    , ((h.timestamp - t.cexs) / 86400000.)::real
-                    , ((h.timestamp - t.contracts) / 86400000.)::real
-                    , ((h.timestamp - t.miners) / 86400000.)::real
+                    , case when t.overall <> 0 then ((h.timestamp - t.overall) / 86400000.)::real else 0::real end
+                    , case when t.p2pks <> 0 then ((h.timestamp - t.p2pks) / 86400000.)::real else 0::real end
+                    , case when t.cexs <> 0 then ((h.timestamp - t.cexs) / 86400000.)::real else 0::real end
+                    , case when t.contracts <> 0 then ((h.timestamp - t.contracts) / 86400000.)::real else 0::real end
+                    , case when t.miners <> 0 then ((h.timestamp - t.miners) / 86400000.)::real else 0::real end
                 from mtr.supply_age_timestamps t
                 join core.headers h on h.height = t.height
                 left join mtr.supply_age_days d on d.height = t.height
@@ -621,11 +621,11 @@ mod sql {
     pub(super) const APPEND_DAYS_SNAPSHOT: &str = "
         insert into mtr.supply_age_days (height, overall, p2pks, cexs, contracts, miners)
         select $1
-            , (($2 - overall) / 86400000.)::real
-            , (($2 - p2pks) / 86400000.)::real
-            , (($2 - cexs) / 86400000.)::real
-            , (($2 - contracts) / 86400000.)::real
-            , (($2 - miners) / 86400000.)::real
+            , case when overall <> 0 then (($2 - overall) / 86400000.)::real else 0::real end
+            , case when p2pks <> 0 then (($2 - p2pks) / 86400000.)::real else 0::real end
+            , case when cexs <> 0 then (($2 - cexs) / 86400000.)::real else 0::real end
+            , case when contracts <> 0 then (($2 - contracts) / 86400000.)::real else 0::real end
+            , case when miners <> 0 then (($2 - miners) / 86400000.)::real else 0::real end
         from mtr.supply_age_timestamps
         where height = $1;
         ";

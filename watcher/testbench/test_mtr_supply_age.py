@@ -437,5 +437,9 @@ def read_age_timestamps(cur: pg.Cursor) -> List[List[int]]:
 
 
 def ts_diff_in_days(ts1: int, ts2: int) -> float:
-    """Returns diff between timestamps in days"""
+    """
+    Returns diff between timestamps in days or zero if zero timestamp
+    """
+    if 0 in [ts1, ts2]:
+        return 0
     return (ts1 - ts2) / 86400_000.0
