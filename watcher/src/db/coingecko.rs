@@ -23,6 +23,7 @@ pub(super) fn include_timeseries(
     // Update cache
     if let Some(price) = timeseries.last() {
         cache.last_datapoint.timestamp = price.timestamp_ms;
+        cache.last_datapoint.value = price.usd;
     }
     Ok(())
 }
