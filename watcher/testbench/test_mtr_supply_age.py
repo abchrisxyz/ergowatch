@@ -4,7 +4,6 @@ from typing import List
 
 from fixtures.api import MockApi, ApiUtil
 from fixtures.scenario import Scenario
-from fixtures.scenario.genesis import GENESIS_ID
 from fixtures.config import temp_cfg
 from fixtures.db import bootstrap_db
 from fixtures.db import fill_rev0_db
@@ -14,7 +13,6 @@ from fixtures.db import unconstrained_db_class_scoped
 from utils import run_watcher
 from utils import assert_pk
 from utils import assert_column_not_null
-from utils import assert_column_ge
 
 
 ORDER = 13

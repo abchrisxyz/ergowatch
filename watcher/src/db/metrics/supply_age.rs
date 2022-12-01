@@ -172,8 +172,25 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
         tx
             .execute(
                 "
+                with genesis_supply as (
+                    select c.height
+                        , h.timestamp
+                        , c.p2pks + c.cex_deposits as p2pks
+                        , c.cex_main as cexs
+                        , c.contracts
+                        , c.miners
+                    from mtr.supply_composition c
+                    join core.headers h on h.height = c.height
+                    where c.height = $1
+                )
                 insert into mtr.supply_age_timestamps (height, overall, p2pks, cexs, contracts, miners)
-                values ($1, 0, 0, 0, 0, 0);",
+                select $1
+                    , case when p2pks > 0 or cexs > 0 or contracts > 0 or miners > 0 then timestamp else 0 end
+                    , case when p2pks > 0 then timestamp else 0 end
+                    , case when cexs > 0 then timestamp else 0 end
+                    , case when contracts > 0 then timestamp else 0 end
+                    , case when miners > 0 then timestamp else 0 end
+                from genesis_supply;",
                 &[&first_height],
             )
             .unwrap();
