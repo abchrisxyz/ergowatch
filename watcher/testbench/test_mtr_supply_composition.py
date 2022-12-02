@@ -345,7 +345,7 @@ def assert_summary(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
         """
     )
     rows = cur.fetchall()
-    assert len(rows) == 6
+    assert len(rows) == 7
     ph = s.parent_height
     tr = initial_treasury_reward()
 
@@ -358,6 +358,15 @@ def assert_summary(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
         assert rows[4] == ("miners", 6, 6, 6, 6, 6, 6)
         t = 50 + pr + 5 * tr
         assert rows[5] == ("treasury", t, t - pr, t - pr, t - pr, t - pr, t - pr)
+        assert rows[6] == (
+            "total",
+            859 + t,
+            859 + t - pr,
+            859 + t - pr,
+            859 + t - pr,
+            859 + t - pr,
+            859 + t - pr,
+        )
     else:
         assert rows[0] == ("p2pks", 500, 500, 500, 500, 500, 500)
         assert rows[1] == ("cex_main", 150, 150, 150, 150, 150, 150)
@@ -365,6 +374,7 @@ def assert_summary(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
         assert rows[3] == ("contracts", 303, 303, 303, 303, 303, 303)
         assert rows[4] == ("miners", 6, 6, 6, 6, 6, 6)
         assert rows[5] == ("treasury", 50, 50, 50, 50, 50, 50)
+        assert rows[6] == ("total", 909, 909, 909, 909, 909, 909)
 
 
 def initial_treasury_reward() -> int:

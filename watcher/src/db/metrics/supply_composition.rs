@@ -51,6 +51,31 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut Cach
 
 pub(super) fn refresh_summary(tx: &mut Transaction, hc: &HeightsCache) {
     refresh_change_summary(tx, hc, "mtr.supply_composition", &SUMMARY_COLUMNS);
+
+    // Add emitted supply diffs from sum of all terms
+    tx.execute(
+        "
+        insert into mtr.supply_composition_summary (
+            label,
+            current,
+            diff_1d,
+            diff_1w,
+            diff_4w,
+            diff_6m,
+            diff_1y
+        )
+        select 'total'
+            , sum(current) as current
+            , sum(diff_1d) as diff_1d
+            , sum(diff_1w) as diff_1w
+            , sum(diff_4w) as diff_4w
+            , sum(diff_6m) as diff_6m
+            , sum(diff_1y) as diff_1y
+        from mtr.supply_composition_summary
+        ",
+        &[],
+    )
+    .unwrap();
 }
 
 pub(super) fn repair(tx: &mut Transaction, height: i32) {
@@ -171,6 +196,30 @@ fn do_bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
     // Summary tables
     let mut tx = client.transaction()?;
     bootstrap_change_summary(&mut tx, "mtr.supply_composition", &SUMMARY_COLUMNS);
+    // Add emitted supply diffs from sum of all terms
+    tx.execute(
+        "
+        insert into mtr.supply_composition_summary (
+            label,
+            current,
+            diff_1d,
+            diff_1w,
+            diff_4w,
+            diff_6m,
+            diff_1y
+        )
+        select 'total'
+            , sum(current) as current
+            , sum(diff_1d) as diff_1d
+            , sum(diff_1w) as diff_1w
+            , sum(diff_4w) as diff_4w
+            , sum(diff_6m) as diff_6m
+            , sum(diff_1y) as diff_1y
+        from mtr.supply_composition_summary
+        ",
+        &[],
+    )
+    .unwrap();
     tx.commit()?;
 
     client.execute(
