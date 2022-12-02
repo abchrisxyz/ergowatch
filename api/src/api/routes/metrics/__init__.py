@@ -50,7 +50,7 @@ def generate_time_window_limits(limit: int) -> Dict[TimeResolution, int]:
     }
 
 
-LIMIT = 1000
+LIMIT = 2000
 TimeWindowLimits = generate_time_window_limits(LIMIT)
 
 from . import addresses
