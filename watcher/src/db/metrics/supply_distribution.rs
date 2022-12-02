@@ -58,36 +58,6 @@ pub(super) fn refresh_summary(tx: &mut Transaction, hc: &HeightsCache) {
     refresh_change_summary(tx, hc, "mtr.supply_on_top_addresses_miners", &SUMMARY_COLUMNS);
 }
 
-pub(super) fn repair(tx: &mut Transaction, height: i32) {
-    let replay_id = crate::db::repair::REPLAY_ID;
-
-    // Modify queries
-    let p2pk_qry = sql::GET_SNAPSHOT_P2PK.replace(" adr.erg ", &format!(" {replay_id}_adr.erg "));
-    let cons_qry = sql::GET_SNAPSHOT_CONTRACTS.replace(" adr.erg ", &format!(" {replay_id}_adr.erg "));
-    let mins_qry = sql::GET_SNAPSHOT_MINERS.replace(" adr.erg ", &format!(" {replay_id}_adr.erg "));
-
-    // Obtain total address counts and calculate rank of 1st percentiles
-    let row = tx.query_one("
-        select 
-            (select total from mtr.address_counts_by_balance_p2pk where height = $1),
-            (select total from mtr.address_counts_by_balance_contracts where height = $1),
-            (select total from mtr.address_counts_by_balance_miners where height = $1)
-        ", &[&height]).unwrap();
-    let p2pk_1prc = first_percentile_rank(row.get(0));
-    let cons_1prc = first_percentile_rank(row.get(1));
-    let mins_1prc = first_percentile_rank(row.get(2));
-
-    // Get snapshots
-    let p2pk_snapshot: Record = tx.query_one(&p2pk_qry, &[&p2pk_1prc]).unwrap().into();
-    let cons_snapshot: Record = tx.query_one(&cons_qry, &[&cons_1prc]).unwrap().into();
-    let mins_snapshot: Record = tx.query_one(&mins_qry, &[&mins_1prc]).unwrap().into();
-
-    // Update records at h
-    update_p2pk_record(tx, height, p2pk_snapshot);
-    update_contract_record(tx, height, cons_snapshot);
-    update_miner_record(tx, height, mins_snapshot);
-}
-
 pub fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
     if !is_bootstrapped(client) {
         do_bootstrap(client, work_mem_kb)?;
@@ -405,42 +375,6 @@ fn insert_record(tx: &mut Transaction, height: i32, rec: Record, table: &str) {
             &rec.top_100,
             &rec.top_10,
         ],
-    )
-    .unwrap();
-}
-
-fn update_p2pk_record(tx: &mut Transaction, height: i32, rec: Record) {
-    let table = "mtr.supply_on_top_addresses_p2pk";
-    update_record(tx, height, rec, table);
-}
-
-fn update_contract_record(tx: &mut Transaction, height: i32, rec: Record) {
-    let table = "mtr.supply_on_top_addresses_contracts";
-    update_record(tx, height, rec, table);
-}
-
-fn update_miner_record(tx: &mut Transaction, height: i32, rec: Record) {
-    let table = "mtr.supply_on_top_addresses_miners";
-    update_record(tx, height, rec, table);
-}
-
-fn update_record(tx: &mut Transaction, height: i32, rec: Record, table: &str) {
-    tx.execute(
-        &format!(
-            "
-            update {table}
-            set top_1_prc = $2
-                , top_1k = $3
-                , top_100 = $4
-                , top_10 = $5
-            where height = $1;"),
-            &[
-                &height,
-                &rec.top_1_prc,
-                &rec.top_1k,
-                &rec.top_100,
-                &rec.top_10,
-            ],
     )
     .unwrap();
 }

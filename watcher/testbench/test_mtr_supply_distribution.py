@@ -66,7 +66,7 @@ SCENARIO_DESCRIPTION = """
         con3-box1  100
         base-box3   90
 
-    //one more block to tell d and x appart and have enough to trigger a repair event
+    //one more block to tell d and x appart
     block-e
         base-box3   90
         >
@@ -211,54 +211,6 @@ class TestMigrations:
             assert "Applying migration 1" in cp.stdout.decode()
 
             with pg.connect(temp_db_rev0_class_scoped) as conn:
-                yield conn
-
-    def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.scenario)
-
-
-@pytest.mark.order(ORDER)
-class TestRepair:
-    """
-    Same as TestSync, but triggering a repair event after full sync.
-    """
-
-    # Start one block later so last block has height multiple of 5
-    # and trigger a repair event.
-    scenario = Scenario(SCENARIO_DESCRIPTION, 599_999 + 1, 1234560000000)
-
-    @pytest.fixture(scope="class")
-    def synced_db(self, temp_cfg, temp_db_class_scoped):
-        """
-        Run watcher with mock api and return cursor to test db.
-        """
-        with MockApi() as api:
-            api = ApiUtil()
-            api.set_blocks(self.scenario.blocks)
-
-            # Bootstrap db
-            with pg.connect(temp_db_class_scoped) as conn:
-                bootstrap_db(conn, self.scenario)
-                # Simulate an interupted repair,
-                # Should be cleaned up at startup.
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        insert into ew.repairs (started, from_height, last_height, next_height)
-                        select now(), 0, 0, 0;
-                        """
-                    )
-                    cur.execute("create schema repair_adr;")
-                conn.commit()
-
-            # Run
-            cp = run_watcher(temp_cfg)
-            assert cp.returncode == 0
-            assert "Including block block-e" in cp.stdout.decode()
-            assert "Repairing heights 600001 to 600005 (5 blocks)" in cp.stdout.decode()
-            assert "Done repairing heights 600001 to 600005" in cp.stdout.decode()
-
-            with pg.connect(temp_db_class_scoped) as conn:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):

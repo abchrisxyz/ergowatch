@@ -161,7 +161,6 @@ impl Cache {
 pub(super) fn repair(tx: &mut Transaction, height: i32) {
     cexs::repair(tx, height);
     supply_composition::repair(tx, height);
-    supply_distribution::repair(tx, height);
 }
 
 /// Return height of first block in `days` days window since timestamp of last block
