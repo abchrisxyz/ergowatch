@@ -1,8 +1,10 @@
 from typing import List
+from typing import Optional
 from fastapi import APIRouter
 from fastapi import HTTPException
 from fastapi import Query
 from fastapi import Request
+from pydantic import BaseModel
 
 router = r = APIRouter()
 summary_router = s = APIRouter()
@@ -10,13 +12,19 @@ summary_router = s = APIRouter()
 from . import GENESIS_TIMESTAMP, SUMMARY_FIELDS
 from . import TimeResolution
 from . import TimeWindowLimits
-from . import MetricsSeries
 from . import MetricsSummaryRecord
+
+
+class UTXOSeries(BaseModel):
+    timestamps: List[int]
+    values: List[int]
+    ergusd: Optional[List[float]]
 
 
 @r.get(
     "",
-    response_model=MetricsSeries,
+    response_model=UTXOSeries,
+    response_model_exclude_none=True,
     description=f"UTxO counts",
     summary="Number of UTxO's",
 )
@@ -36,35 +44,44 @@ async def counts(
         default=TimeResolution.block,
         description="Time window resolution",
     ),
+    ergusd: bool = Query(default=False, description="Include ERG/USD price data"),
 ):
     if fr is not None and to is not None:
-        return await _count_fr_to(request, fr, to, r)
+        return await _get_fr_to(request, fr, to, r, ergusd)
     time_interval_limit = TimeWindowLimits[r]
     if (fr, to) == (None, None):
-        return await _count_last(request)
+        return await _get_last(request, ergusd)
     if fr is not None:
         to = fr + time_interval_limit
     else:
         fr = to - time_interval_limit
-    return await _count_fr_to(request, fr, to, r)
+    return await _get_fr_to(request, fr, to, r, ergusd)
 
 
-async def _count_last(request: Request):
+async def _get_last(request: Request, ergusd: bool):
     """Return last record"""
-    query = f"""
+    query = """
         select h.timestamp
             , m.value
+            {}
         from mtr.utxos m
         join core.headers h on h.height = m.height
+        {}
         order by h.height desc 
         limit 1;
     """
+    query = format_ergusd(query, ergusd)
     async with request.app.state.db.acquire() as conn:
         row = await conn.fetchrow(query)
-    return {"timestamps": [row["timestamp"]], "values": [row["value"]]}
+    res = {"timestamps": [row["timestamp"]], "values": [row["value"]]}
+    if ergusd:
+        res["ergusd"] = [row["ergusd"]]
+    return res
 
 
-async def _count_fr_to(request: Request, fr: int, to: int, r: TimeResolution):
+async def _get_fr_to(
+    request: Request, fr: int, to: int, r: TimeResolution, ergusd: bool
+):
     time_interval_limit = TimeWindowLimits[r]
     if fr > to:
         raise HTTPException(
@@ -80,8 +97,10 @@ async def _count_fr_to(request: Request, fr: int, to: int, r: TimeResolution):
         query = """
             select h.timestamp
                 , m.value
+                {}
             from mtr.utxos m
             join core.headers h on h.height = m.height
+            {}
             where h.timestamp >= $1 and h.timestamp <= $2
             order by h.height;
         """
@@ -89,17 +108,23 @@ async def _count_fr_to(request: Request, fr: int, to: int, r: TimeResolution):
         query = f"""
             select t.timestamp
                 , m.value
+                {{}}
             from mtr.utxos m
             join mtr.timestamps_{r.name} t on t.height = m.height
+            {{}}
             where t.timestamp >= $1 and t.timestamp <= $2
             order by t.height;
         """
+    query = format_ergusd(query, ergusd)
     async with request.app.state.db.acquire() as conn:
         rows = await conn.fetch(query, fr, to)
-    return {
+    res = {
         "timestamps": [r["timestamp"] for r in rows],
         "values": [r["value"] for r in rows],
     }
+    if ergusd:
+        res["ergusd"] = [r["ergusd"] for r in rows]
+    return res
 
 
 @s.get("", response_model=List[MetricsSummaryRecord], summary=" ")
@@ -117,3 +142,12 @@ async def change_summary(request: Request):
     async with request.app.state.db.acquire() as conn:
         rows = await conn.fetch(query)
     return [{f: r[f] for f in SUMMARY_FIELDS} for r in rows]
+
+
+def format_ergusd(qry: str, ergusd: bool):
+    if ergusd:
+        return qry.format(
+            ", p.value as ergusd", "left join mtr.ergusd p on p.height = m.height"
+        )
+    else:
+        return qry.format("", "")

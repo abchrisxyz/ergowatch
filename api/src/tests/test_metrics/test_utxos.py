@@ -80,6 +80,25 @@ def client():
         ({BLOCK_HS[4]}, {BLOCK_VALS[4]}),
         ({BLOCK_HS[5]}, {BLOCK_VALS[5]});
 
+        -- ergusd
+        insert into mtr.ergusd (height, value) values
+        ({DAY_HS[0]}, {0 + 0.1}),
+        ({DAY_HS[1]}, {1 + 0.1}),
+        ({DAY_HS[2]}, {2 + 0.1}),
+        ({DAY_HS[3]}, {3 + 0.1}),
+        ({DAY_HS[4]}, {4 + 0.1}),
+        ({HOUR_HS[0]}, {0 + 0.1}),
+        ({HOUR_HS[1]}, {1 + 0.1}),
+        ({HOUR_HS[2]}, {2 + 0.1}),
+        ({HOUR_HS[3]}, {3 + 0.1}),
+        ({HOUR_HS[4]}, {4 + 0.1}),
+        ({BLOCK_HS[0]}, {0 + 0.1}),
+        ({BLOCK_HS[1]}, {1 + 0.1}),
+        ({BLOCK_HS[2]}, {2 + 0.1}),
+        ({BLOCK_HS[3]}, {3 + 0.1}),
+        ({BLOCK_HS[4]}, {4 + 0.1}),
+        ({BLOCK_HS[5]}, {5 + 0.1});
+
         insert into mtr.utxos_summary(
             label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
         ) values
@@ -91,129 +110,88 @@ def client():
             yield client
 
 
-class TestCountBlock:
-    base_url = "/metrics/utxos?r=block"
+def base_url(r: str):
+    return f"/metrics/utxos?r={r}"
 
-    def test_default(self, client):
-        url = self.base_url
+
+@pytest.mark.parametrize(
+    "r,dt,tss,vals",
+    [
+        ("block", BLOCK_DT, BLOCK_TSS, BLOCK_VALS),
+        ("1h", HOUR_DT, HOUR_TSS, HOUR_VALS),
+        ("24h", DAY_DT, DAY_TSS, DAY_VALS),
+    ],
+)
+class TestSeriesApi:
+    def test_default(self, client, r, dt, tss, vals):
+        url = base_url(r)
         response = client.get(url)
         assert response.status_code == 200
-        # Return last block record
+        # Return latest record
         assert response.json() == {
             "timestamps": [LAST_TS],
             "values": [LAST_VAL],
         }
 
-    def test_from_to(self, client):
-        url = self.base_url + f"&fr={BLOCK_TSS[1]}&to={BLOCK_TSS[3]}"
+    def test_from_to(self, client, r, dt, tss, vals):
+        url = base_url(r)
+        url += f"&fr={tss[1] - 1}&to={tss[3] + 1}"
         response = client.get(url)
         assert response.status_code == 200
         assert response.json() == {
-            "timestamps": BLOCK_TSS[1:4],
-            "values": BLOCK_VALS[1:4],
+            "timestamps": tss[1:4],
+            "values": vals[1:4],
         }
 
-    def test_from_only(self, client):
-        # from height 1
-        url = self.base_url + f"&fr={BLOCK_TSS[1]}"
-        response = client.get(url)
-        assert response.status_code == 200
-        assert response.json() == {
-            "timestamps": BLOCK_TSS[1:5],
-            "values": BLOCK_VALS[1:5],
-        }
-
-    def test_to_only(self, client):
-        # to right after block 5999
-        url = self.base_url + f"&to={BLOCK_TSS[4] + 10}"
-        response = client.get(url)
-        assert response.status_code == 200
-        assert response.json() == {
-            "timestamps": BLOCK_TSS[2:5],
-            "values": BLOCK_VALS[2:5],
-        }
-
-    def test_from_prior_to_genesis(self, client):
-        url = self.base_url + f"&fr={GENESIS_TIMESTAMP - 1}"
-        response = client.get(url)
-        assert response.status_code == 422
-
-    def test_window_size(self, client):
-        url = self.base_url + f"&fr={BLOCK_TSS[0]}&to={BLOCK_TSS[5]}"
+    def test_from_to_window_limit(self, client, r, dt, tss, vals):
+        url = base_url(r)
+        url += f"&fr={tss[1]}&to={tss[5]}"
         response = client.get(url)
         assert response.status_code == 422
         assert (
             response.json()["detail"]
-            == f"Time window is limited to {120000 * LIMIT} for block resolution"
+            == f"Time window is limited to {LIMIT * dt} for {r} resolution"
         )
 
-
-class TestCountHourly:
-    base_url = "/metrics/utxos?r=1h"
-
-    def test_default(self, client):
-        url = self.base_url
-        response = client.get(url)
-        assert response.status_code == 200
-        # Return last hourly record
-        assert response.json() == {
-            "timestamps": [LAST_TS],
-            "values": [LAST_VAL],
-        }
-
-    def test_from_to(self, client):
-        url = self.base_url + f"&fr={HOUR_TSS[1] - 1}&to={HOUR_TSS[3] + 1}"
-        response = client.get(url)
-        assert response.status_code == 200
-        assert response.json() == {
-            "timestamps": HOUR_TSS[1:4],
-            "values": HOUR_VALS[1:4],
-        }
-
-    def test_from_to_window_limit(self, client):
-        url = self.base_url + f"&fr={HOUR_TSS[1]}&to={HOUR_TSS[5]}"
-        response = client.get(url)
-        assert response.status_code == 422
-        assert (
-            response.json()["detail"]
-            == f"Time window is limited to {LIMIT * HOUR_DT} for 1h resolution"
-        )
-
-    def test_from_just_before_new(self, client):
+    def test_from_just_before_new(self, client, r, dt, tss, vals):
         # from timestamp between h1 and h2, just before h2
         # expect value at h2, h3 and h4
-        url = self.base_url + f"&fr={HOUR_TSS[1] - 100}"
+        url = base_url(r)
+        url += f"&fr={tss[1] - 100}"
         response = client.get(url)
         assert response.status_code == 200
         assert response.json() == {
-            "timestamps": HOUR_TSS[1:4],
-            "values": HOUR_VALS[1:4],
+            "timestamps": tss[1:4],
+            "values": vals[1:4],
         }
 
-    def test_from_spot(self, client):
-        # from timestamp at h4
-        # expect value at h4, h5 and h6
-        url = self.base_url + f"&fr={HOUR_TSS[3]}"
+    def test_from_spot(self, client, r, dt, tss, vals):
+        # from timestamp at h2
+        # expect value at h2, h3, h4 and h5
+        url = base_url(r)
+        url += f"&fr={tss[1]}"
         response = client.get(url)
         assert response.status_code == 200
         assert response.json() == {
-            "timestamps": HOUR_TSS[3:6],
-            "values": HOUR_VALS[3:6],
+            "timestamps": tss[1:5],
+            "values": vals[1:5],
         }
 
-    def test_from_just_after_spot(self, client):
+    def test_from_just_after_spot(self, client, r, dt, tss, vals):
         # from timestamp just after h4
         # expect value at h5 and h6
-        url = self.base_url + f"&fr={HOUR_TSS[3] + 1}"
+        url = base_url(r)
+        url += f"&fr={tss[3] + 1}"
         response = client.get(url)
         assert response.status_code == 200
         assert response.json() == {
-            "timestamps": HOUR_TSS[4:6],
-            "values": HOUR_VALS[4:6],
+            "timestamps": tss[4:6],
+            "values": vals[4:6],
         }
 
-    def test_out_of_range(self, client):
-        url = self.base_url + f"&fr={HOUR_TSS[-1] + 10}"
+    def test_out_of_range(self, client, r, dt, tss, vals):
+        url = base_url(r)
+        url += f"&fr={tss[-1] + 10}"
         response = client.get(url)
         assert response.status_code == 200
         assert response.json() == {
@@ -221,147 +199,64 @@ class TestCountHourly:
             "values": [],
         }
 
-    def test_to_only(self, client):
+    def test_to_only(self, client, r, dt, tss, vals):
         # to timestamp of block h4
         # expect values at h2, h3 and h4
-        url = self.base_url + f"&to={HOUR_TSS[3] + 100000}"
+        url = base_url(r)
+        url += f"&to={tss[3] + 100000}"
         response = client.get(url)
         assert response.status_code == 200
         assert response.json() == {
-            "timestamps": HOUR_TSS[1:4],
-            "values": HOUR_VALS[1:4],
+            "timestamps": tss[1:4],
+            "values": vals[1:4],
         }
 
-    def test_from_prior_to_genesis(self, client):
-        url = self.base_url + f"&fr={GENESIS_TIMESTAMP - 1}"
+    def test_from_prior_to_genesis(self, client, r, dt, tss, vals):
+        url = base_url(r)
+        url += f"&fr={GENESIS_TIMESTAMP - 1}"
         response = client.get(url)
         assert response.status_code == 422
 
-    def test_from_ge_to(self, client):
-        url = self.base_url + f"&fr={HOUR_TSS[3]}&to={HOUR_TSS[3] - 1}"
+    def test_from_ge_to(self, client, r, dt, tss, vals):
+        url = base_url(r)
+        url += f"&fr={tss[3]}&to={tss[3] - 1}"
         response = client.get(url)
         assert response.status_code == 422
         assert response.json()["detail"] == "Parameter `fr` cannot be higher than `to`"
 
-    def test_to_gt_sync_height(self, client):
+    def test_to_gt_sync_height(self, client, r, dt, tss, vals):
         # to 2 hours after last one
         # expect value at h5 and h6
-        url = self.base_url + f"&to={HOUR_TSS[-1] + HOUR_DT * 2}"
+        url = base_url(r)
+        url += f"&to={tss[-1] + dt * 2}"
         response = client.get(url)
         assert response.status_code == 200
         assert response.json() == {
-            "timestamps": HOUR_TSS[4:6],
-            "values": HOUR_VALS[4:6],
+            "timestamps": tss[4:6],
+            "values": vals[4:6],
         }
 
-
-class TestCountDaily:
-    base_url = "/metrics/utxos?r=24h"
-
-    def test_default(self, client):
-        url = self.base_url
+    def test_last_with_ergusd(self, client, r, dt, tss, vals):
+        url = base_url(r)
+        url += f"&ergusd=1"
         response = client.get(url)
         assert response.status_code == 200
-        # Return last daily record
+        # Return latest record
         assert response.json() == {
             "timestamps": [LAST_TS],
             "values": [LAST_VAL],
+            "ergusd": [len(BLOCK_HS) - 1 + 0.1],
         }
 
-    def test_from_to(self, client):
-        url = self.base_url + f"&fr={DAY_TSS[1] - 1}&to={DAY_TSS[3] + 1}"
+    def test_from_to_with_ergusd(self, client, r, dt, tss, vals):
+        url = base_url(r)
+        url += f"&fr={tss[1] - 1}&to={tss[3] + 1}&ergusd=1"
         response = client.get(url)
         assert response.status_code == 200
         assert response.json() == {
-            "timestamps": DAY_TSS[1:4],
-            "values": DAY_VALS[1:4],
-        }
-
-    def test_from_to_window_limit(self, client):
-        url = self.base_url + f"&fr={DAY_TSS[1]}&to={DAY_TSS[5]}"
-        response = client.get(url)
-        assert response.status_code == 422
-        assert (
-            response.json()["detail"]
-            == f"Time window is limited to {LIMIT * DAY_DT} for 24h resolution"
-        )
-
-    def test_from_just_before_new(self, client):
-        # from timestamp between d1 and d2, just before d2
-        # expect value at d2, d3 and d4
-        url = self.base_url + f"&fr={1562112000000 - 100}"
-        # from timestamp between d1 and d2, just before d2
-        # expect value at d2, d3 and d4
-        url = self.base_url + f"&fr={DAY_TSS[1] - 100}"
-        response = client.get(url)
-        assert response.status_code == 200
-        assert response.json() == {
-            "timestamps": DAY_TSS[1:4],
-            "values": DAY_VALS[1:4],
-        }
-
-    def test_from_spot(self, client):
-        # from timestamp at d4
-        # expect value at d4, d5 and d6
-        url = self.base_url + f"&fr={DAY_TSS[3]}"
-        response = client.get(url)
-        assert response.status_code == 200
-        assert response.json() == {
-            "timestamps": DAY_TSS[3:6],
-            "values": DAY_VALS[3:6],
-        }
-
-    def test_from_just_after_spot(self, client):
-        # from timestamp just after d4
-        # expect value at d5 and d6
-        url = self.base_url + f"&fr={DAY_TSS[3] + 1}"
-        response = client.get(url)
-        assert response.status_code == 200
-        assert response.json() == {
-            "timestamps": DAY_TSS[4:6],
-            "values": DAY_VALS[4:6],
-        }
-
-    def test_out_of_range(self, client):
-        url = self.base_url + f"&fr={DAY_TSS[-1] + 10}"
-        response = client.get(url)
-        assert response.status_code == 200
-        assert response.json() == {
-            "timestamps": [],
-            "values": [],
-        }
-
-    def test_to_only(self, client):
-        # to timestamp of block 26
-        # expect values at d2, d3 and d4
-        url = self.base_url + f"&to={DAY_TSS[3] + 100000}"
-        response = client.get(url)
-        assert response.status_code == 200
-        assert response.json() == {
-            "timestamps": DAY_TSS[1:4],
-            "values": DAY_VALS[1:4],
-        }
-
-    def test_from_prior_to_genesis(self, client):
-        url = self.base_url + f"&fr={GENESIS_TIMESTAMP - 1}"
-        response = client.get(url)
-        assert response.status_code == 422
-
-    def test_from_ge_to(self, client):
-        url = self.base_url + f"&fr={DAY_TSS[3]}&to={DAY_TSS[3] - 1}"
-        response = client.get(url)
-        assert response.status_code == 422
-        assert response.json()["detail"] == "Parameter `fr` cannot be higher than `to`"
-
-    def test_to_gt_sync_height(self, client):
-        # to 2 days after last one
-        # expect value at d5 and d6
-        url = self.base_url + f"&to={DAY_TSS[-1] + DAY_DT * 2}"
-        response = client.get(url)
-        assert response.status_code == 200
-        assert response.json() == {
-            "timestamps": DAY_TSS[4:6],
-            "values": DAY_VALS[4:6],
+            "timestamps": tss[1:4],
+            "values": vals[1:4],
+            "ergusd": [i + 0.1 for i in range(1, 4)],
         }
 
 

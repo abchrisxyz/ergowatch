@@ -44,6 +44,8 @@ Rules of thumb:
  
 Some endpoints will accept a `?token_id=` query parameter to return data relating to a given token instead of ERG itself.
 
+ERG/USD data provided by [CoinGecko](https://www.coingecko.com/en/api).
+
 [Swagger]({root_path}/docs)
 | [ReDoc]({root_path}/redoc)
 | [Release notes](https://github.com/abchrisxyz/ergowatch/blob/master/CHANGELOG.md)

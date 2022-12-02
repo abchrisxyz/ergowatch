@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import List
+from typing import Optional
 from fastapi import APIRouter
 from fastapi import HTTPException
 from fastapi import Query
@@ -34,11 +35,13 @@ class AddressCountsSeries(BaseModel):
     ge_10k: List[int]
     ge_100k: List[int]
     ge_1m: List[int]
+    ergusd: Optional[List[float]]
 
 
 @r.get(
     "/{address_type}",
     response_model=AddressCountsSeries,
+    response_model_exclude_none=True,
     summary="Number of addresses by minimal balance",
     description=f"Number of addresses by minimal balance.",
 )
@@ -59,20 +62,21 @@ async def supply_on_addresses(
         default=TimeResolution.block,
         description="Time window resolution",
     ),
+    ergusd: bool = Query(default=False, description="Include ERG/USD price data"),
 ):
     if fr is not None and to is not None:
-        return await _get_fr_to(request, address_type, fr, to, r)
+        return await _get_fr_to(request, address_type, fr, to, r, ergusd)
     time_interval_limit = TimeWindowLimits[r]
     if (fr, to) == (None, None):
-        return await _get_last(request, address_type)
+        return await _get_last(request, address_type, ergusd)
     if fr is not None:
         to = fr + time_interval_limit
     else:
         fr = to - time_interval_limit
-    return await _get_fr_to(request, address_type, fr, to, r)
+    return await _get_fr_to(request, address_type, fr, to, r, ergusd)
 
 
-async def _get_last(request: Request, address_type: AddressType):
+async def _get_last(request: Request, address_type: AddressType, ergusd: bool):
     """Return last record"""
     query = f"""
         select h.timestamp
@@ -87,14 +91,17 @@ async def _get_last(request: Request, address_type: AddressType):
             , m.ge_10k
             , m.ge_100k
             , m.ge_1m
+            {{}}
         from mtr.address_counts_by_balance_{address_type} m
         join core.headers h on h.height = m.height
+        {{}}
         order by h.height desc 
         limit 1;
     """
+    query = format_ergusd(query, ergusd)
     async with request.app.state.db.acquire() as conn:
         row = await conn.fetchrow(query)
-    return {
+    res = {
         "timestamps": [row["timestamp"]],
         "gt_0": [row["total"]],
         "ge_0p001": [row["ge_0p001"]],
@@ -108,10 +115,18 @@ async def _get_last(request: Request, address_type: AddressType):
         "ge_100k": [row["ge_100k"]],
         "ge_1m": [row["ge_1m"]],
     }
+    if ergusd:
+        res["ergusd"] = [row["ergusd"]]
+    return res
 
 
 async def _get_fr_to(
-    request: Request, address_type: AddressType, fr: int, to: int, r: TimeResolution
+    request: Request,
+    address_type: AddressType,
+    fr: int,
+    to: int,
+    r: TimeResolution,
+    ergusd: bool,
 ):
     time_interval_limit = TimeWindowLimits[r]
     if fr > to:
@@ -138,8 +153,10 @@ async def _get_fr_to(
                 , m.ge_10k
                 , m.ge_100k
                 , m.ge_1m
+                {{}}
             from mtr.address_counts_by_balance_{address_type} m
             join core.headers h on h.height = m.height
+            {{}}
             where h.timestamp >= $1 and h.timestamp <= $2
             order by h.height;
         """
@@ -157,14 +174,17 @@ async def _get_fr_to(
                 , m.ge_10k
                 , m.ge_100k
                 , m.ge_1m
+                {{}}
             from mtr.address_counts_by_balance_{address_type} m
             join mtr.timestamps_{r.name} t on t.height = m.height
+            {{}}
             where t.timestamp >= $1 and t.timestamp <= $2
             order by t.height;
         """
+    query = format_ergusd(query, ergusd)
     async with request.app.state.db.acquire() as conn:
         rows = await conn.fetch(query, fr, to)
-    return {
+    res = {
         "timestamps": [r["timestamp"] for r in rows],
         "gt_0": [r["total"] for r in rows],
         "ge_0p001": [r["ge_0p001"] for r in rows],
@@ -178,6 +198,9 @@ async def _get_fr_to(
         "ge_100k": [r["ge_100k"] for r in rows],
         "ge_1m": [r["ge_1m"] for r in rows],
     }
+    if ergusd:
+        res["ergusd"] = [r["ergusd"] for r in rows]
+    return res
 
 
 @s.get("/{address_type}", response_model=List[MetricsSummaryRecord], summary=" ")
@@ -195,3 +218,12 @@ async def change_summary(request: Request, address_type: AddressType):
     async with request.app.state.db.acquire() as conn:
         rows = await conn.fetch(query)
     return [{f: r[f] for f in SUMMARY_FIELDS} for r in rows]
+
+
+def format_ergusd(qry: str, ergusd: bool):
+    if ergusd:
+        return qry.format(
+            ", p.value as ergusd", "left join mtr.ergusd p on p.height = m.height"
+        )
+    else:
+        return qry.format("", "")

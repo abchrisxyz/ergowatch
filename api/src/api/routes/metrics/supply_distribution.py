@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import List
+from typing import Optional
 from fastapi import APIRouter
 from fastapi import HTTPException
 from fastapi import Query
@@ -28,11 +29,13 @@ class SupplyDistributionSeries(BaseModel):
     top_100: List[int]
     top_10: List[int]
     circ_supply: List[int]
+    ergusd: Optional[List[float]]
 
 
 @r.get(
     "/{address_type}",
     response_model=SupplyDistributionSeries,
+    response_model_exclude_none=True,
     summary="Supply on top x addresses",
     description=f"Supply on top 10, 100, 1000 and top 1% addresses.",
 )
@@ -53,20 +56,21 @@ async def supply_on_addresses(
         default=TimeResolution.block,
         description="Time window resolution",
     ),
+    ergusd: bool = Query(default=False, description="Include ERG/USD price data"),
 ):
     if fr is not None and to is not None:
-        return await _get_fr_to(request, address_type, fr, to, r)
+        return await _get_fr_to(request, address_type, fr, to, r, ergusd)
     time_interval_limit = TimeWindowLimits[r]
     if (fr, to) == (None, None):
-        return await _get_last(request, address_type)
+        return await _get_last(request, address_type, ergusd)
     if fr is not None:
         to = fr + time_interval_limit
     else:
         fr = to - time_interval_limit
-    return await _get_fr_to(request, address_type, fr, to, r)
+    return await _get_fr_to(request, address_type, fr, to, r, ergusd)
 
 
-async def _get_last(request: Request, address_type: AddressType):
+async def _get_last(request: Request, address_type: AddressType, ergusd: bool):
     """Return last record"""
     query = f"""
         select h.timestamp
@@ -75,15 +79,18 @@ async def _get_last(request: Request, address_type: AddressType):
             , top_100
             , top_10
             , s.circulating_supply
+            {{}}
         from mtr.supply_on_top_addresses_{address_type} m
         join core.headers h on h.height = m.height
         join blk.stats s on s.height = m.height
+        {{}}
         order by h.height desc 
         limit 1;
     """
+    query = format_ergusd(query, ergusd)
     async with request.app.state.db.acquire() as conn:
         row = await conn.fetchrow(query)
-    return {
+    res = {
         "timestamps": [row["timestamp"]],
         "top_1prc": [row["top_1_prc"]],
         "top_1k": [row["top_1k"]],
@@ -91,10 +98,18 @@ async def _get_last(request: Request, address_type: AddressType):
         "top_10": [row["top_10"]],
         "circ_supply": [row["circulating_supply"]],
     }
+    if ergusd:
+        res["ergusd"] = [row["ergusd"]]
+    return res
 
 
 async def _get_fr_to(
-    request: Request, address_type: AddressType, fr: int, to: int, r: TimeResolution
+    request: Request,
+    address_type: AddressType,
+    fr: int,
+    to: int,
+    r: TimeResolution,
+    ergusd: bool,
 ):
     time_interval_limit = TimeWindowLimits[r]
     if fr > to:
@@ -115,9 +130,11 @@ async def _get_fr_to(
                 , m.top_100
                 , m.top_10
                 , s.circulating_supply
+                {{}}
             from mtr.supply_on_top_addresses_{address_type} m
             join core.headers h on h.height = m.height
             join blk.stats s on s.height = m.height
+            {{}}
             where h.timestamp >= $1 and h.timestamp <= $2
             order by h.height;
         """
@@ -129,15 +146,18 @@ async def _get_fr_to(
                 , m.top_100
                 , m.top_10
                 , s.circulating_supply
+                {{}}
             from mtr.supply_on_top_addresses_{address_type} m
             join mtr.timestamps_{r.name} t on t.height = m.height
             join blk.stats s on s.height = m.height
+            {{}}
             where t.timestamp >= $1 and t.timestamp <= $2
             order by t.height;
         """
+    query = format_ergusd(query, ergusd)
     async with request.app.state.db.acquire() as conn:
         rows = await conn.fetch(query, fr, to)
-    return {
+    res = {
         "timestamps": [r["timestamp"] for r in rows],
         "top_1prc": [r["top_1_prc"] for r in rows],
         "top_1k": [r["top_1k"] for r in rows],
@@ -145,6 +165,9 @@ async def _get_fr_to(
         "top_10": [r["top_10"] for r in rows],
         "circ_supply": [r["circulating_supply"] for r in rows],
     }
+    if ergusd:
+        res["ergusd"] = [r["ergusd"] for r in rows]
+    return res
 
 
 @s.get("/{address_type}", response_model=List[MetricsSummaryRecord], summary=" ")
@@ -162,3 +185,12 @@ async def change_summary(request: Request, address_type: AddressType):
     async with request.app.state.db.acquire() as conn:
         rows = await conn.fetch(query)
     return [{f: r[f] for f in SUMMARY_FIELDS} for r in rows]
+
+
+def format_ergusd(qry: str, ergusd: bool):
+    if ergusd:
+        return qry.format(
+            ", p.value as ergusd", "left join mtr.ergusd p on p.height = m.height"
+        )
+    else:
+        return qry.format("", "")

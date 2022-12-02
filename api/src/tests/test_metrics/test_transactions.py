@@ -91,6 +91,25 @@ def client():
         ({BLOCK_HS[4]}, {to_sql(BLOCK_VALS[4])}),
         ({BLOCK_HS[5]}, {to_sql(BLOCK_VALS[5])});
 
+        -- ergusd
+        insert into mtr.ergusd (height, value) values
+        ({DAY_HS[0]}, {0 + 0.1}),
+        ({DAY_HS[1]}, {1 + 0.1}),
+        ({DAY_HS[2]}, {2 + 0.1}),
+        ({DAY_HS[3]}, {3 + 0.1}),
+        ({DAY_HS[4]}, {4 + 0.1}),
+        ({HOUR_HS[0]}, {0 + 0.1}),
+        ({HOUR_HS[1]}, {1 + 0.1}),
+        ({HOUR_HS[2]}, {2 + 0.1}),
+        ({HOUR_HS[3]}, {3 + 0.1}),
+        ({HOUR_HS[4]}, {4 + 0.1}),
+        ({BLOCK_HS[0]}, {0 + 0.1}),
+        ({BLOCK_HS[1]}, {1 + 0.1}),
+        ({BLOCK_HS[2]}, {2 + 0.1}),
+        ({BLOCK_HS[3]}, {3 + 0.1}),
+        ({BLOCK_HS[4]}, {4 + 0.1}),
+        ({BLOCK_HS[5]}, {5 + 0.1});
+
         insert into mtr.transactions_summary(
             label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
         ) values
@@ -242,6 +261,33 @@ class TestSeriesApi:
             "daily_1d": [row[0] for row in vals[4:6]],
             "daily_7d": [row[1] for row in vals[4:6]],
             "daily_28d": [row[2] for row in vals[4:6]],
+        }
+
+    def test_last_with_ergusd(self, client, r, dt, tss, vals):
+        url = base_url(r)
+        url += f"&ergusd=1"
+        response = client.get(url)
+        assert response.status_code == 200
+        # Return latest record
+        assert response.json() == {
+            "timestamps": [LAST_TS],
+            "daily_1d": [LAST_VAL[0]],
+            "daily_7d": [LAST_VAL[1]],
+            "daily_28d": [LAST_VAL[2]],
+            "ergusd": [len(BLOCK_HS) - 1 + 0.1],
+        }
+
+    def test_from_to_with_ergusd(self, client, r, dt, tss, vals):
+        url = base_url(r)
+        url += f"&fr={tss[1] - 1}&to={tss[3] + 1}&ergusd=1"
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.json() == {
+            "timestamps": tss[1:4],
+            "daily_1d": [row[0] for row in vals[1:4]],
+            "daily_7d": [row[1] for row in vals[1:4]],
+            "daily_28d": [row[2] for row in vals[1:4]],
+            "ergusd": [i + 0.1 for i in range(1, 4)],
         }
 
 

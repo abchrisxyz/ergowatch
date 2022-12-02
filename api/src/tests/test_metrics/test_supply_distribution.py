@@ -116,6 +116,25 @@ def client(request):
         ({BLOCK_HS[4]}, {BLOCK_SCS[4]}, 0, 0, 0, 0, 0),
         ({BLOCK_HS[5]}, {BLOCK_SCS[5]}, 0, 0, 0, 0, 0);
 
+        -- ergusd
+        insert into mtr.ergusd (height, value) values
+        ({DAY_HS[0]}, {0 + 0.1}),
+        ({DAY_HS[1]}, {1 + 0.1}),
+        ({DAY_HS[2]}, {2 + 0.1}),
+        ({DAY_HS[3]}, {3 + 0.1}),
+        ({DAY_HS[4]}, {4 + 0.1}),
+        ({HOUR_HS[0]}, {0 + 0.1}),
+        ({HOUR_HS[1]}, {1 + 0.1}),
+        ({HOUR_HS[2]}, {2 + 0.1}),
+        ({HOUR_HS[3]}, {3 + 0.1}),
+        ({HOUR_HS[4]}, {4 + 0.1}),
+        ({BLOCK_HS[0]}, {0 + 0.1}),
+        ({BLOCK_HS[1]}, {1 + 0.1}),
+        ({BLOCK_HS[2]}, {2 + 0.1}),
+        ({BLOCK_HS[3]}, {3 + 0.1}),
+        ({BLOCK_HS[4]}, {4 + 0.1}),
+        ({BLOCK_HS[5]}, {5 + 0.1});
+
         insert into mtr.supply_on_top_addresses_{address_type}_summary(
             label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
         ) values
@@ -284,6 +303,37 @@ class TestSeriesApi:
             "top_100": [row[2] for row in vals[4:6]],
             "top_10": [row[3] for row in vals[4:6]],
             "circ_supply": scs[4:6],
+        }
+
+    def test_default_with_ergusd(self, client, r, dt, tss, vals, scs):
+        url = base_url(client.address_type, r)
+        url += "&ergusd=1"
+        response = client.get(url)
+        assert response.status_code == 200
+        # Return latest record
+        assert response.json() == {
+            "timestamps": [LAST_TS],
+            "top_1prc": [LAST_VAL[0]],
+            "top_1k": [LAST_VAL[1]],
+            "top_100": [LAST_VAL[2]],
+            "top_10": [LAST_VAL[3]],
+            "circ_supply": [LAST_SC],
+            "ergusd": [len(BLOCK_HS) - 1 + 0.1],
+        }
+
+    def test_from_to_with_ergusd(self, client, r, dt, tss, vals, scs):
+        url = base_url(client.address_type, r)
+        url += f"&fr={tss[1] - 1}&to={tss[3] + 1}&ergusd=1"
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.json() == {
+            "timestamps": tss[1:4],
+            "top_1prc": [row[0] for row in vals[1:4]],
+            "top_1k": [row[1] for row in vals[1:4]],
+            "top_100": [row[2] for row in vals[1:4]],
+            "top_10": [row[3] for row in vals[1:4]],
+            "circ_supply": scs[1:4],
+            "ergusd": [i + 0.1 for i in range(1, 4)],
         }
 
 

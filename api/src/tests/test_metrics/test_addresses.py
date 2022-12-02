@@ -116,6 +116,25 @@ def client(request):
         ({BLOCK_HS[4]}, {to_sql(BLOCK_VALS[4])}),
         ({BLOCK_HS[5]}, {to_sql(BLOCK_VALS[5])});
 
+        -- ergusd
+        insert into mtr.ergusd (height, value) values
+        ({DAY_HS[0]}, {0 + 0.1}),
+        ({DAY_HS[1]}, {1 + 0.1}),
+        ({DAY_HS[2]}, {2 + 0.1}),
+        ({DAY_HS[3]}, {3 + 0.1}),
+        ({DAY_HS[4]}, {4 + 0.1}),
+        ({HOUR_HS[0]}, {0 + 0.1}),
+        ({HOUR_HS[1]}, {1 + 0.1}),
+        ({HOUR_HS[2]}, {2 + 0.1}),
+        ({HOUR_HS[3]}, {3 + 0.1}),
+        ({HOUR_HS[4]}, {4 + 0.1}),
+        ({BLOCK_HS[0]}, {0 + 0.1}),
+        ({BLOCK_HS[1]}, {1 + 0.1}),
+        ({BLOCK_HS[2]}, {2 + 0.1}),
+        ({BLOCK_HS[3]}, {3 + 0.1}),
+        ({BLOCK_HS[4]}, {4 + 0.1}),
+        ({BLOCK_HS[5]}, {5 + 0.1});
+
         insert into mtr.address_counts_by_balance_{address_type}_summary(
             label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
         ) values
@@ -332,6 +351,49 @@ class TestSeriesApi:
             "ge_10k": [row[8] for row in vals[4:6]],
             "ge_100k": [row[9] for row in vals[4:6]],
             "ge_1m": [row[10] for row in vals[4:6]],
+        }
+
+    def test_default_with_ergusd(self, client, r, dt, tss, vals):
+        url = base_url(client.address_type, r)
+        url += "&ergusd=1"
+        response = client.get(url)
+        assert response.status_code == 200
+        # Return latest record
+        assert response.json() == {
+            "timestamps": [LAST_TS],
+            "gt_0": [LAST_VAL[0]],
+            "ge_0p001": [LAST_VAL[1]],
+            "ge_0p01": [LAST_VAL[2]],
+            "ge_0p1": [LAST_VAL[3]],
+            "ge_1": [LAST_VAL[4]],
+            "ge_10": [LAST_VAL[5]],
+            "ge_100": [LAST_VAL[6]],
+            "ge_1k": [LAST_VAL[7]],
+            "ge_10k": [LAST_VAL[8]],
+            "ge_100k": [LAST_VAL[9]],
+            "ge_1m": [LAST_VAL[10]],
+            "ergusd": [len(BLOCK_HS) - 1 + 0.1],
+        }
+
+    def test_from_to_with_ergusd(self, client, r, dt, tss, vals):
+        url = base_url(client.address_type, r)
+        url += f"&fr={tss[1] - 1}&to={tss[3] + 1}&ergusd=1"
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.json() == {
+            "timestamps": tss[1:4],
+            "gt_0": [row[0] for row in vals[1:4]],
+            "ge_0p001": [row[1] for row in vals[1:4]],
+            "ge_0p01": [row[2] for row in vals[1:4]],
+            "ge_0p1": [row[3] for row in vals[1:4]],
+            "ge_1": [row[4] for row in vals[1:4]],
+            "ge_10": [row[5] for row in vals[1:4]],
+            "ge_100": [row[6] for row in vals[1:4]],
+            "ge_1k": [row[7] for row in vals[1:4]],
+            "ge_10k": [row[8] for row in vals[1:4]],
+            "ge_100k": [row[9] for row in vals[1:4]],
+            "ge_1m": [row[10] for row in vals[1:4]],
+            "ergusd": [i + 0.1 for i in range(1, 4)],
         }
 
 

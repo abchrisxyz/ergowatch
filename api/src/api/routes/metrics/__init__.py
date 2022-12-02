@@ -16,11 +16,6 @@ class TimeResolution(str, Enum):
     daily = "24h"
 
 
-class MetricsSeries(BaseModel):
-    timestamps: List[int]
-    values: List[int]
-
-
 SUMMARY_FIELDS = [
     "label",
     "current",
@@ -52,6 +47,7 @@ def generate_time_window_limits(limit: int) -> Dict[TimeResolution, int]:
 
 LIMIT = 2000
 TimeWindowLimits = generate_time_window_limits(LIMIT)
+
 
 from . import addresses
 from .exchanges import exchanges_router
