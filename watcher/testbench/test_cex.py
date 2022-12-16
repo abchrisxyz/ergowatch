@@ -234,7 +234,7 @@ class TestGenesis:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.scenario, bootstrapped=True)
+        _test_db_state(synced_db, self.scenario)
 
 
 @pytest.mark.order(ORDER)
@@ -267,113 +267,58 @@ class TestMigrations:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.scenario, bootstrapped=True)
+        _test_db_state(synced_db, self.scenario)
 
 
-@pytest.mark.order(ORDER)
-class TestRepair:
-    """
-    Same as TestSync, but triggering a repair event after full sync.
-    """
-
-    # Start one block later so last block has height multiple of 5
-    # and trigger a repair event.
-    scenario = Scenario(SCENARIO_DESCRIPTION, 599_999 + 1, 1234560000000)
-
-    @pytest.fixture(scope="class")
-    def synced_db(self, temp_cfg, temp_db_class_scoped):
-        """
-        Run watcher with mock api and return cursor to test db.
-        """
-        with MockApi() as api:
-            api = ApiUtil()
-            api.set_blocks(self.scenario.blocks)
-
-            # Bootstrap db
-            with pg.connect(temp_db_class_scoped) as conn:
-                bootstrap_db(conn, self.scenario)
-                # Simulate an interupted repair,
-                # Should be cleaned up at startup.
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        insert into ew.repairs (started, from_height, last_height, next_height)
-                        select now(), 0, 0, 0;
-                        """
-                    )
-                    cur.execute("create schema repair_adr;")
-                conn.commit()
-
-            # Run
-            cp = run_watcher(temp_cfg)
-            assert cp.returncode == 0
-            assert "Including block block-e" in cp.stdout.decode()
-            assert "Repairing heights 600002 to 600005 (4 blocks)" in cp.stdout.decode()
-            assert "Done repairing heights 600002 to 600005" in cp.stdout.decode()
-
-            with pg.connect(temp_db_class_scoped) as conn:
-                yield conn
-
-    def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.scenario, bootstrapped=True)
-
-
-def _test_db_state(conn: pg.Connection, s: Scenario, bootstrapped=False):
-    """
-    Test outcomes can be different for cases that trigger bootstrapping code or
-    a repair event. This is indicated through the *bootstrapped* flag.
-
-    TestSync and SyncRollback trigger no bootstrap and no repair.
-    TestGenesis and TestMigrations will bootstrap their cex schema.
-    TestRepair does no bootstrap but ends with a repair and so produces
-    the same state as TestGenesis and TestMigrations.
-    """
+def _test_db_state(conn: pg.Connection, s: Scenario):
     assert_db_constraints(conn)
     with conn.cursor() as cur:
         assert_cex_ids(cur)
         assert_main_addresses_list(cur)
         assert_ignored_addresses_list(cur)
         assert_main_addresses(cur, s)
-        assert_deposit_addresses(cur)
-        assert_addresses_conflicts(cur, s)
-        assert_processing_log(cur, s, bootstrapped)
-        assert_supply(cur, s, bootstrapped)
-        assert_repair_cleaned_up(cur)
+        assert_deposit_addresses(cur, s)
+        assert_addresses_excluded(cur, s)
+        assert_last_processed_height(cur, s)
+        assert_supply(cur, s)
 
 
 def assert_db_constraints(conn: pg.Connection):
     # cex.cexs
     assert_pk(conn, "cex", "cexs", ["id"])
     assert_column_not_null(conn, "cex", "cexs", "id")
+    assert_column_not_null(conn, "cex", "cexs", "text_id")
     assert_column_not_null(conn, "cex", "cexs", "name")
+    assert_unique(conn, "cex", "cexs", ["text_id"])
     assert_unique(conn, "cex", "cexs", ["name"])
-    # cex.addresses
-    assert_pk(conn, "cex", "addresses", ["address_id"])
-    assert_fk(conn, "cex", "addresses", "addresses_address_id_fkey")
-    assert_fk(conn, "cex", "addresses", "addresses_cex_id_fkey")
-    assert_column_not_null(conn, "cex", "addresses", "address_id")
-    assert_column_not_null(conn, "cex", "addresses", "cex_id")
-    assert_column_not_null(conn, "cex", "addresses", "type")
-    assert_index(conn, "cex", "addresses", "addresses_cex_id_idx")
-    assert_index(conn, "cex", "addresses", "addresses_type_idx")
-    assert_index(conn, "cex", "addresses", "addresses_spot_height_idx")
-    # cex.addresses_ignored
-    assert_pk(conn, "cex", "addresses_ignored", ["address_id"])
-    assert_column_not_null(conn, "cex", "addresses_ignored", "address_id")
-    # cex.addresses_conflicts
-    assert_pk(conn, "cex", "addresses_conflicts", ["address_id"])
-    assert_column_not_null(conn, "cex", "addresses_conflicts", "address_id")
-    assert_column_not_null(conn, "cex", "addresses_conflicts", "first_cex_id")
-    assert_column_not_null(conn, "cex", "addresses_conflicts", "type")
-    assert_fk(
-        conn, "cex", "addresses_conflicts", "addresses_conflicts_first_cex_id_fkey"
+    # cex.main_addresses
+    assert_pk(conn, "cex", "main_addresses", ["address_id"])
+    assert_fk(conn, "cex", "main_addresses", "main_addresses_address_id_fkey")
+    assert_fk(conn, "cex", "main_addresses", "main_addresses_cex_id_fkey")
+    assert_column_not_null(conn, "cex", "main_addresses", "address_id")
+    assert_column_not_null(conn, "cex", "main_addresses", "cex_id")
+    assert_index(conn, "cex", "main_addresses", "main_addresses_cex_id_idx")
+    # cex.deposit_addresses
+    assert_pk(conn, "cex", "deposit_addresses", ["address_id"])
+    assert_fk(conn, "cex", "deposit_addresses", "deposit_addresses_address_id_fkey")
+    assert_fk(conn, "cex", "deposit_addresses", "deposit_addresses_cex_id_fkey")
+    assert_column_not_null(conn, "cex", "deposit_addresses", "address_id")
+    assert_column_not_null(conn, "cex", "deposit_addresses", "cex_id")
+    assert_index(conn, "cex", "deposit_addresses", "deposit_addresses_cex_id_idx")
+    assert_index(conn, "cex", "deposit_addresses", "deposit_addresses_spot_height_idx")
+    # cex.deposit_addresses_ignored
+    assert_pk(conn, "cex", "deposit_addresses_ignored", ["address_id"])
+    assert_column_not_null(conn, "cex", "deposit_addresses_ignored", "address_id")
+    # cex.deposit_addresses_excluded
+    assert_pk(conn, "cex", "deposit_addresses_excluded", ["address_id"])
+    assert_column_not_null(conn, "cex", "deposit_addresses_excluded", "address_id")
+    assert_column_not_null(
+        conn, "cex", "deposit_addresses_excluded", "address_spot_height"
     )
-    # cex.block_processing_log
-    assert_pk(conn, "cex", "block_processing_log", ["header_id"])
-    assert_column_not_null(conn, "cex", "block_processing_log", "header_id")
-    assert_column_not_null(conn, "cex", "block_processing_log", "height")
-    assert_column_not_null(conn, "cex", "block_processing_log", "status")
-    assert_index(conn, "cex", "block_processing_log", "block_processing_log_status_idx")
+    assert_column_not_null(
+        conn, "cex", "deposit_addresses_excluded", "conflict_spot_height"
+    )
+
     # cex.supply
     assert_pk(conn, "cex", "supply", ["height", "cex_id"])
     assert_column_not_null(conn, "cex", "supply", "height")
@@ -460,101 +405,73 @@ def assert_main_addresses(cur: pg.Cursor, s: Scenario):
         """
         select c.cex_id
             , a.address
-            , c.spot_height
-        from cex.addresses c
+        from cex.main_addresses c
         join core.addresses a on a.id = c.address_id
-        where c.type = 'main'
         order by 1, 2;
         """
     )
     rows = cur.fetchall()
     assert len(rows) == 3
-    assert (1, s.address("cex1"), None) in rows
-    assert (2, s.address("cex2"), None) in rows
-    assert (3, s.address("cex3"), None) in rows
+    assert (1, s.address("cex1")) in rows
+    assert (2, s.address("cex2")) in rows
+    assert (3, s.address("cex3")) in rows
 
 
-def assert_deposit_addresses(cur: pg.Cursor):
-    pub1 = AC.get("pub1")
-    pub2 = AC.get("pub2")
+def assert_deposit_addresses(cur: pg.Cursor, s: Scenario):
     cur.execute(
         """
         select c.cex_id
             , a.address
-        from cex.addresses c
+        from cex.deposit_addresses c
         join core.addresses a on a.id = c.address_id
-        where type = 'deposit'
         order by 1, 2;
         """
     )
     rows = cur.fetchall()
     assert len(rows) == 2
     assert rows == [
-        (1, pub1.address),
-        (2, pub2.address),
+        (1, s.address("pub1")),
+        (2, s.address("pub2")),
     ]
 
 
-def assert_addresses_conflicts(cur: pg.Cursor, s: Scenario):
-    pub8 = AC.get("pub8")
-    pub9 = AC.get("pub9")
+def assert_addresses_excluded(cur: pg.Cursor, s: Scenario):
     cur.execute(
         """
         select a.address
-            , c.first_cex_id
-            , c.type
-            , c.spot_height
+            , c.address_spot_height
             , c.conflict_spot_height
-        from cex.addresses_conflicts c
+        from cex.deposit_addresses_excluded c
         join core.addresses a on a.id = c.address_id
-        order by spot_height;
+        order by address_spot_height;
         """
     )
     rows = cur.fetchall()
     assert len(rows) == 2
     assert rows == [
-        (pub9.address, 1, "deposit", s.parent_height + 2, s.parent_height + 5),
-        (pub8.address, 1, "deposit", s.parent_height + 5, s.parent_height + 5),
+        (s.address("pub9"), s.parent_height + 2, s.parent_height + 5),
+        (s.address("pub8"), s.parent_height + 5, s.parent_height + 5),
     ]
 
 
-def assert_processing_log(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
+def assert_last_processed_height(cur: pg.Cursor, s: Scenario):
     cur.execute(
         """
-        select header_id
-            , height
-            , invalidation_height
-            , status
-        from cex.block_processing_log
-        order by height;
+        select last_processed_height
+        from cex._deposit_addresses_log;
         """
     )
     rows = cur.fetchall()
-    assert len(rows) == 6
-    expected_status = "processed" if bootstrapped else "pending"
-    assert rows[0] == (GENESIS_ID, s.parent_height + 0, None, "processed")
-    assert rows[1] == ("block-a", s.parent_height + 1, None, expected_status)
-    assert rows[2] == ("block-b", s.parent_height + 2, None, expected_status)
-    assert rows[3] == (
-        "block-c",
-        s.parent_height + 3,
-        s.parent_height + 2,
-        expected_status,
-    )
-    assert rows[4] == (
-        "block-d",
-        s.parent_height + 4,
-        s.parent_height + 3,
-        expected_status,
-    )
-    assert rows[5] == ("block-e", s.parent_height + 5, None, expected_status)
+    assert len(rows) == 1
+    assert rows[0] == (s.parent_height + 5,)
 
 
-def assert_supply(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
+def assert_supply(cur: pg.Cursor, s: Scenario):
     height_b = s.parent_height + 2
     height_c = s.parent_height + 3
     height_d = s.parent_height + 4
     height_e = s.parent_height + 5
+
     cur.execute(
         """
         select height
@@ -566,35 +483,15 @@ def assert_supply(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
         """
     )
     rows = cur.fetchall()
-    if bootstrapped:
-        assert len(rows) == 7
-        assert rows == [
-            (height_b, 1, 6, 20),
-            (height_c, 1, 16, 10),
-            (height_c, 2, 0, 15),
-            (height_d, 2, 5, 9),
-            (height_e, 1, 17, 10),
-            (height_e, 2, 9, 6),
-            (height_e, 3, 99, 0),
-        ]
-    else:
-        assert len(rows) == 6
-        assert rows == [
-            (height_b, 1, 6, 94),
-            (height_c, 1, 16, 104),
-            (height_d, 2, 5, 9),
-            (height_e, 1, 17, 104),
-            (height_e, 2, 9, 6),
-            (height_e, 3, 99, 0),
-        ]
-
-
-def assert_repair_cleaned_up(cur: pg.Cursor):
-    # Cleanup should have removed repair schemas
-    cur.execute(
-        """
-        insert into ew.repairs (started, from_height, last_height, next_height)
-        select now(), 0, 0, 0;
-        """
-    )
-    cur.execute("create schema repair_adr;")
+    for row in rows:
+        print(row)
+    assert len(rows) == 7
+    assert rows == [
+        (height_b, 1, 6, 20),
+        (height_c, 1, 16, 10),
+        (height_c, 2, 0, 15),
+        (height_d, 2, 5, 9),
+        (height_e, 1, 17, 10),
+        (height_e, 2, 9, 6),
+        (height_e, 3, 99, 0),
+    ]

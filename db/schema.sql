@@ -8,23 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 31);
-
-create table ew.repairs (
-	singleton int primary key default 1,
-	started timestamp not null,
-	-- Repair range of current session
-	from_height int not null,
-	last_height int not null,
-	-- Next height to be processed.
-	-- Allows to pick up where we left after a shutdown.
-	next_height int not null,
-	check(singleton = 1),
-	check(last_height >= from_height),
-	check(next_height >= from_height),
-	check(next_height <= last_height)
-);
-
+insert into ew.revision (major, minor) values (3, 32);
 
 -------------------------------------------------------------------------------
 -- Core
@@ -240,14 +224,33 @@ insert into cex.cexs (id, name, text_id) values
 	(5, 'TradeOgre', 'tradeogre'),
 	(6, 'Huobi', 'huobi');
 
-create type cex.t_address_type as enum ('main', 'deposit');
+create table cex.main_addresses (
+	address_id bigint,
+	cex_id integer
+);
 
-create table cex.addresses (
+create table cex.deposit_addresses (
 	address_id bigint,
 	cex_id integer,
-	type cex.t_address_type,
 	spot_height int
 );
+
+create table cex.deposit_addresses_excluded (
+	-- Same columns as cex.address
+	address_id bigint,
+	address_spot_height integer,
+	conflict_spot_height integer
+);
+
+-- Track deposit addresses processing height
+create table cex._deposit_addresses_log (
+	singleton int primary key default 1,
+	last_processed_height int default 0,
+	check(singleton = 1)
+);
+insert into cex._deposit_addresses_log(singleton) values (1);
+
+-------------------------------------------------------------------------------
 
 /*
 	List of addresses to be ignored.
@@ -259,14 +262,14 @@ create table cex.addresses (
 	height. Keeping it simple and manual for now as number of
 	addresses to ignore is small.
  */
-create table cex.addresses_ignored (
+create table cex.deposit_addresses_ignored (
 	address_id bigint
 );
 
 /*
 	List of known main addresses to be populated manually.
 
-	Corresponding address id's will be added to cex.addresses
+	Corresponding address id's will be added to cex.main_addresses
 	automatically once available. 
 */
 create table cex.main_addresses_list (
@@ -282,65 +285,6 @@ create table cex.main_addresses_list (
 */
 create table cex.ignored_addresses_list (
 	address text
-);
-
-/* 
-	The PK of cex.addresses is the address id. An address can therefore
-	be linked to a single CEX only.
-	However, we can't exclude the possibility of running into addresses
-	linked to more than one CEX. When a known address is linked to
-	a second CEX, it will get removed from cex.addresses and stored
-	here for reference.
- */
-create table cex.addresses_conflicts (
-	-- Same columns as cex.address
-	address_id bigint,
-	first_cex_id integer,
-	type cex.t_address_type,
-	spot_height integer,
-	-- Then some info on when the conflict occurred
-	conflict_spot_height integer
-);
-
-/*
-	Track CEX deposit addresses processing by block.
-	
-	Logs the processing status of each block as well as their invalidation
-	height (the earliest height of deposit txs).
-	
-	New blocks are added with status 'pending', indicating they haven't
-	been processed in a repair event yet.
-
-	When an unprocessed block is rolled back, its deposit addresses
-	are removed from cex.addresses and it is itself removed from this table.
-
-	When an already processed block is rolled back, its deposit
-	addresses are removed from the main cex.addresses and its status is
-	changed from 'processed' to 'pending_rollback'.
-
-	When a repair event is triggered, it'll pick up at the lowest
-	invalidation height of all 'pending' and 'pending_rollback' blocks.
-	This ensures that the repair event overwrites any changes from a
-	previous repair event that included blocks not part of the main
-	chain anymore.
-	
-	When a repair event is completed, the status of affected blocks
-	is changed to 'processed' or 'processed_rollback'.
-
-	Blocks with status 'processed_rollback' are not deleted in order to
-	assess how often such events occur.
- */
-create type cex.t_block_status as enum (
-	'pending',
-	'pending_rollback',
-	'processed',
-	'processed_rollback'
-);
-create table cex.block_processing_log (
-	header_id text,
-	height integer,
-	invalidation_height integer,
-	status cex.t_block_status
 );
 
 -- Supply in main and deposit addresses by cex.

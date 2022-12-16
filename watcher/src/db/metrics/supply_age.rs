@@ -568,7 +568,7 @@ mod sql {
         from adr.erg_diffs d
         left join adr.erg b on b.address_id = d.address_id
         join core.addresses a on a.id = d.address_id
-        left join cex.addresses c on c.address_id = d.address_id and c.type='main'
+        left join cex.main_addresses c on c.address_id = d.address_id
         where d.height = $1
             -- exclude emission contracts
             and d.address_id <> core.address_id('2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU')
@@ -602,7 +602,7 @@ mod sql {
         from adr.erg_diffs d
         left join mtr_sa_adr.erg b on b.address_id = d.address_id
         join core.addresses a on a.id = d.address_id
-        left join cex.addresses c on c.address_id = d.address_id and c.type='main'
+        left join cex.main_addresses c on c.address_id = d.address_id
         where d.height = $1
             -- exclude emission contracts
             and d.address_id <> core.address_id('2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU')

@@ -222,7 +222,7 @@ class TestGenesis:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.scenario, bootstrapped=True)
+        _test_db_state(synced_db, self.scenario)
 
 
 @pytest.mark.order(ORDER)
@@ -255,70 +255,13 @@ class TestMigrations:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.scenario, bootstrapped=True)
+        _test_db_state(synced_db, self.scenario)
 
 
-@pytest.mark.order(ORDER)
-class TestRepair:
-    """
-    Same as TestSync, but triggering a repair event after full sync.
-    """
-
-    # Start one block later so last block has height multiple of 5
-    # and trigger a repair event.
-    scenario = Scenario(SCENARIO_DESCRIPTION, 599_999 + 1, 1234560000000)
-
-    @pytest.fixture(scope="class")
-    def synced_db(self, temp_cfg, temp_db_class_scoped):
-        """
-        Run watcher with mock api and return cursor to test db.
-        """
-        with MockApi() as api:
-            api = ApiUtil()
-            api.set_blocks(self.scenario.blocks)
-
-            # Bootstrap db
-            with pg.connect(temp_db_class_scoped) as conn:
-                bootstrap_db(conn, self.scenario)
-                # Simulate an interupted repair,
-                # Should be cleaned up at startup.
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        insert into ew.repairs (started, from_height, last_height, next_height)
-                        select now(), 0, 0, 0;
-                        """
-                    )
-                    cur.execute("create schema repair_adr;")
-                conn.commit()
-
-            # Run
-            cp = run_watcher(temp_cfg)
-            assert cp.returncode == 0
-            assert "Including block block-e" in cp.stdout.decode()
-            assert "Repairing heights 600002 to 600005 (4 blocks)" in cp.stdout.decode()
-            assert "Done repairing heights 600002 to 600005" in cp.stdout.decode()
-
-            with pg.connect(temp_db_class_scoped) as conn:
-                yield conn
-
-    def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.scenario, bootstrapped=True)
-
-
-def _test_db_state(conn: pg.Connection, s: Scenario, bootstrapped=False):
-    """
-    Test outcomes can be different for cases that trigger bootstrapping code or
-    a repair event. This is indicated through the *bootstrapped* flag.
-
-    TestSync and SyncRollback trigger no bootstrap and no repair.
-    TestGenesis and TestMigrations will bootstrap their cex schema.
-    TestRepair does no bootstrap but ends with a repair and so produces
-    the same state as TestGenesis and TestMigrations.
-    """
+def _test_db_state(conn: pg.Connection, s: Scenario):
     assert_db_constraints(conn)
     with conn.cursor() as cur:
-        assert_supply(cur, s, bootstrapped)
+        assert_supply(cur, s)
 
 
 def assert_db_constraints(conn: pg.Connection):
@@ -331,7 +274,7 @@ def assert_db_constraints(conn: pg.Connection):
     assert_column_ge(conn, "mtr", "cex_supply", "deposit", 0)
 
 
-def assert_supply(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
+def assert_supply(cur: pg.Cursor, s: Scenario):
     cur.execute(
         """
         select height
@@ -342,19 +285,10 @@ def assert_supply(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
         """
     )
     rows = cur.fetchall()
-    if bootstrapped:
-        assert len(rows) == 6
-        assert rows[0] == (s.parent_height + 0, 0, 0)
-        assert rows[1] == (s.parent_height + 1, 0, 0)
-        assert rows[2] == (s.parent_height + 2, 26, 20)
-        assert rows[3] == (s.parent_height + 3, 41, 25)
-        assert rows[4] == (s.parent_height + 4, 40, 19)
-        assert rows[5] == (s.parent_height + 5, 139, 16)
-    else:
-        assert len(rows) == 6
-        assert rows[0] == (s.parent_height + 0, 0, 0)
-        assert rows[1] == (s.parent_height + 1, 0, 0)
-        assert rows[2] == (s.parent_height + 2, 100, 94)
-        assert rows[3] == (s.parent_height + 3, 120, 104)
-        assert rows[4] == (s.parent_height + 4, 134, 113)
-        assert rows[5] == (s.parent_height + 5, 233, 110)
+    assert len(rows) == 6
+    assert rows[0] == (s.parent_height + 0, 0, 0)
+    assert rows[1] == (s.parent_height + 1, 0, 0)
+    assert rows[2] == (s.parent_height + 2, 26, 20)
+    assert rows[3] == (s.parent_height + 3, 41, 25)
+    assert rows[4] == (s.parent_height + 4, 40, 19)
+    assert rows[5] == (s.parent_height + 5, 139, 16)

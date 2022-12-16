@@ -21,11 +21,11 @@ pub struct Node {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Repairs {
-    /// Number of blocks between repair event triggers
+pub struct Deposits {
+    /// Minimum number of blocks to be processed in a batch
     pub interval: u32,
-    // Wait *offset* blocks after a trigger before starting a repair event.
-    pub offset: u32,
+    // Number of blocks from latest one to exclude from processing batch
+    pub buffer: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -40,7 +40,7 @@ pub struct Coingecko {
 pub struct Settings {
     pub database: Database,
     pub node: Node,
-    pub repairs: Repairs,
+    pub deposits: Deposits,
     pub coingecko: Coingecko,
 }
 

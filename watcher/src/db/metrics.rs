@@ -14,6 +14,7 @@ mod utils;
 pub mod utxos;
 mod volume;
 
+use crate::db::cexs::deposit_addresses::AddressQueues;
 use crate::db::coingecko::Cache as CoinGeckoCache;
 use crate::db::Buffer;
 use crate::parsing::BlockData;
@@ -101,6 +102,11 @@ pub(super) fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result
     Ok(())
 }
 
+pub(super) fn process_deposit_addresses(tx: &mut Transaction, queues: &AddressQueues) {
+    cexs::process_deposit_addresses(tx, queues);
+    supply_composition::process_deposit_addresses(tx, queues);
+}
+
 fn refresh_change_summaries(tx: &mut Transaction, heights: &heights::Cache) {
     utxos::refresh_summary(tx, heights);
     address_counts::refresh_summary(tx, heights);
@@ -156,11 +162,6 @@ impl Cache {
             height_28d_ago: load_height_days_ago(client, 28),
         }
     }
-}
-
-pub(super) fn repair(tx: &mut Transaction, height: i32) {
-    cexs::repair(tx, height);
-    supply_composition::repair(tx, height);
 }
 
 /// Return height of first block in `days` days window since timestamp of last block

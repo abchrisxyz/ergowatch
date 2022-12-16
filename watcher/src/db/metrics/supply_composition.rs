@@ -4,6 +4,7 @@
 use super::heights::Cache as HeightsCache;
 use super::utils::bootstrap_change_summary;
 use super::utils::refresh_change_summary;
+use crate::db::cexs::deposit_addresses::AddressQueues;
 use crate::emission;
 use crate::parsing::BlockData;
 use log::info;
@@ -78,22 +79,66 @@ pub(super) fn refresh_summary(tx: &mut Transaction, hc: &HeightsCache) {
     .unwrap();
 }
 
-pub(super) fn repair(tx: &mut Transaction, height: i32) {
-    // Get changes in address counts by balance
-    let mut diffs: Composition = get_diffs(tx, height);
+pub(super) fn process_deposit_addresses(tx: &mut Transaction, addresses: &AddressQueues) {
+    // Propagate: p2pks --> deposits
+    if !addresses.propagate.is_empty() {
+        tx.execute(
+            "
+            with diffs as (
+                select height
+                    , sum(value) as value
+                from adr.erg_diffs
+                where address_id = any($1)
+                group by 1
+            ), patch as (
+                select h as height
+                    , sum(d.value) over (
+                        order by h asc
+                        rows between unbounded preceding and current row
+                    ) as value
+                from generate_series((select min(height) from diffs), (select max(height) from core.headers)) as h
+                left join diffs d on d.height = h
+            )
+            update mtr.supply_composition c
+            set p2pks = c.p2pks - p.value
+                , cex_deposits = c.cex_deposits + p.value
+            from patch p
+            where p.height = c.height;
+            ",
+            &[&addresses.propagate],
+        )
+        .unwrap();
+    }
 
-    // Don't exclude the possibility of repairs going back to
-    // treasury rewards era and append possible reward to diff.
-    diffs.treasury += emission::treasury_reward_at_height(height as i64);
-
-    // Get previous record
-    let prev: Record = tx
-        .query_one(sql::GET_RECORD_AT, &[&(height - 1)])
-        .unwrap()
-        .into();
-
-    // Update record with new values
-    update_record(tx, height, &(prev.composition + diffs));
+    // Purge: deposits --> p2pks
+    if !addresses.purge.is_empty() {
+        tx.execute(
+            "
+            with diffs as (
+                select height
+                    , sum(value) as value
+                from adr.erg_diffs
+                where address_id = any($1)
+                group by 1
+            ), patch as (
+                select h as height
+                    , sum(d.value) over (
+                        order by h asc
+                        rows between unbounded preceding and current row
+                    ) as value
+                from generate_series((select min(height) from diffs), (select max(height) from core.headers)) as h
+                left join diffs d on d.height = h
+            )
+            update mtr.supply_composition c
+            set p2pks = c.p2pks + p.value
+                , cex_deposits = c.cex_deposits - p.value
+            from patch p
+            where p.height = c.height;
+            ",
+            &[&addresses.purge],
+        )
+        .unwrap();
+    }
 }
 
 pub fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result<()> {
@@ -298,32 +343,6 @@ fn insert_record(tx: &mut Transaction, rec: &Record) {
     .unwrap();
 }
 
-fn update_record(tx: &mut Transaction, height: i32, composition: &Composition) {
-    tx.execute(
-        &format!(
-            "
-            update mtr.supply_composition
-            set  p2pks = $2
-                , cex_main = $3
-                , cex_deposits = $4
-                , contracts = $5
-                , miners = $6
-                , treasury = $7
-            where height = $1;"
-        ),
-        &[
-            &height,
-            &composition.p2pks,
-            &composition.cex_main,
-            &composition.cex_deposits,
-            &composition.contracts,
-            &composition.miners,
-            &composition.treasury,
-        ],
-    )
-    .unwrap();
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct Record {
     pub height: i32,
@@ -483,15 +502,16 @@ mod sql {
     ///
     /// $1: height
     pub(super) const GET_DIFFS_AT: &str = "
-        select coalesce(sum(value) filter (where a.p2pk and c.address_id is null), 0)::bigint as d_p2pk
-            , coalesce(sum(value) filter (where a.p2pk and c.type = 'main'), 0)::bigint as d_cex_m
-            , coalesce(sum(value) filter (where a.p2pk and c.type = 'deposit'), 0)::bigint as d_cex_d
+        select coalesce(sum(value) filter (where a.p2pk and cm.address_id is null and cd.address_id is null), 0)::bigint as d_p2pk
+            , coalesce(sum(value) filter (where a.p2pk and cm.address_id is not null), 0)::bigint as d_cex_m
+            , coalesce(sum(value) filter (where a.p2pk and cd.address_id is not null), 0)::bigint as d_cex_d
             , coalesce(sum(value) filter (where not a.p2pk and not a.miner and a.id <> core.address_id('4L1ktFSzm3SH1UioDuUf5hyaraHird4D2dEACwQ1qHGjSKtA6KaNvSzRCZXZGf9jkfNAEC1SrYaZmCuvb2BKiXk5zW9xuvrXFT7FdNe2KqbymiZvo5UQLAm5jQY8ZBRhTZ4AFtZa1UF5nd4aofwPiL7YkJuyiL5hDHMZL1ZnyL746tHmRYMjAhCgE7d698dRhkdSeVy')), 0)::bigint as d_cons
             , coalesce(sum(value) filter (where a.miner), 0)::bigint as d_miner
             , coalesce(sum(value) filter (where a.id = core.address_id('4L1ktFSzm3SH1UioDuUf5hyaraHird4D2dEACwQ1qHGjSKtA6KaNvSzRCZXZGf9jkfNAEC1SrYaZmCuvb2BKiXk5zW9xuvrXFT7FdNe2KqbymiZvo5UQLAm5jQY8ZBRhTZ4AFtZa1UF5nd4aofwPiL7YkJuyiL5hDHMZL1ZnyL746tHmRYMjAhCgE7d698dRhkdSeVy')), 0)::bigint as d_tres
         from adr.erg_diffs d
         join core.addresses a on a.id = d.address_id
-        left join cex.addresses c on c.address_id = d.address_id
+        left join cex.main_addresses cm on cm.address_id = d.address_id
+        left join cex.deposit_addresses cd on cd.address_id = d.address_id
         where d.height = $1
             -- exclude emission contracts
             and d.address_id <> core.address_id('2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU')
@@ -544,18 +564,6 @@ mod sql {
         from mtr.supply_composition
         where height >= $1 and height <= $2
         order by 1;
-    ";
-
-    pub(super) const GET_RECORD_AT: &str = "
-        select height
-            , p2pks
-            , cex_main
-            , cex_deposits
-            , contracts
-            , miners
-            , treasury
-        from mtr.supply_composition
-        where height = $1;
     ";
 }
 

@@ -420,15 +420,15 @@ def generate_bootstrap_sql_cex(header: Header, outputs: List[Output]) -> str:
     # Since no cex addresses are involved, no need fill cex.supply.
 
     # Mark existing block as processed
-    qry_block_processing_log = dedent(
+    qry_deposit_addresses_log = dedent(
         f"""
-        insert into cex.block_processing_log(header_id, height, invalidation_height, status)
-        values ('{header.id}', {header.height}, null, 'processed');\n
+        update cex._deposit_addresses_log
+        set last_processed_height = {header.height};\n
     """
     )
     return "".join(
         [
-            qry_block_processing_log,
+            qry_deposit_addresses_log,
         ]
     )
 

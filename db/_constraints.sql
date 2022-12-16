@@ -181,33 +181,32 @@ alter table cex.cexs alter column name set not null;
 alter table cex.cexs add constraint cexs_unique_text_id unique (text_id);
 alter table cex.cexs add constraint cexs_unique_name unique (name);
 
-alter table cex.addresses add primary key (address_id);
-alter table cex.addresses alter column address_id set not null;
-alter table cex.addresses alter column cex_id set not null;
-alter table cex.addresses alter column type set not null;
-alter table cex.addresses add foreign key (address_id)
+alter table cex.main_addresses add primary key (address_id);
+alter table cex.main_addresses alter column address_id set not null;
+alter table cex.main_addresses alter column cex_id set not null;
+alter table cex.main_addresses add foreign key (address_id)
 	references core.addresses (id);
-alter table cex.addresses add foreign key (cex_id)
+alter table cex.main_addresses add foreign key (cex_id)
 	references cex.cexs (id);
-create index on cex.addresses(cex_id);
-create index on cex.addresses(type);
-create index on cex.addresses(spot_height);
+create index on cex.main_addresses(cex_id);
 
-alter table cex.addresses_ignored add primary key (address_id);
-alter table cex.addresses_ignored alter column address_id set not null;
-
-alter table cex.addresses_conflicts add primary key (address_id);
-alter table cex.addresses_conflicts alter column address_id set not null;
-alter table cex.addresses_conflicts alter column first_cex_id set not null;
-alter table cex.addresses_conflicts alter column type set not null;
-alter table cex.addresses_conflicts add foreign key (first_cex_id)
+alter table cex.deposit_addresses add primary key (address_id);
+alter table cex.deposit_addresses alter column address_id set not null;
+alter table cex.deposit_addresses alter column cex_id set not null;
+alter table cex.deposit_addresses add foreign key (address_id)
+	references core.addresses (id);
+alter table cex.deposit_addresses add foreign key (cex_id)
 	references cex.cexs (id);
+create index on cex.deposit_addresses(cex_id);
+create index on cex.deposit_addresses(spot_height);
 
-alter table cex.block_processing_log add primary key (header_id);
-alter table cex.block_processing_log alter column header_id set not null;
-alter table cex.block_processing_log alter column height set not null;
-alter table cex.block_processing_log alter column status set not null;
-create index on cex.block_processing_log (status);
+alter table cex.deposit_addresses_ignored add primary key (address_id);
+alter table cex.deposit_addresses_ignored alter column address_id set not null;
+
+alter table cex.deposit_addresses_excluded add primary key (address_id);
+alter table cex.deposit_addresses_excluded alter column address_id set not null;
+alter table cex.deposit_addresses_excluded alter column address_spot_height set not null;
+alter table cex.deposit_addresses_excluded alter column conflict_spot_height set not null;
 
 alter table cex.supply add primary key (height, cex_id);
 alter table cex.supply alter column height set not null;

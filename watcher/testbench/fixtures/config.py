@@ -23,9 +23,9 @@ CONFIG = textwrap.dedent(
     url = "http://{MOCK_APIS_HOST}"
     poll_interval = 5
 
-    [repairs]
-    interval = 5 # blocks
-    offset = 0 # blocks - will repair up to last height
+    [deposits]
+    interval = 1 # detect new deposit anytime when synced
+    buffer = 0 # blocks - will repair up to last height
 
     [coingecko]
     url = "http://{MOCK_APIS_HOST}/coingecko"

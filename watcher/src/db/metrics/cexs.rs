@@ -1,5 +1,5 @@
 /// CEX metrics
-use crate::parsing::BlockData;
+use crate::{db::cexs::deposit_addresses::AddressQueues, parsing::BlockData};
 use log::info;
 use postgres::Transaction;
 
@@ -11,8 +11,13 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
     rollback_supply(tx, block.height);
 }
 
-pub(super) fn repair(tx: &mut Transaction, height: i32) {
-    update_supply(tx, height);
+pub(super) fn process_deposit_addresses(tx: &mut Transaction, queues: &AddressQueues) {
+    if !queues.propagate.is_empty() {
+        propagate_deposit_addresses(tx, &queues.propagate);
+    }
+    if !queues.purge.is_empty() {
+        purge_deposit_addresses(tx, &queues.purge);
+    }
 }
 
 /// Add new snapshot of supply on all exchanges at `height`.
@@ -41,32 +46,6 @@ fn rollback_supply(tx: &mut Transaction, height: i32) {
         "
         delete from mtr.cex_supply
         where height = $1;",
-        &[&height],
-    )
-    .unwrap();
-}
-
-/// Update snapshot of supply on all exchanges at `height`.
-fn update_supply(tx: &mut Transaction, height: i32) {
-    tx.execute(
-        "
-        with new_values as (
-            select coalesce(sum(main + deposit), 0) as total
-                , coalesce(sum(deposit), 0) as deposit
-            from cex.supply
-            where (cex_id, height) in (
-                select cex_id
-                    , max(height)
-                from cex.supply
-                where height <= $1
-                group by 1
-            )
-        )
-        update mtr.cex_supply s
-        set total = n.total
-            , deposit = n.deposit
-        from new_values n
-        where s.height = $1;",
         &[&height],
     )
     .unwrap();
@@ -145,4 +124,62 @@ fn set_constraints(tx: &mut Transaction) {
     for statement in statements {
         tx.execute(statement, &[]).unwrap();
     }
+}
+
+fn propagate_deposit_addresses(tx: &mut Transaction, addresses: &Vec<i64>) {
+    tx.execute(
+        "
+        with diffs as (
+            select height
+                , sum(value) as value
+            from adr.erg_diffs
+            where address_id = any($1)
+            group by 1
+        ), patch as (
+            select h as height
+                , sum(d.value) over (
+                    order by h asc
+                    rows between unbounded preceding and current row
+                ) as value
+            from generate_series((select min(height) from diffs), (select max(height) from core.headers)) as h
+            left join diffs d on d.height = h
+        )
+        update mtr.cex_supply s
+        set total = s.total + p.value
+            , deposit = s.deposit + p.value
+        from patch p
+        where p.height = s.height;
+        ",
+        &[&addresses],
+    )
+    .unwrap();
+}
+
+fn purge_deposit_addresses(tx: &mut Transaction, addresses: &Vec<i64>) {
+    tx.execute(
+        "
+        with diffs as (
+            select height
+                , sum(value) as value
+            from adr.erg_diffs
+            where address_id = any($1)
+            group by 1
+        ), patch as (
+            select h as height
+                , sum(d.value) over (
+                    order by h asc
+                    rows between unbounded preceding and current row
+                ) as value
+            from generate_series((select min(height) from diffs), (select max(height) from core.headers)) as h
+            left join diffs d on d.height = h
+        )
+        update mtr.cex_supply s
+        set total = s.total - p.value
+            , deposit = s.deposit - p.value
+        from patch p
+        where p.height = s.height;
+        ",
+        &[&addresses],
+    )
+    .unwrap();
 }

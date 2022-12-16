@@ -23,10 +23,6 @@ struct Cli {
     #[clap(short = 'm', long)]
     allow_migrations: bool,
 
-    /// Resume interrupted repair session on startup
-    #[clap(short = 'r', long)]
-    resume_repair: bool,
-
     /// Print version information
     #[clap(short, long)]
     version: bool,
@@ -45,9 +41,8 @@ pub struct Session {
     pub exit_when_synced: bool,
     pub head: crate::types::Head,
     pub allow_rollbacks: bool,
-    pub repair_interval: u32,
-    pub repair_offset: u32,
-    pub resume_repair: bool,
+    pub deposits_interval: i32,
+    pub deposits_buffer: i32,
 }
 
 impl Session {
@@ -99,15 +94,9 @@ impl Session {
         if cli.allow_migrations {
             info!("Found option `--allow-migrations`, watcher will apply migrations if needed")
         }
-        if cli.resume_repair {
-            info!("Found option `--resume-repair`, watcher will resume any interrupted repair sessions")
-        }
         if cli.exit {
             info!("Found option `--exit`, watcher will exit once synced with node")
         }
-
-        // Drop any replay tables from previous repair sessions.
-        db.drop_replay_tables();
 
         // Check db version and migrations if allowed
         db.check_migrations(cli.allow_migrations).unwrap();
@@ -123,9 +112,8 @@ impl Session {
             exit_when_synced: cli.exit,
             head: db_core_head,
             allow_rollbacks: db_has_constraints,
-            repair_interval: cfg.repairs.interval,
-            repair_offset: cfg.repairs.offset,
-            resume_repair: cli.resume_repair,
+            deposits_interval: cfg.deposits.interval as i32,
+            deposits_buffer: cfg.deposits.buffer as i32,
         })
     }
 }

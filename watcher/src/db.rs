@@ -5,7 +5,6 @@ pub mod coingecko;
 pub mod core;
 pub mod metrics;
 mod migrations;
-pub mod repair;
 pub mod unspent;
 
 use log::debug;
@@ -15,11 +14,12 @@ use postgres::{Client, NoTls, Transaction};
 use crate::parsing::BlockData;
 use crate::types::Head;
 
+use self::cexs::deposit_addresses::AddressQueues;
+
 #[derive(Debug)]
 pub struct DB {
     conn_str: String,
     bootstrapping_work_mem_kb: u32,
-    repair_event: Option<repair::RepairEvent>,
     cache: Cache,
     buffer: Buffer,
 }
@@ -33,8 +33,7 @@ impl DB {
         let mut client = Client::connect(&self.conn_str, NoTls)?;
         let mut tx = client.transaction()?;
         core::genesis::include_genesis_boxes(&mut tx, &boxes);
-        // Other schemas pick up genesis boxes from core tables
-        // during bootstrapping.
+        // Other schemas pick up genesis boxes from core tables during bootstrapping.
         tx.commit()?;
         Ok(())
     }
@@ -63,6 +62,8 @@ impl DB {
 
         tx.commit()?;
 
+        self.cache.last_height = block.height;
+
         Ok(())
     }
 
@@ -72,14 +73,20 @@ impl DB {
         let mut tx = client.transaction()?;
 
         metrics::rollback_block(&mut tx, block, &mut self.cache.metrics)?;
-        cexs::rollback_block(&mut tx, block, &mut self.cache.cexs)?;
+        let aqs = cexs::rollback_block(&mut tx, block, &mut self.cache.cexs);
         blocks::rollback_block(&mut tx, block, &mut self.cache.blocks)?;
         addresses::rollback_block(&mut tx, block)?;
         cexs::declaration::rollback_block(&mut tx, block, &mut self.cache.cexs)?;
         unspent::rollback_block(&mut tx, block)?;
         core::rollback_block(&mut tx, block)?;
 
+        if let Some(queues) = aqs {
+            self.process_deposit_address_queues(&mut tx, queues);
+        }
+
         tx.commit()?;
+
+        self.cache.last_height = block.height - 1;
 
         Ok(())
     }
@@ -143,6 +150,43 @@ impl DB {
         tx.commit()?;
         Ok(())
     }
+
+    pub fn periodic_cex_deposits_processing(
+        &mut self,
+        interval: i32,
+        buffer: i32,
+    ) -> anyhow::Result<()> {
+        let gap = self.cache.last_height - self.cache.cexs.deposit_addresses.last_processed_height;
+        if gap >= interval + buffer {
+            // Processing range from next height up to highest multiple of interval
+            let diff = self.cache.last_height - buffer;
+            let max_height = diff - diff % interval;
+
+            let mut client = Client::connect(&self.conn_str, NoTls)?;
+            let mut tx = client.transaction()?;
+
+            let queues = cexs::deposit_addresses::spot(
+                &mut tx,
+                max_height,
+                &self.cache.cexs.deposit_addresses,
+            );
+            self.process_deposit_address_queues(&mut tx, queues);
+            tx.commit()?;
+
+            self.cache.cexs.deposit_addresses.last_processed_height = max_height;
+        }
+        Ok(())
+    }
+
+    fn process_deposit_address_queues(&mut self, tx: &mut Transaction, queues: AddressQueues) {
+        info!(
+            "Processing deposit address changes: {} new & {} excluded",
+            queues.propagate.len(),
+            queues.purge.len()
+        );
+        cexs::process_deposit_addresses(tx, &queues, &mut self.cache.cexs);
+        metrics::process_deposit_addresses(tx, &queues);
+    }
 }
 
 impl DB {
@@ -165,7 +209,6 @@ impl DB {
         DB {
             conn_str,
             bootstrapping_work_mem_kb,
-            repair_event: None,
             buffer: Buffer::new(),
             cache: Cache::new(),
         }
@@ -293,6 +336,7 @@ impl Buffer {
 
 #[derive(Debug)]
 pub struct Cache {
+    last_height: i32,
     pub cexs: cexs::Cache,
     pub coingecko: coingecko::Cache,
     pub metrics: metrics::Cache,
@@ -303,6 +347,7 @@ impl Cache {
     /// Initialize a cache with default values, representing an empty database.
     pub fn new() -> Self {
         Self {
+            last_height: 0,
             cexs: cexs::Cache::new(),
             coingecko: coingecko::Cache::new(),
             metrics: metrics::Cache::new(),
@@ -313,9 +358,21 @@ impl Cache {
     /// Load cache values from db
     pub fn load(&mut self, client: &mut Client) {
         info!("Loading cache");
+        self.last_height = get_last_height(client);
         self.cexs = cexs::Cache::load(client);
         self.coingecko = coingecko::Cache::load(client);
         self.metrics = metrics::Cache::load(client);
         self.blocks = blocks::Cache::load(client);
+    }
+}
+
+fn get_last_height(client: &mut Client) -> i32 {
+    match client
+        .query_one("select max(height) from core.headers;", &[])
+        .unwrap()
+        .get(0)
+    {
+        Some(h) => h,
+        None => 0,
     }
 }

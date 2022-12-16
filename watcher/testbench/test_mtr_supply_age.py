@@ -15,7 +15,7 @@ from utils import assert_pk
 from utils import assert_column_not_null
 
 
-ORDER = 13
+ORDER = 15
 
 
 SCENARIO_DESCRIPTION = """

@@ -39,7 +39,6 @@ OPTIONS:
     -c, --config <PATH>                          Path to config file
     -h, --help                                   Print help information
     -m, --allow-migrations                       Allow database migrations to be applied
-    -r, --resume-repair                          Resume interrupted repair session on startup
     -v, --version                                Print version information
     -x, --exit                                   Exit once synced (mostly for integration tests)
 ```

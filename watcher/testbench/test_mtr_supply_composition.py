@@ -183,7 +183,7 @@ class TestGenesis:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.scenario, bootstrapped=True)
+        _test_db_state(synced_db, self.scenario)
 
 
 @pytest.mark.order(ORDER)
@@ -217,72 +217,14 @@ class TestMigrations:
                 yield conn
 
     def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.scenario, bootstrapped=True)
+        _test_db_state(synced_db, self.scenario)
 
 
-@pytest.mark.order(ORDER)
-class TestRepair:
-    """
-    Same as TestSync, but triggering a repair event after full sync.
-    """
-
-    # Start one block later so last block has height multiple of 5
-    # and trigger a repair event.
-    scenario = Scenario(SCENARIO_DESCRIPTION, 199_999 + 1, 1234560000000, name="repair")
-
-    @pytest.fixture(scope="class")
-    def synced_db(self, temp_cfg, temp_db_class_scoped):
-        """
-        Run watcher with mock api and return cursor to test db.
-        """
-        with MockApi() as api:
-            api = ApiUtil()
-            api.set_blocks(self.scenario.blocks)
-
-            # Bootstrap db
-            with pg.connect(temp_db_class_scoped) as conn:
-                bootstrap_db(conn, self.scenario)
-                # Simulate an interupted repair,
-                # Should be cleaned up at startup.
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        insert into ew.repairs (started, from_height, last_height, next_height)
-                        select now(), 0, 0, 0;
-                        """
-                    )
-                    cur.execute("create schema repair_adr;")
-                conn.commit()
-
-            # Run
-            cp = run_watcher(temp_cfg)
-            assert cp.returncode == 0
-            assert "Including block block-e" in cp.stdout.decode()
-            assert "Repairing heights" in cp.stdout.decode()
-            assert "(5 blocks)" in cp.stdout.decode()
-            assert "Done repairing heights" in cp.stdout.decode()
-
-            with pg.connect(temp_db_class_scoped) as conn:
-                yield conn
-
-    def test_db_state(self, synced_db: pg.Connection):
-        _test_db_state(synced_db, self.scenario, bootstrapped=True)
-
-
-def _test_db_state(conn: pg.Connection, s: Scenario, bootstrapped=False):
-    """
-    Test outcomes can be different for cases that trigger bootstrapping code or
-    a repair event. This is indicated through the *bootstrapped* flag.
-
-    TestSync and SyncRollback trigger no bootstrap and no repair.
-    TestGenesis and TestMigrations will bootstrap their cex schema.
-    TestRepair does no bootstrap but ends with a repair and so produces
-    the same state as TestGenesis and TestMigrations.
-    """
+def _test_db_state(conn: pg.Connection, s: Scenario):
     assert_db_constraints(conn)
     with conn.cursor() as cur:
-        assert_supply_composition(cur, s, bootstrapped)
-        assert_summary(cur, s, bootstrapped)
+        assert_supply_composition(cur, s)
+        assert_summary(cur, s)
 
 
 def assert_db_constraints(conn: pg.Connection):
@@ -295,7 +237,7 @@ def assert_db_constraints(conn: pg.Connection):
     assert_column_not_null(conn, "mtr", "supply_composition", "treasury")
 
 
-def assert_supply_composition(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
+def assert_supply_composition(cur: pg.Cursor, s: Scenario):
     cur.execute(
         """
         select height
@@ -313,31 +255,20 @@ def assert_supply_composition(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
     assert len(rows) == 6
     ph = s.parent_height
     tr = initial_treasury_reward()
-    if bootstrapped:
-        # Treasury reward in first block is zero for h = 0
-        # but will be non-zero otherwise
-        pr = parent_reward(ph)
-        assert rows[0] == (ph + 0, 0, 0, 0, 0, 0, pr)
-        assert rows[1] == (ph + 1, 600, 50, 100, 0, 10, 50 + pr + 1 * tr)
-        assert rows[2] == (ph + 2, 400, 150, 0, 200, 10, 50 + pr + 2 * tr)
-        assert rows[3] == (ph + 3, 400, 150, 0, 202, 6, 50 + pr + 3 * tr)
-        assert rows[4] == (ph + 4, 400, 150, 0, 302, 6, 50 + pr + 4 * tr)
-        assert rows[5] == (ph + 5, 400, 150, 0, 303, 6, 50 + pr + 5 * tr)
-    else:
-        assert rows[0] == (ph + 0, 0, 0, 0, 0, 0, 0)
-        assert rows[1] == (ph + 1, 700, 50, 0, 0, 10, 50)
-        assert rows[2] == (ph + 2, 500, 150, -100, 200, 10, 50)
-        assert rows[3] == (ph + 3, 500, 150, -100, 202, 6, 50)
-        assert rows[4] == (ph + 4, 500, 150, -100, 302, 6, 50)
-        assert rows[5] == (ph + 5, 500, 150, -100, 303, 6, 50)
+    pr = parent_reward(ph)
+    treas = lambda i: 0
+    #  For genesis and migration scenarions
+    if s.parent_height < 200_000:
+        treas = lambda i: pr + i * tr
+    assert rows[0] == (ph + 0, 0, 0, 0, 0, 0, pr)
+    assert rows[1] == (ph + 1, 600, 50, 100, 0, 10, 50 + treas(1))
+    assert rows[2] == (ph + 2, 400, 150, 0, 200, 10, 50 + treas(2))
+    assert rows[3] == (ph + 3, 400, 150, 0, 202, 6, 50 + treas(3))
+    assert rows[4] == (ph + 4, 400, 150, 0, 302, 6, 50 + treas(4))
+    assert rows[5] == (ph + 5, 400, 150, 0, 303, 6, 50 + treas(5))
 
 
-def assert_summary(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
-    # Repair scenario would need one more block to refresh summaries.
-    # Other scenario's already cover that aspect, so safe to skip here.
-    if s.name == "repair":
-        return
-
+def assert_summary(cur: pg.Cursor, s: Scenario):
     cur.execute(
         """
         select label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
@@ -348,33 +279,26 @@ def assert_summary(cur: pg.Cursor, s: Scenario, bootstrapped: bool):
     assert len(rows) == 7
     ph = s.parent_height
     tr = initial_treasury_reward()
-
-    if bootstrapped:
-        pr = parent_reward(ph)
-        assert rows[0] == ("p2pks", 400, 400, 400, 400, 400, 400)
-        assert rows[1] == ("cex_main", 150, 150, 150, 150, 150, 150)
-        assert rows[2] == ("cex_deposits", 0, 0, 0, 0, 0, 0)
-        assert rows[3] == ("contracts", 303, 303, 303, 303, 303, 303)
-        assert rows[4] == ("miners", 6, 6, 6, 6, 6, 6)
-        t = 50 + pr + 5 * tr
-        assert rows[5] == ("treasury", t, t - pr, t - pr, t - pr, t - pr, t - pr)
-        assert rows[6] == (
-            "total",
-            859 + t,
-            859 + t - pr,
-            859 + t - pr,
-            859 + t - pr,
-            859 + t - pr,
-            859 + t - pr,
-        )
-    else:
-        assert rows[0] == ("p2pks", 500, 500, 500, 500, 500, 500)
-        assert rows[1] == ("cex_main", 150, 150, 150, 150, 150, 150)
-        assert rows[2] == ("cex_deposits", -100, -100, -100, -100, -100, -100)
-        assert rows[3] == ("contracts", 303, 303, 303, 303, 303, 303)
-        assert rows[4] == ("miners", 6, 6, 6, 6, 6, 6)
-        assert rows[5] == ("treasury", 50, 50, 50, 50, 50, 50)
-        assert rows[6] == ("total", 909, 909, 909, 909, 909, 909)
+    pr = parent_reward(ph)
+    assert rows[0] == ("p2pks", 400, 400, 400, 400, 400, 400)
+    assert rows[1] == ("cex_main", 150, 150, 150, 150, 150, 150)
+    assert rows[2] == ("cex_deposits", 0, 0, 0, 0, 0, 0)
+    assert rows[3] == ("contracts", 303, 303, 303, 303, 303, 303)
+    assert rows[4] == ("miners", 6, 6, 6, 6, 6, 6)
+    t = 50
+    #  For genesis and migration scenarions
+    if s.parent_height < 200_000:
+        t = t = 50 + pr + 5 * tr
+    assert rows[5] == ("treasury", t, t - pr, t - pr, t - pr, t - pr, t - pr)
+    assert rows[6] == (
+        "total",
+        859 + t,
+        859 + t - pr,
+        859 + t - pr,
+        859 + t - pr,
+        859 + t - pr,
+        859 + t - pr,
+    )
 
 
 def initial_treasury_reward() -> int:
@@ -384,4 +308,11 @@ def initial_treasury_reward() -> int:
 def parent_reward(parent_height: int) -> int:
     # Treasury reward in first block is zero for h = 0
     # but will be non-zero otherwise
-    return 0 if parent_height == 0 else initial_treasury_reward()
+    if parent_height == 0:
+        return 0
+    elif parent_height <= 526_000:
+        return initial_treasury_reward()
+    else:
+        # Non-genesis scenario heights are high enough to not
+        # worry about decreasing treasury rewards
+        return 0

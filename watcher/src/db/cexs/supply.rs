@@ -1,45 +1,8 @@
-use super::Cache;
 use crate::parsing::BlockData;
 use postgres::types::Type;
+use postgres::GenericClient;
 use postgres::Transaction;
-
-/*
-    At current height (h) we have a set of known deposit addresses,
-    discovered in blocks prior to h, and a set of new deposit
-    addresses, discovered at h.
-    Supply on deposit addresses at current height (h) is calculated as:
-        S(h) = S_k(h-1) + D_k(h) + S_n(h)
-
-    with:
-        S(h)     supply in exchange deposit addresses at current height
-        S_k(h-1) supply in known deposit addresses at h-1
-        D_k(h)   supply diffs from known addresses at h
-        S_n(h)   supply in new addresses at h
-
-    S_k(h-1) is known from the previous block and cached.
-    D_k is the sum of balance diffs linked to known deposit addresses
-    at height h (table adr.erg_diffs).
-    S_n(h) is the sum of balances linked to new deposit addresses (table
-    erg.bal).
-
-    Advantages of this method are:
-        - adr.erg_diffs table only needs to be read for current h
-        - adr.erg table only needs to be read for new addresses (if any)
-        - doesn't require a join on all deposit addresses
-        - latest value based on all available data (known deposit addresses)
-
-    The drawback is that it creates a discontinuity between current and
-    previous supply values if there were any new deposit addresses in
-    the current block. However, the discontinuity is only temporary and
-    will be fixed in the next repair event.
-
-    Supply on main addresses is much simpler since new main addresses
-    only get added through migrations. It is the cached value from last
-    height plus any balance diffs linked to main addresses at current
-    height:
-
-        S(h) = S(h-1) + D(h)
-*/
+use std::collections::HashMap;
 
 /// Main and deposit supply differences, in nano ERG.
 struct SupplyDiff {
@@ -62,16 +25,17 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData, cache: &mut Cache
 
     for sd in supply_diffs {
         // Update cache
-        *cache.main_supply.entry(sd.cex_id).or_insert(0) += sd.main;
-        *cache.deposit_supply.entry(sd.cex_id).or_insert(0) += sd.deposit;
+        *cache.main.entry(sd.cex_id).or_insert(0) += sd.main;
+        *cache.deposit.entry(sd.cex_id).or_insert(0) += sd.deposit;
+
         // Update db
         tx.execute(
             &statement,
             &[
                 &block.height,
                 &sd.cex_id,
-                &cache.main_supply[&sd.cex_id],
-                &cache.deposit_supply[&sd.cex_id],
+                &cache.main[&sd.cex_id],
+                &cache.deposit[&sd.cex_id],
             ],
         )
         .unwrap();
@@ -89,41 +53,8 @@ pub(super) fn rollback(tx: &mut Transaction, block: &BlockData, cache: &mut Cach
     // Update cache
     let supply_diffs = get_supply_diffs(tx, block.height);
     for sd in supply_diffs {
-        *cache.main_supply.get_mut(&sd.cex_id).unwrap() -= sd.main;
-        *cache.deposit_supply.get_mut(&sd.cex_id).unwrap() -= sd.deposit;
-    }
-}
-
-pub(super) fn repair(tx: &mut Transaction, height: i32, cache: &mut Cache) {
-    // Remove any existing records at height
-    tx.execute("delete from cex.supply where height = $1;", &[&height])
-        .unwrap();
-
-    // Add new ones
-    let supply_diffs = repair::get_supply_diffs(tx, height);
-    let statement = tx
-        .prepare_typed(
-            "
-            insert into cex.supply (height, cex_id, main, deposit)
-            values ($1, $2, $3, $4);",
-            &[Type::INT4, Type::INT4, Type::INT8, Type::INT8],
-        )
-        .unwrap();
-    for sd in supply_diffs {
-        // Update cache
-        *cache.main_supply.entry(sd.cex_id).or_insert(0) += sd.main;
-        *cache.deposit_supply.entry(sd.cex_id).or_insert(0) += sd.deposit;
-        // Update db
-        tx.execute(
-            &statement,
-            &[
-                &height,
-                &sd.cex_id,
-                &cache.main_supply[&sd.cex_id],
-                &cache.deposit_supply[&sd.cex_id],
-            ],
-        )
-        .unwrap();
+        *cache.main.get_mut(&sd.cex_id).unwrap() -= sd.main;
+        *cache.deposit.get_mut(&sd.cex_id).unwrap() -= sd.deposit;
     }
 }
 
@@ -132,34 +63,29 @@ fn get_supply_diffs(tx: &mut Transaction, height: i32) -> Vec<SupplyDiff> {
     let rows = tx
         .query(
             "
-            with known_addresses_diffs as (
+            with main_addresses_diffs as (
                 select a.cex_id
-                    , coalesce(sum(d.value) filter (where a.type = 'main'), 0)::bigint as main
-                    , coalesce(sum(d.value) filter (where a.type = 'deposit'), 0)::bigint as deposit
-                from cex.addresses a
+                    , sum(d.value)::bigint as value
+                from cex.main_addresses a
                 join adr.erg_diffs d
                     on d.address_id = a.address_id
                 where d.height = $1
-                    -- exclude addresses discoverd in current block
-                    -- and include main addresses explicitly since they 
-                    -- have no spot_height
-                    and (a.type = 'main' or a.spot_height <= $1 - 1)
                 group by 1
-            ), new_deposit_addresses_balances as (
+            ), deposit_addresses_diffs as (
                 select a.cex_id
-                    , sum(b.value) as deposit
-                from cex.addresses a
-                join adr.erg b on b.address_id = a.address_id
-                where a.type = 'deposit'
-                    and a.spot_height = $1
+                    , sum(d.value)::bigint as value
+                from cex.deposit_addresses a
+                join adr.erg_diffs d
+                    on d.address_id = a.address_id
+                where d.height = $1
                 group by 1
             )
-            select d.cex_id
-                , d.main::bigint
-                , d.deposit + coalesce(b.deposit, 0)::bigint
-            from known_addresses_diffs d
-            left join new_deposit_addresses_balances b
-                on b.cex_id = d.cex_id;
+            select coalesce(m.cex_id, d.cex_id) as cex_id
+                , coalesce(m.value, 0)::bigint as main
+                , coalesce(d.value, 0)::bigint as deposit
+            from main_addresses_diffs m
+            full outer join deposit_addresses_diffs d
+                on d.cex_id = m.cex_id
             ",
             &[&height],
         )
@@ -175,37 +101,208 @@ fn get_supply_diffs(tx: &mut Transaction, height: i32) -> Vec<SupplyDiff> {
         .collect()
 }
 
-mod repair {
-    use super::SupplyDiff;
-    use postgres::Transaction;
+#[derive(Debug)]
+pub struct Cache {
+    /// Maps cex_id to latest supply on its main addresses
+    pub main: HashMap<i32, i64>,
+    /// Maps cex_id to latest supply on its deposit addresses
+    pub deposit: HashMap<i32, i64>,
+}
 
-    /// Non-zero supply diffs, by cex, relative to supply at previous height.
-    ///
-    /// Repair variant not distinguishing between known/new addresses.
-    pub(super) fn get_supply_diffs(tx: &mut Transaction, height: i32) -> Vec<SupplyDiff> {
-        let rows = tx
+impl Cache {
+    pub(super) fn new() -> Self {
+        Self {
+            main: HashMap::new(),
+            deposit: HashMap::new(),
+        }
+    }
+
+    pub(super) fn load(client: &mut impl GenericClient) -> Self {
+        // Main and deposit supplies
+        let rows = client
             .query(
                 "
-                select a.cex_id
-                    , coalesce(sum(d.value) filter (where a.type = 'main'), 0)::bigint as main
-                    , coalesce(sum(d.value) filter (where a.type = 'deposit'), 0)::bigint as deposit
-                from cex.addresses a
-                join adr.erg_diffs d
-                    on d.address_id = a.address_id
-                where d.height = $1
-                group by 1
-            ",
-                &[&height],
+                select cex_id
+                    , main
+                    , deposit
+                from cex.supply
+                where (cex_id, height) in (
+                    select cex_id
+                        , max(height)
+                    from cex.supply
+                    group by 1
+                );",
+                &[],
             )
             .unwrap();
-
-        rows.iter()
-            .map(|r| SupplyDiff {
-                cex_id: r.get(0),
-                main: r.get(1),
-                deposit: r.get(2),
-            })
-            .filter(|sd| sd.main != 0 || sd.deposit != 0)
-            .collect()
+        let mut c = Cache::new();
+        for row in rows {
+            let cex_id: i32 = row.get(0);
+            c.main.insert(cex_id, row.get(1));
+            c.deposit.insert(cex_id, row.get(2));
+        }
+        c
     }
+}
+
+pub(super) fn process_deposit_addresses(
+    tx: &mut Transaction,
+    queues: &super::deposit_addresses::AddressQueues,
+    cache: &mut Cache,
+) {
+    if !queues.propagate.is_empty() {
+        propagate_deposit_addresses(tx, &queues.propagate);
+    }
+    if !queues.purge.is_empty() {
+        purge_deposit_addresses(tx);
+    }
+    *cache = Cache::load(tx);
+}
+
+/// Reflect addition of new deposit addresses
+fn propagate_deposit_addresses(tx: &mut Transaction, addresses: &Vec<i64>) {
+    // Prepare patch: deposit balance changes by height and cex_id
+    tx.execute(
+        "
+        create temp table _cex_supply_patch as
+            with diffs as (
+                select d.height
+                    , a.cex_id
+                    , sum(d.value) as value
+                from adr.erg_diffs d
+                join cex.deposit_addresses a on a.address_id = d.address_id
+                where d.address_id = any($1)
+                group by 1, 2
+            ), first_diffs as (
+                select cex_id
+                    , min(height) as height
+                from diffs
+                group by 1 
+            -- Collect all existing records to be updated to ensure they are included
+            ), existing_records as (
+                select s.height
+                    , s.cex_id
+                    , 0 as value -- zero diff value, actual values will come from diffs cte
+                from cex.supply s, first_diffs d
+                where d.cex_id = s.cex_id
+                    and s.height >= d.height
+            ), full_patch_diffs as (
+                select height
+                    , cex_id
+                    , sum(value) as value
+                from (
+                    select height, cex_id, value
+                    from diffs
+                    union
+                    select height, cex_id, value
+                    from existing_records
+                ) sq
+                group by 1, 2
+            )
+            select height
+                , cex_id
+                , sum(value) over (
+                    partition by cex_id
+                    order by height asc
+                    rows between unbounded preceding and current row
+                ) as value
+            from full_patch_diffs;
+        ",
+        &[&addresses],
+    )
+    .unwrap();
+
+    // Insert new heights with balances of latest height prior
+    tx.execute(
+        "
+        with new_entries as (
+            select p.height
+                , p.cex_id
+            from _cex_supply_patch p
+            left join cex.supply s
+                on s.height = p.height
+                and s.cex_id = p.cex_id
+            where s.height is null
+        )
+        insert into cex.supply(height, cex_id, main, deposit)
+            select p.new_height
+                , p.cex_id
+                , coalesce(s.main, 0)
+                , coalesce(s.deposit, 0)
+            from (
+                select n.height as new_height
+                    , n.cex_id
+                    , max(s.height) as prev_height
+                from new_entries n
+                left join cex.supply s on s.cex_id = n.cex_id and s.height < n.height
+                group by 1, 2
+            ) p
+            left join cex.supply s
+                on s.height = p.prev_height
+                and s.cex_id = p.cex_id;
+        ",
+        &[],
+    )
+    .unwrap();
+
+    // Update deposit balances with patches
+    tx.execute(
+        "
+        update cex.supply s
+        set deposit = s.deposit + p.value
+        from _cex_supply_patch p
+        where p.height >= s.height
+            and p.cex_id = s.cex_id;
+        ",
+        &[],
+    )
+    .unwrap();
+}
+
+fn purge_deposit_addresses(tx: &mut Transaction) {
+    // Recalc form scratch
+    tx.execute("truncate cex.supply", &[]).unwrap();
+    tx.execute(
+        "
+        with main_diffs as (
+            select d.height
+                , c.cex_id
+                , sum(d.value) as value
+            from cex.main_addresses c
+            join adr.erg_diffs d on d.address_id = c.address_id
+            group by 1, 2
+            having sum(d.value) <> 0
+        ), deposit_diffs as (
+            select d.height
+                , c.cex_id
+                , sum(d.value) as value
+            from cex.deposit_addresses c
+            join adr.erg_diffs d on d.address_id = c.address_id
+            group by 1, 2
+            having sum(d.value) <> 0
+        ), merged as (
+            select coalesce(m.height, d.height) as height
+                , coalesce(m.cex_id, d.cex_id) as cex_id
+                , coalesce(m.value, 0) as main
+                , coalesce(d.value, 0) as deposit
+            from main_diffs m
+            full outer join deposit_diffs d
+                on d.height = m.height
+                and d.cex_id = m.cex_id
+        )
+        insert into cex.supply (height, cex_id, main, deposit)
+            select height
+                , cex_id
+                , sum(main) over w as main
+                , sum(deposit) over w as deposit
+            from merged
+            window w as (
+                partition by cex_id
+                order by height asc
+                rows between unbounded preceding and current row
+            )
+            order by 1, 2;",
+        &[],
+    )
+    .unwrap();
 }

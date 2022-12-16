@@ -10,13 +10,12 @@ bootstrapping_work_mem_kb = 128000
 url = "http://127.0.0.1:9053"
 poll_interval = 5 # seconds
 
-[repairs]
-# Trigger a repair event every 1000 blocks
-interval = 1000 # blocks
-# Wait 5 blocks after a trigger height before starting a repair event.
-# This is to reduce the chance of including non-main chain blocks in
-# a repair event.
-offset = 5 # blocks
+[deposits]
+# Minimum number of blocks to be processed in a batch
+interval = 10 # blocks
+# Number of blocks from latest one to exclude from processing batch.
+# This is to reduce the chance of processing a fork.
+buffer = 5 # blocks
 
 [coingecko]
 url = "https://api.coingecko.com/api/v3/coins/ergo/market_chart/range"

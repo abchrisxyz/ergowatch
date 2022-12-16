@@ -11,29 +11,28 @@ use crate::session::Session;
 pub fn sync_and_track(session: &mut Session) -> Result<(), &'static str> {
     info!("Synchronizing with node");
 
-    session.db.purge_or_resume(session.resume_repair);
-
     loop {
         let mut node_height = get_node_height_blocking(session);
 
         if node_height <= session.head.height {
-            // Is it time to start a repair event?
-            if (session.head.height) % session.repair_interval == 0 {
-                info!("Starting repair session");
-                let max_height = session.head.height - session.repair_offset;
-                session.db.start_new_repair_event(max_height as i32);
-            }
+            // Periodic cex deposit address detection
+            session
+                .db
+                .periodic_cex_deposits_processing(
+                    session.deposits_interval,
+                    session.deposits_buffer,
+                )
+                .unwrap();
 
             // -x --exit option, exit when synced
             if session.exit_when_synced {
-                session.db.wait_for_repairs();
                 info!("Done syncing, exiting now");
                 return Ok(());
             }
             info!("Database is synced - waiting for next block");
-            node_height = weight_for_next_block(&session);
+            node_height = wait_for_next_block(&session);
 
-            // Sync CoinGecko after waiting new block,
+            // Sync CoinGecko after waiting for new block,
             // so that latest price data is available when it gets included.
             coingecko::sync(session);
         }
@@ -116,9 +115,6 @@ fn include_block(session: &mut Session, block: &BlockData) {
 
 /// Discard block data from database
 fn rollback_block(session: &mut Session, block: &BlockData) {
-    if session.db.is_repairing_height(block.height) {
-        session.db.abort_repairs();
-    }
     session.db.rollback_block(block).unwrap();
 }
 
@@ -139,7 +135,7 @@ fn get_node_height_blocking(session: &Session) -> u32 {
 }
 
 /// Returns new height when available
-fn weight_for_next_block(session: &Session) -> u32 {
+fn wait_for_next_block(session: &Session) -> u32 {
     loop {
         let h = get_node_height_blocking(session);
         if h != session.head.height {
@@ -155,15 +151,8 @@ pub mod coingecko {
     use log::warn;
 
     pub fn sync(session: &mut Session) {
-        let repairing = session.db.is_repairing();
         if coingecko_needs_syncing(session) {
-            if repairing {
-                session.db.pause_repairs();
-            }
             sync_coingecko(session);
-            if repairing {
-                session.db.resume_repairs();
-            }
         }
     }
 

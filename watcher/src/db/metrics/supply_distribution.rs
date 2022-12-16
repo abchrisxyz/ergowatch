@@ -387,7 +387,7 @@ mod sql {
                 , value
             from adr.erg b
             join core.addresses a on a.id = b.address_id
-            left join cex.addresses c on c.address_id = b.address_id and c.type = 'main'
+            left join cex.main_addresses c on c.address_id = b.address_id
             where a.p2pk
                 -- ignore main cex addresses
                 and c.address_id is null
@@ -459,7 +459,7 @@ const P2PK_QUERYSET: QuerySet = QuerySet {
             , b.value
         from mtr_sd_adr.erg b
         join core.addresses a on a.id = b.address_id
-        left join cex.addresses c on c.address_id = b.address_id and c.type = 'main'
+        left join cex.main_addresses c on c.address_id = b.address_id
         where a.p2pk
             -- ignore main cex addresses
             and c.address_id is null
@@ -473,7 +473,7 @@ const P2PK_QUERYSET: QuerySet = QuerySet {
                     , sum(value)
                 from adr.erg_diffs d
                 join core.addresses a on a.id = d.address_id
-                left join cex.addresses c on c.address_id = d.address_id and c.type = 'main'
+                left join cex.main_addresses c on c.address_id = d.address_id
                 where d.height = $1
                     and a.p2pk
                     -- ignore main cex addresses
