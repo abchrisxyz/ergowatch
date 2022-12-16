@@ -9,6 +9,7 @@ services:
   db:
     build:
       context: ./db
+    shm_size: 1g
     environment:
       POSTGRES_DB: ergo
       POSTGRES_USER: ergo
