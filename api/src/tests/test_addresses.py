@@ -46,8 +46,8 @@ def client():
         (20, 'header20', 'header19', 1568123456789, 111122233, 0, 0, 0),
         (30, 'header30', 'header29', 1569123456789, 111222333, 0, 0, 0);
 
-        insert into cex.addresses (address_id, cex_id, type) values
-        (3, 1, 'main');
+        insert into cex.main_addresses (address_id, cex_id) values
+        (3, 1);
     """
     with MockDB(sql=sql) as _:
         with TestClient(app) as client:

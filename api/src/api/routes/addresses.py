@@ -174,11 +174,10 @@ async def address_tags(
     if address in TAGS:
         return TAGS[address]
     tags = []
-    # Exchange address
+    # Exchange deposit address
     query = """
         select c.text_id
-            , a.type
-        from cex.addresses a
+        from cex.deposit_addresses a
         join cex.cexs c on c.id = a.cex_id
         where a.address_id = core.address_id($1);
     """
@@ -186,6 +185,19 @@ async def address_tags(
         row = await conn.fetchrow(query, address)
     if row is not None:
         tags.append(f"exchange")
-        tags.append(f"exchange-{row['type']}")
+        tags.append(f"exchange-deposit")
+        tags.append(f"exchange-{row['text_id']}")
+    # Exchange main address
+    query = """
+        select c.text_id
+        from cex.main_addresses a
+        join cex.cexs c on c.id = a.cex_id
+        where a.address_id = core.address_id($1);
+    """
+    async with request.app.state.db.acquire() as conn:
+        row = await conn.fetchrow(query, address)
+    if row is not None:
+        tags.append(f"exchange")
+        tags.append(f"exchange-main")
         tags.append(f"exchange-{row['text_id']}")
     return tags
