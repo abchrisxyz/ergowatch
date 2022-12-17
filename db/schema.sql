@@ -280,7 +280,7 @@ create table cex.main_addresses_list (
 /*
 	List of ignored addresses to be populated manually.
 
-	Corresponding address id's will be added to cex.addresses_ignored
+	Corresponding address id's will be added to cex.deposit_addresses_ignored
 	automatically once available. 
 */
 create table cex.ignored_addresses_list (
