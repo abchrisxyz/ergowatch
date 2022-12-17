@@ -206,9 +206,17 @@ fn propagate_deposit_addresses(tx: &mut Transaction, addresses: &Vec<i64>) {
                     order by height asc
                     rows between unbounded preceding and current row
                 ) as value
-            from full_patch_diffs;
+            from full_patch_diffs
+            order by 1;
         ",
         &[&addresses],
+    )
+    .unwrap();
+
+    // Add index to speed things up
+    tx.execute(
+        "alter table _cex_supply_patch add primary key(height, cex_id);",
+        &[],
     )
     .unwrap();
 
@@ -251,8 +259,7 @@ fn propagate_deposit_addresses(tx: &mut Transaction, addresses: &Vec<i64>) {
         update cex.supply s
         set deposit = s.deposit + p.value
         from _cex_supply_patch p
-        where p.height >= s.height
-            and p.cex_id = s.cex_id;
+        where (p.height, p.cex_id) = (s.height, s.cex_id);
         ",
         &[],
     )
