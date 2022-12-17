@@ -195,9 +195,9 @@ mod candidates {
             -- be aware of known addresses for each cex
             left join cex.main_addresses mas
                 on mas.address_id = dif.address_id
-            left join cex.deposit_addresses cas
-                on cas.address_id = dif.address_id
-                and cas.cex_id = txs.cex_id
+            left join cex.deposit_addresses das
+                on das.address_id = dif.address_id
+                and das.cex_id = txs.cex_id
             -- already excluded addresses
             left join cex.deposit_addresses_excluded dax
                 on dax.address_id = dif.address_id
@@ -211,7 +211,8 @@ mod candidates {
                 and dif.height >= $1
                 and dif.height <= $2
                 -- exclude txs from known cex addresses
-                and cas.address_id is null
+                and mas.address_id is null
+                and das.address_id is null
                 and dax.address_id is null
                 -- exclude contract addresses
                 -- exclude contract addresses
