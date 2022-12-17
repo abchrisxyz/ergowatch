@@ -179,6 +179,10 @@ impl DB {
     }
 
     fn process_deposit_address_queues(&mut self, tx: &mut Transaction, queues: AddressQueues) {
+        if queues.propagate.is_empty() && queues.purge.is_empty() {
+            info!("No new deposit addresses");
+            return;
+        }
         info!(
             "Processing deposit address changes: {} new & {} excluded",
             queues.propagate.len(),
