@@ -26,23 +26,3 @@ async def sync_height(request: Request):
         return {
             "height": row["height"],
         }
-
-
-@r.get(
-    "/repairs",
-    response_model=Repairs | None,
-    summary="Running repair session details",
-)
-async def repairs(request: Request):
-    query = "select * from ew.repairs;"
-    async with request.app.state.db.acquire() as conn:
-        row = await conn.fetchrow(query)
-        if row is None:
-            return None
-        r = {
-            "started": row["started"],
-            "range": [row["from_height"], row["last_height"]],
-            "at": row["next_height"],
-        }
-        print(r)
-        return r
