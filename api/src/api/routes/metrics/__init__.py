@@ -50,7 +50,7 @@ TimeWindowLimits = generate_time_window_limits(LIMIT)
 
 
 from . import addresses
-from .exchanges import exchanges_router
+from . import exchanges
 from . import supply_age
 from . import supply_composition
 from . import supply_distribution
@@ -61,7 +61,7 @@ from . import volume
 metrics_router = r = APIRouter()
 
 r.include_router(addresses.router, prefix="/addresses")
-r.include_router(exchanges_router, prefix="/exchanges")
+r.include_router(exchanges.router, prefix="/exchanges")
 r.include_router(supply_age.router, prefix="/supply/age")
 r.include_router(supply_composition.router, prefix="/supply/composition")
 r.include_router(supply_distribution.router, prefix="/supply/distribution")
@@ -72,6 +72,7 @@ r.include_router(volume.router, prefix="/volume")
 metrics_summary_router = s = APIRouter()
 
 s.include_router(addresses.summary_router, prefix="/addresses")
+s.include_router(exchanges.summary_router, prefix="/exchanges")
 s.include_router(supply_age.summary_router, prefix="/supply/age")
 s.include_router(supply_composition.summary_router, prefix="/supply/composition")
 s.include_router(supply_distribution.summary_router, prefix="/supply/distribution")
