@@ -37,6 +37,12 @@ class ExchangeSupply(BaseModel):
     deposit: List[int]
 
 
+class ExchangeAddressInfo(BaseModel):
+    cex: str
+    address: str
+    balance: int
+
+
 @r.get("", response_model=List[str])
 async def list_tracked_exchanges(request: Request):
     """
@@ -148,3 +154,30 @@ async def exchange_supply_history(
         "main": [r["main"] for r in rows],
         "deposit": [r["deposit"] for r in rows],
     }
+
+
+@r.get("/tracklist", response_model=List[ExchangeAddressInfo])
+async def list_tracked_addresses(request: Request):
+    """
+    List tracked main addresses, by cex, with balance.
+    """
+    query = """
+        select a.address
+            , c.text_id
+            , coalesce(b.value, 0) as bal
+        from cex.main_addresses m
+        join core.addresses a on a.id = m.address_id
+        join cex.cexs c on c.id = m.cex_id
+        left join adr.erg b on b.address_id = m.address_id
+        order by 3 desc;
+    """
+    async with request.app.state.db.acquire() as conn:
+        rows = await conn.fetch(query)
+    return [
+        {
+            "cex": r["text_id"],
+            "address": r["address"],
+            "balance": r["bal"],
+        }
+        for r in rows
+    ]
