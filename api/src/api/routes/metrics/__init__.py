@@ -49,6 +49,7 @@ LIMIT = 2000
 TimeWindowLimits = generate_time_window_limits(LIMIT)
 
 
+from . import overview
 from . import addresses
 from . import exchanges
 from . import supply_age
@@ -60,6 +61,7 @@ from . import volume
 
 metrics_router = r = APIRouter()
 
+r.include_router(overview.router, prefix="")
 r.include_router(addresses.router, prefix="/addresses")
 r.include_router(exchanges.router, prefix="/exchanges")
 r.include_router(supply_age.router, prefix="/supply/age")
