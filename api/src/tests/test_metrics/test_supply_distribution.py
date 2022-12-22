@@ -139,7 +139,12 @@ def client(request):
             label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
         ) values
             ('label_1', 1, 2, 3, 4, 5, 6),
-            ('label_2', 10, 20, 30, 40, 50, 60);
+            ('label_2', 60, 10, 30, 10, 10, 10);
+        insert into mtr.supply_composition_summary(
+            label, current, diff_1d, diff_1w, diff_4w, diff_6m, diff_1y
+        ) values
+            ('dummy', 0, 0, 0, 0, 0, 0),
+            ('total', 240, 40, 0, 40, 40, 40);
     """
     with MockDB(sql=sql) as _:
         with TestClient(app) as client:
@@ -355,7 +360,11 @@ def test_summary(client):
     url = f"/metrics/summary/supply/distribution/{client.address_type}"
     response = client.get(url)
     assert response.status_code == 200
-    assert response.json() == [
+    res = response.json()
+    assert len(res) == 2
+    absolute = res["absolute"]
+    relative = res["relative"]
+    assert absolute == [
         {
             "label": "label_1",
             "current": 1,
@@ -367,11 +376,15 @@ def test_summary(client):
         },
         {
             "label": "label_2",
-            "current": 10,
-            "diff_1d": 20,
+            "current": 60,
+            "diff_1d": 10,
             "diff_1w": 30,
-            "diff_4w": 40,
-            "diff_6m": 50,
-            "diff_1y": 60,
+            "diff_4w": 10,
+            "diff_6m": 10,
+            "diff_1y": 10,
         },
     ]
+    assert relative[1]["label"] == "label_2"
+    assert relative[1]["current"] == 0.25
+    assert relative[1]["diff_1d"] == 0.0
+    assert relative[1]["diff_1w"] == 0.125
