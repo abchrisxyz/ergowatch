@@ -560,7 +560,7 @@ mod sql {
             , coalesce(sum(d.value) filter (where d.value > 0 and a.p2pk and c.address_id is not null), 0) * $2::bigint
             + coalesce(sum(d.value::numeric * b.mean_age_timestamp) filter (where d.value < 0 and a.p2pk and c.address_id is not null), 0)
             -- contracts
-            , coalesce(sum(d.value) filter (where d.value > 0 and  not a.p2pk and not a.miner), 0) * $2::bigint
+            , coalesce(sum(d.value) filter (where d.value > 0 and not a.p2pk and not a.miner), 0) * $2::bigint
             + coalesce(sum(d.value::numeric * b.mean_age_timestamp) filter (where d.value < 0 and not a.p2pk and not a.miner), 0)
             -- miners
             , coalesce(sum(d.value) filter (where d.value > 0 and  a.miner), 0) * $2::bigint
@@ -594,7 +594,7 @@ mod sql {
             , coalesce(sum(d.value) filter (where d.value > 0 and a.p2pk and c.address_id is not null), 0) * $2::bigint
             + coalesce(sum(d.value::numeric * b.mean_age_timestamp) filter (where d.value < 0 and a.p2pk and c.address_id is not null), 0)
             -- contracts
-            , coalesce(sum(d.value) filter (where d.value > 0 and  not a.p2pk and not a.miner), 0) * $2::bigint
+            , coalesce(sum(d.value) filter (where d.value > 0 and not a.p2pk and not a.miner), 0) * $2::bigint
             + coalesce(sum(d.value::numeric * b.mean_age_timestamp) filter (where d.value < 0 and not a.p2pk and not a.miner), 0)
             -- miners
             , coalesce(sum(d.value) filter (where d.value > 0 and  a.miner), 0) * $2::bigint
