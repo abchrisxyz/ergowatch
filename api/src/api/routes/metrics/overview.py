@@ -31,6 +31,11 @@ class MetricsOverview(BaseModel):
 )
 async def metrics_overview(request: Request):
     query = f"""
+        with circ_supply as (
+            select current as total
+            from mtr.supply_composition_summary
+            where label = 'total'
+        )
         select '00 p2pk counts' as name, (select total from mtr.address_counts_by_balance_p2pk order by height desc limit 1) as value
         union
         select '01 contract counts' as name, (select total from mtr.address_counts_by_balance_contracts order by height desc limit 1) as value
@@ -38,23 +43,20 @@ async def metrics_overview(request: Request):
         select '02 mining contract counts' as name, (select total from mtr.address_counts_by_balance_miners order by height desc limit 1) as value
         union
         select '03 dist p2pks' as name, (
-            select m.top_1_prc::numeric / s.circulating_supply
-            from mtr.supply_on_top_addresses_p2pk m
-            join blk.stats s on s.height = m.height
+            select m.top_1_prc::numeric / s.total
+            from mtr.supply_on_top_addresses_p2pk m, circ_supply s
             order by m.height desc limit 1
         ) as value
         union
         select '04 dist contracts' as name, (
-            select m.top_1_prc::numeric / s.circulating_supply
-            from mtr.supply_on_top_addresses_contracts m
-            join blk.stats s on s.height = m.height
+            select m.top_1_prc::numeric / s.total
+            from mtr.supply_on_top_addresses_contracts m, circ_supply s
             order by m.height desc limit 1
         ) as value
         union
         select '05 dist mining contracts' as name, (
-            select m.top_1_prc::numeric / s.circulating_supply
-            from mtr.supply_on_top_addresses_miners m
-            join blk.stats s on s.height = m.height
+            select m.top_1_prc::numeric / s.total
+            from mtr.supply_on_top_addresses_miners m, circ_supply s
             order by m.height desc limit 1
         ) as value
         union
