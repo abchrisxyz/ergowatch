@@ -1,4 +1,5 @@
 from textwrap import dedent
+from typing import Dict
 from typing import List
 from typing import Optional
 from fastapi import APIRouter
@@ -187,23 +188,46 @@ async def _get_fr_to(
 
 @s.get(
     "",
-    response_model=List[MetricsSummaryRecord],
+    response_model=Dict[str, List[MetricsSummaryRecord]],
     summary=" ",
 )
 async def change_summary(request: Request):
     query = f"""
-        select label
-            , current
-            , diff_1d
-            , diff_1w
-            , diff_4w
-            , diff_6m
-            , diff_1y
-        from mtr.supply_composition_summary;
+        with circ_supply as (
+            select current
+                , diff_1d
+                , diff_1w
+                , diff_4w
+                , diff_6m
+                , diff_1y
+            from mtr.supply_composition_summary
+            where label = 'total'
+        )
+        select s.label
+            , s.current
+            , s.diff_1d 
+            , s.diff_1w 
+            , s.diff_4w 
+            , s.diff_6m 
+            , s.diff_1y
+            , s.current::numeric / cs.current as current_rel
+            , (s.current::numeric / cs.current) - (s.current::numeric - s.diff_1d) / (cs.current::numeric - cs.diff_1d)  as diff_1d_rel
+            , (s.current::numeric / cs.current) - (s.current::numeric - s.diff_1w) / (cs.current::numeric - cs.diff_1w)  as diff_1w_rel
+            , (s.current::numeric / cs.current) - (s.current::numeric - s.diff_4w) / (cs.current::numeric - cs.diff_4w)  as diff_4w_rel
+            , (s.current::numeric / cs.current) - (s.current::numeric - s.diff_6m) / (cs.current::numeric - cs.diff_6m)  as diff_6m_rel
+            , (s.current::numeric / cs.current) - (s.current::numeric - s.diff_1y) / (cs.current::numeric - cs.diff_1y)  as diff_1y_rel
+        from mtr.supply_composition_summary s, circ_supply cs
+        where label <> 'total';
     """
     async with request.app.state.db.acquire() as conn:
         rows = await conn.fetch(query)
-    return [{f: r[f] for f in SUMMARY_FIELDS} for r in rows]
+    return {
+        "absolute": [{f: r[f] for f in SUMMARY_FIELDS} for r in rows],
+        "relative": [
+            {f: r[f + "_rel" if f != "label" else f] for f in SUMMARY_FIELDS}
+            for r in rows
+        ],
+    }
 
 
 def format_ergusd(qry: str, ergusd: bool):
