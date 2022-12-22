@@ -31,6 +31,7 @@ class SupplyAgeSeries(BaseModel):
     response_model=SupplyAgeSeries,
     response_model_exclude_none=True,
     summary="Mean supply age",
+    include_in_schema=False,
     description=dedent(
         """
         Mean age of supply, in days, across:\n
@@ -166,7 +167,9 @@ async def _get_fr_to(
     return res
 
 
-@s.get("", response_model=List[MetricsSummaryRecord], summary=" ")
+@s.get(
+    "", response_model=List[MetricsSummaryRecord], summary=" ", include_in_schema=False
+)
 async def change_summary(request: Request):
     query = f"""
         select label

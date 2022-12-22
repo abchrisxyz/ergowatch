@@ -37,13 +37,16 @@ pub(super) fn include_block(
     cexs::include(tx, block);
     address_counts::include(tx, block, &mut cache.address_counts);
     supply_composition::include(tx, block, &mut cache.supply_composition);
-    supply_age::include(
-        tx,
-        block,
-        &mut cache.supply_age,
-        &cache.supply_composition,
-        &buffer.supply_age_diffs,
-    );
+    // Temporarily skip untill issue 73 is fixed
+    if false {
+        supply_age::include(
+            tx,
+            block,
+            &mut cache.supply_age,
+            &cache.supply_composition,
+            &buffer.supply_age_diffs,
+        );
+    }
     supply_distribution::include(tx, block, &cache.address_counts);
     timestamps::include(tx, block, &mut cache.timestamps);
     transactions::include(tx, block, cache);
@@ -68,7 +71,10 @@ pub(super) fn rollback_block(
     transactions::rollback(tx, block);
     timestamps::rollback(tx, block, &mut cache.timestamps);
     supply_distribution::rollback(tx, block);
-    supply_age::rollback(tx, block, &mut cache.supply_age);
+    // Temporarily skip untill issue 73 is fixed
+    if false {
+        supply_age::rollback(tx, block, &mut cache.supply_age);
+    }
     supply_composition::rollback(tx, block, &mut cache.supply_composition);
     address_counts::rollback(tx, block, &mut cache.address_counts);
     cexs::rollback(tx, block);
@@ -94,7 +100,10 @@ pub(super) fn bootstrap(client: &mut Client, work_mem_kb: u32) -> anyhow::Result
 
     address_counts::bootstrap(client, work_mem_kb)?;
     supply_composition::bootstrap(client, work_mem_kb)?;
-    supply_age::bootstrap(client, work_mem_kb)?;
+    // Temporarily skip untill issue 73 is fixed
+    if false {
+        supply_age::bootstrap(client, work_mem_kb)?;
+    }
     supply_distribution::bootstrap(client, work_mem_kb)?;
     timestamps::bootstrap(client, work_mem_kb)?;
     transactions::bootstrap(client, work_mem_kb)?;

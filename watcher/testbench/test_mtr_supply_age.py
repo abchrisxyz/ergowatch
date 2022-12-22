@@ -73,6 +73,7 @@ SCENARIO_DESCRIPTION = """
     """
 
 
+@pytest.mark.skip("Issue 73")
 @pytest.mark.order(ORDER)
 class TestSync:
     """
@@ -107,6 +108,7 @@ class TestSync:
         _test_db_state(synced_db, self.scenario)
 
 
+@pytest.mark.skip("Issue 73")
 @pytest.mark.order(ORDER)
 class TestSyncRollback:
     """
@@ -155,6 +157,7 @@ class TestSyncRollback:
         _test_db_state(synced_db, self.scenario)
 
 
+@pytest.mark.skip("Issue 73")
 @pytest.mark.order(ORDER)
 class TestGenesis:
     """
@@ -186,6 +189,7 @@ class TestGenesis:
         _test_db_state(synced_db, self.scenario)
 
 
+@pytest.mark.skip("Issue 73")
 @pytest.mark.order(ORDER)
 class TestMigrations:
     """
