@@ -16,8 +16,7 @@ pub(super) fn include(tx: &mut Transaction, block: &BlockData) -> SupplyAgeDiffs
 pub(super) fn rollback(tx: &mut Transaction, block: &BlockData) {
     let height = &block.height;
     // Rollback any addresses that were not deleted (i.e. balance did not drop to zero)
-    tx.execute(ROLLBACK_BALANCE_UPDATES, &[height, &block.timestamp])
-        .unwrap();
+    tx.execute(ROLLBACK_BALANCE_UPDATES, &[height]).unwrap();
     // Then, restore deleted addresses from scratch
     let addresses = get_spent_addresses(tx, block.height);
     for address_id in addresses {
@@ -95,11 +94,6 @@ const ROLLBACK_BALANCE_UPDATES: &str = "
     )
     update adr.erg a
     set value = a.value - d.value
-        , mean_age_timestamp = case
-            when (a.value - d.value) <> 0 then
-                a.mean_age_timestamp / (a.value - d.value) * (a.value + d.value) - d.value / (a.value - d.value) * $2::bigint
-            else 0
-        end
     from updated_addresses_diffs d
     where d.address_id = a.address_id;";
 

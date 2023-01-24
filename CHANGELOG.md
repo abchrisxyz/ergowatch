@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.3 - 2023-01-24
+
+### Fixed
+- Disable age calculation in fork handling until [Issue 73](https://github.com/abchrisxyz/ergowatch/issues/73) is resolved
+---
+
 ## v0.5.2 - 2022-12-23
 
 ### New Features
