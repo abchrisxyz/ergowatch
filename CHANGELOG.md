@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.4 - 2023-01-31
+
+### Fixed
+- Handle invalid UTF-8 bytes during EIP-4 token rendering
+---
+
 ## v0.5.3 - 2023-01-24
 
 ### Fixed

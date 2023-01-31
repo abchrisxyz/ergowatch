@@ -149,12 +149,19 @@ impl EIP4Data {
 
 fn parse_eip4_register(base16_str: &str) -> anyhow::Result<String> {
     let bytes = base16::decode(base16_str.as_bytes()).unwrap();
-    anyhow::Ok(String::from_utf8(bytes)?)
+    match String::from_utf8(bytes) {
+        Ok(s) => anyhow::Ok(s),
+        Err(e) => {
+            warn!("Could not decode base16 register value to String: {base16_str} ({e})");
+            anyhow::Ok(String::from(base16_str))
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::extract_new_tokens;
+    use super::parse_eip4_register;
     use crate::parsing::testing::block_600k;
     use crate::parsing::testing::block_minting_tokens;
     use crate::parsing::testing::block_multi_asset_mint;
@@ -212,5 +219,12 @@ mod tests {
         assert_eq!(tokens.len(), 1);
         // Emission amount should be total of minting boxes
         assert_eq!(tokens[0].emission_amount, 10 + 10);
+    }
+
+    #[test]
+    fn test_parse_eip4_register_invalid_utf() {
+        let base16_str = "0cd8c9f416e5b1ca9f986a7f10a84191dfb85941619e49e53c0dc30ebf83324b";
+        let rendered = parse_eip4_register(&base16_str).unwrap();
+        assert_eq!(rendered, base16_str);
     }
 }
