@@ -10,7 +10,7 @@ utils_router = r = APIRouter()
 @r.get("/height2timestamp/{height}", response_model=int)
 async def height_to_timestamp(
     request: Request,
-    height: int = Path(None, ge=0),
+    height: int = Path(ge=0),
 ):
     """
     Get timestamp (in milliseconds) of block at given height.
@@ -30,7 +30,7 @@ async def height_to_timestamp(
 @r.get("/timestamp2height/{timestamp}", response_model=int)
 async def timestamp_to_height(
     request: Request,
-    timestamp: int = Path(None, ge=GENESIS_TIMESTAMP, description="milliseconds"),
+    timestamp: int = Path(ge=GENESIS_TIMESTAMP, description="milliseconds"),
 ):
     """
     Convert timestamp (in milliseconds) to height.

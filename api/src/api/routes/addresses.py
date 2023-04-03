@@ -57,7 +57,7 @@ async def address_balance(
 async def address_balance_at_height(
     request: Request,
     address: Address,
-    height: int = Path(None, ge=0),
+    height: int = Path(ge=0),
     token_id: TokenID = Query(None, description="Optional token id"),
 ):
     opt_args = []

@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.5 - 2023-04-03
+
+### Fixed
+- Remove default values from FastAPI path parameters
+---
+
 ## v0.5.4 - 2023-01-31
 
 ### Fixed
