@@ -1,4 +1,5 @@
 use crate::parsing::BlockData;
+use itertools::Itertools;
 use postgres::types::Type;
 use postgres::Transaction;
 
@@ -82,6 +83,10 @@ fn extract_data_inputs<'a>(block: &'a BlockData) -> Vec<DataInput<'a>> {
                     header_id: &block.header_id,
                     index: ix as i32,
                 })
+                // A tx can have the same box listed more than once as data input.
+                // For an example, see:
+                //  ca08a3d9296ce69990b0ceb5d08b910e52f007c6a9a9157eaac130049d216f5b
+                .unique_by(|di| di.box_id)
         })
         .collect()
 }
