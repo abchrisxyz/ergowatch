@@ -3,6 +3,10 @@ version: "3.8"
 networks:
   ergo-node:
     external: true
+  # Explicit default network to avoid potential conflicts in podman
+  # TODO: test this
+  default:
+    name: ergo-watch
 
 services:
   # Postgresql database
@@ -44,7 +48,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
- 
+
   # API server
   api:
     build:
