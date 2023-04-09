@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.6 - 2023-04-09
+
+### Fixed
+- Handle duplicate data-inputs
+---
+
 ## v0.5.5 - 2023-04-03
 
 ### Fixed
