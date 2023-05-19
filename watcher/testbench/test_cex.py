@@ -27,7 +27,7 @@ ORDER = 13
 SCENARIO_DESCRIPTION = """
     // pub1 is a deposit address for cex1
     // pub2 is a deposit address for cex2
-    // pub3 is a deposit address for cex3
+    // pub3 is a deposit address for cex3 (rolled back)
     //
     // pub9 appears as a deposit address for cex1 at first
     // but later sends to cex3 too.
@@ -75,7 +75,7 @@ SCENARIO_DESCRIPTION = """
 
     // ----------------------fork-of-d----------------------
     block-x // fork of block d to be ignored/rolled back:
-        -// cex 3 claiming deposit (deposit was sold)
+        // cex 3 claiming deposit (deposit was sold)
         pub3-box1   20
         >
         cex3-box1   20
@@ -109,7 +109,8 @@ SCENARIO_DESCRIPTION = """
         // erg still ends up on main though
         pub9-box2   94
         >
-        cex3-box2   94
+        cex3-box2   90
+        pub9-box3    4
         --
         // contract tx to be ignored
         // con1 will be ignored as deposit address'
@@ -125,6 +126,15 @@ SCENARIO_DESCRIPTION = """
         cex1-box8    1
         cex2-box8    1
         pub8-box2    8
+    // one more block to reproduce issue with excluded address conflicts 
+    // https://github.com/abchrisxyz/ergowatch/issues/76
+    block-f
+        // pub9 already listed as excluded address
+        // pub9 should still be ignored as a deposit address
+        // only supply on cex3 main changes
+        pub9-box3   4
+        >
+        cex2-box3   4
     """
 
 
@@ -152,7 +162,7 @@ class TestSync:
             # Run
             cp = run_watcher(temp_cfg)
             assert cp.returncode == 0
-            assert "Including block block-c" in cp.stdout.decode()
+            assert "Including block block-f" in cp.stdout.decode()
 
             with pg.connect(temp_db_class_scoped) as conn:
                 yield conn
@@ -199,7 +209,7 @@ class TestSyncRollback:
             cp = run_watcher(temp_cfg)
             assert cp.returncode == 0
             assert "Rolling back block block-x" in cp.stdout.decode()
-            assert "Including block block-d" in cp.stdout.decode()
+            assert "Including block block-f" in cp.stdout.decode()
 
             with pg.connect(temp_db_class_scoped) as conn:
                 yield conn
@@ -463,7 +473,7 @@ def assert_last_processed_height(cur: pg.Cursor, s: Scenario):
     )
     rows = cur.fetchall()
     assert len(rows) == 1
-    assert rows[0] == (s.parent_height + 5,)
+    assert rows[0] == (s.parent_height + 6,)
 
 
 def assert_supply(cur: pg.Cursor, s: Scenario):
@@ -471,6 +481,7 @@ def assert_supply(cur: pg.Cursor, s: Scenario):
     height_c = s.parent_height + 3
     height_d = s.parent_height + 4
     height_e = s.parent_height + 5
+    height_f = s.parent_height + 6
 
     cur.execute(
         """
@@ -485,7 +496,7 @@ def assert_supply(cur: pg.Cursor, s: Scenario):
     rows = cur.fetchall()
     for row in rows:
         print(row)
-    assert len(rows) == 7
+    assert len(rows) == 8
     assert rows == [
         (height_b, 1, 6, 20),
         (height_c, 1, 16, 10),
@@ -493,5 +504,6 @@ def assert_supply(cur: pg.Cursor, s: Scenario):
         (height_d, 2, 5, 9),
         (height_e, 1, 17, 10),
         (height_e, 2, 9, 6),
-        (height_e, 3, 99, 0),
+        (height_e, 3, 95, 0),
+        (height_f, 2, 13, 6),
     ]

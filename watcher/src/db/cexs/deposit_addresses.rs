@@ -242,11 +242,12 @@ mod candidates {
             "
             select a.address_id
                 , a.spot_height
-                , c.spot_height                    
+                , min(c.spot_height)                    
             from _cex_deposit_candidates c
             join cex.deposit_addresses a
                 on a.address_id = c.address_id
-                and a.cex_id <> c.cex_id;
+                and a.cex_id <> c.cex_id
+            group by 1, 2;
             ",
             &[],
         )
