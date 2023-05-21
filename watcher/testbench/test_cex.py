@@ -373,7 +373,7 @@ def assert_main_addresses_list(cur: pg.Cursor):
         """
     )
     rows = cur.fetchall()
-    assert len(rows) == 12
+    assert len(rows) == 13
 
     # Coinex
     assert (1, "9fowPvQ2GXdmhD2bN54EL9dRnio3kBQGyrD3fkbHwuTXD6z1wBU") in rows
@@ -387,6 +387,7 @@ def assert_main_addresses_list(cur: pg.Cursor):
     assert (3, "9hU5VUSUAmhEsTehBKDGFaFQSJx574UPoCquKBq59Ushv5XYgAu") in rows
     assert (3, "9i8Mci4ufn8iBQhzohh4V3XM3PjiJbxuDG1hctouwV4fjW5vBi3") in rows
     assert (3, "9iNt6wfxSc3DSaBVp22E7g993dwKUCvbGdHoEjxF8SRqj35oXvT") in rows
+    assert (3, "9fs7HkPGY9fhN6WsHd7V7LMcuMqsgseXzNahyToxJKwHCc1zc1c") in rows
     # Probit
     assert (4, "9eg2Rz3tGogzLaVZhG1ycPj1dJtN4Jn8ySa2mnVLJyVJryb13QB") in rows
     # TradeOgre

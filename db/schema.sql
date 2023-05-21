@@ -8,7 +8,7 @@ create table ew.revision (
 	minor integer not null,
 	check(singleton = 1)
 );
-insert into ew.revision (major, minor) values (3, 32);
+insert into ew.revision (major, minor) values (3, 33);
 
 -------------------------------------------------------------------------------
 -- Core
@@ -336,6 +336,7 @@ insert into cex.main_addresses_list (cex_id, address) values
 	(3, '9i8Mci4ufn8iBQhzohh4V3XM3PjiJbxuDG1hctouwV4fjW5vBi3'),
 	(3, '9guZaxPoe4jecHi6ZxtMotKUL4AzpomFf3xqXsFSuTyZoLbmUBr'),
 	(3, '9iNt6wfxSc3DSaBVp22E7g993dwKUCvbGdHoEjxF8SRqj35oXvT'),
+	(3, '9fs7HkPGY9fhN6WsHd7V7LMcuMqsgseXzNahyToxJKwHCc1zc1c'),
 	
 	-- ProBit https://discord.com/channels/668903786361651200/896711052736233482/964541753162096680
 	(4, '9eg2Rz3tGogzLaVZhG1ycPj1dJtN4Jn8ySa2mnVLJyVJryb13QB'),
