@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.7 - 2023-05-21
+
+### Fixed
+- [Issue 75](https://github.com/abchrisxyz/ergowatch/issues/75) - Add new main Kucoin address
+- [Issue 76](https://github.com/abchrisxyz/ergowatch/issues/76) - Fix issue with multiple deposit address conflicts
+---
+
 ## v0.5.6 - 2023-04-09
 
 ### Fixed
