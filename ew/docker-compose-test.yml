@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  # Test Postgres database
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: test_db
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+    ports:
+      - "127.0.0.1:5433:5432"

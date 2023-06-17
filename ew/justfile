@@ -1,0 +1,7 @@
+# show recipes
+@list:
+  just --list
+
+# Run all integration tests, single threaded
+test:
+    cargo test --test '*' -- --test-threads=1
