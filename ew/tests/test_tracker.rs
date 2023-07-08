@@ -11,9 +11,9 @@ use tokio_postgres::NoTls;
 
 use common::blocks::TestBlock as TB;
 use common::node_mockup::TestNode;
-use ew::core::testing::Node;
 use ew::core::tracking::Tracker;
 use ew::core::tracking::TrackingMessage;
+use ew::core::Node;
 use tokio::sync::mpsc::error::TryRecvError;
 
 fn set_tracing_subscriber(set: bool) -> Option<tracing::dispatcher::DefaultGuard> {
