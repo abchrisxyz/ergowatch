@@ -3,11 +3,9 @@ use std::collections::HashSet;
 use tokio_postgres::Transaction;
 
 use crate::core::node;
-use crate::core::types::AddressID;
 use crate::core::types::BoxID;
 use crate::core::types::Digest32;
 use crate::core::types::Height;
-use crate::core::types::Input;
 use crate::core::types::Timestamp;
 
 pub struct BoxIndex<'a> {

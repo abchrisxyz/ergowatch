@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use super::ergo;
 use super::node;
 
