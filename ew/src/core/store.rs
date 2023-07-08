@@ -283,16 +283,14 @@ fn collect_box_indices(block: &node::models::Block) -> Vec<boxes::BoxIndex> {
         .block_transactions
         .transactions
         .iter()
-        .flat_map(|tx| {
-            tx.outputs
-                .iter()
-                .enumerate()
-                .map(|(itx, output)| boxes::BoxIndex {
-                    box_id: &output.box_id,
-                    height: block.header.height,
-                    tx_index: itx as i32,
-                    output_index: output.index,
-                })
+        .enumerate()
+        .flat_map(|(itx, tx)| {
+            tx.outputs.iter().map(move |output| boxes::BoxIndex {
+                box_id: &output.box_id,
+                height: block.header.height,
+                tx_index: itx as i32,
+                output_index: output.index,
+            })
         })
         .collect()
 }
