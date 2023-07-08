@@ -23,6 +23,7 @@ use super::types::Output;
 use super::types::Transaction;
 use crate::config::PostgresConfig;
 
+#[derive(Debug)]
 pub(super) struct Store {
     client: tokio_postgres::Client,
     head: Head,
@@ -44,7 +45,9 @@ impl Store {
 
         schema::init(&mut client).await;
         let head = blocks::last_head(&client).await;
+        tracing::debug!("head: {:?}", &head);
         let last_address_id = addresses::get_max_id(&mut client).await;
+        tracing::debug!(last_address_id);
         Self {
             client,
             head,
@@ -117,15 +120,20 @@ impl Store {
 
         // Parse into node block
         let node_block: node::models::Block = serde_json::from_str(&text_block).unwrap();
+        assert_eq!(height, node_block.header.height);
 
-        let pgtx = self.client.transaction().await.unwrap();
-        if height > self.head.height {
+        // Check if block is new or already processed
+        let is_next_block = height > self.head.height;
+        if is_next_block {
             assert_eq!(height, self.head.height + 1);
             assert_eq!(node_block.header.parent_id, self.head.header_id);
+        }
+        tracing::debug!(is_next_block);
+
+        let pgtx = self.client.transaction().await.unwrap();
+        if is_next_block {
             blocks::insert(&pgtx, height, text_block).await;
             boxes::insert_many(&pgtx, collect_box_indices(&node_block)).await;
-        } else {
-            tracing::debug!("block is already registered");
         }
 
         // Collect (data-)input box id's
@@ -141,8 +149,10 @@ impl Store {
         pgtx.commit().await.unwrap();
 
         // Update head
-        self.head.height += 1;
-        self.head.header_id = node_block.header.id.clone();
+        if is_next_block {
+            self.head.height = node_block.header.height;
+            self.head.header_id = node_block.header.id.clone();
+        }
 
         // Convert intermediate input box representations to final input type
         let mut inputs: HashMap<BoxID, Input> = HashMap::new();
