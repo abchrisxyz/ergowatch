@@ -57,7 +57,7 @@ impl Tracker {
     }
 
     pub async fn start(&mut self) {
-        tracing::debug!("Starting tracker");
+        tracing::info!("Starting tracker");
         // Ensure genesis boxes have been dispatched
         for cur in &mut self.cursors {
             cur.ensure_genesis_boxes(&mut self.store).await;

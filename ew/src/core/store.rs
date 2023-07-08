@@ -31,6 +31,7 @@ pub(super) struct Store {
 
 impl Store {
     pub async fn new(pgconf: PostgresConfig) -> Self {
+        tracing::debug!("initializing new store");
         let (mut client, connection) = tokio_postgres::connect(&pgconf.connection_uri, NoTls)
             .await
             .unwrap();
@@ -329,8 +330,10 @@ async fn compile_address_ids(
     // Going over each tx in turn to handle outputs spent in same block.
     // This allows assuming all inputs will have an allocated address id already.
     for tx in &node_block.block_transactions.transactions {
+        // tracing::debug!("tx: {}", tx.id);
         // Inputs and data-inputs have all been registered so just retrieve their address id
         for input in &tx.inputs {
+            // tracing::debug!("input box_id: {}", input.box_id);
             let utxo = &input_boxes[&input.box_id];
             let address = ergo::ergo_tree::base16_to_address(&utxo.output.ergo_tree);
             if !ids.contains_key(&address) {

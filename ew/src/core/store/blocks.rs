@@ -7,7 +7,7 @@ use crate::core::types::Height;
 
 /// Retrieve head from latest block.
 pub(super) async fn last_head(client: &Client) -> Head {
-    debug!("Reading last block head");
+    debug!("reading last block head");
     let qry = "select max(height) from core.blocks";
     let max_h: Option<Height> = client.query_one(qry, &[]).await.unwrap().get(0);
     debug!("Max height in core.blocks is {:?}", max_h);
