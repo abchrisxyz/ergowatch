@@ -4,6 +4,8 @@ use tokio;
 use ew::core::tracking::Tracker;
 use ew::core::types::Head;
 use ew::core::Node;
+use ew::units;
+use ew::units::Unit;
 use tracing::Instrument;
 
 /// Gives some time to tracing subscriber
@@ -39,36 +41,46 @@ async fn main() -> Result<(), &'static str> {
     tracing::info!("configuring tracker");
     let node = Node::new("local-node", &node_url);
     let pgconf = ew::config::PostgresConfig::new(&pg_uri);
-    let mut tracker = Tracker::new(node, pgconf).await;
+    let mut tracker = Tracker::new(node, pgconf.clone()).await;
 
     // Dummy sink for now
-    let mut rx = tracker.add_cursor("main".to_string(), Head::initial());
+    // let mut rx = tracker.add_cursor("main".to_string(), Head::initial());
+
+    let mut sigmausd = units::sigmausd::Worker::new("sigmausd", &pgconf, &mut tracker).await;
 
     // Start tracker
     tokio::spawn(async move {
         sleep_some().await;
         tracker
             .start()
-            .instrument(tracing::info_span!("tracker"))
+            // .instrument(tracing::info_span!("tracker"))
             .await;
     });
 
-    // Dummy sink implementation
-    tracing::info!("starting dummy sink");
-    loop {
-        tokio::select! {
-            _ = tokio::signal::ctrl_c() => {break;},
-            msg = rx.recv() => {
-                let s = match msg.expect("message is some") {
-                    ew::core::tracking::TrackingMessage::Genesis(_) => String::from("genesis"),
-                    ew::core::tracking::TrackingMessage::Include(d) => format!("include {}", d.block.header.height),
-                    ew::core::tracking::TrackingMessage::Rollback(h) => format!("rollback {}", h),
-                };
-                tracing::debug!("dummy sink got message: {}", s);
-            },
-        }
-    }
+    // Start units
+    tokio::spawn(async move {
+        sigmausd.start().await;
+    });
 
+    // // Dummy sink implementation
+    // tracing::info!("starting dummy sink");
+    // loop {
+    //     tokio::select! {
+    //         _ = tokio::signal::ctrl_c() => {break;},
+    //         msg = rx.recv() => {
+    //             let s = match msg.expect("message is some") {
+    //                 ew::core::tracking::TrackingMessage::Genesis(_) => String::from("genesis"),
+    //                 ew::core::tracking::TrackingMessage::Include(d) => format!("include {}", d.block.header.height),
+    //                 ew::core::tracking::TrackingMessage::Rollback(h) => format!("rollback {}", h),
+    //             };
+    //             tracing::debug!("dummy sink got message: {}", s);
+    //         },
+    //     }
+    // }
+
+    // Wait for ctrl-c
+    _ = tokio::signal::ctrl_c().await;
     tracing::info!("exiting");
+    todo!("clean shutdown");
     Ok(())
 }
