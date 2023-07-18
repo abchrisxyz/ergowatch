@@ -2,7 +2,6 @@ mod addresses;
 mod blocks;
 mod boxes;
 mod meta;
-mod schema;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -22,6 +21,7 @@ use super::types::Input;
 use super::types::Output;
 use super::types::Transaction;
 use crate::config::PostgresConfig;
+use crate::utils::Schema;
 
 #[derive(Debug)]
 pub(super) struct Store {
@@ -43,7 +43,9 @@ impl Store {
             }
         });
 
-        schema::init(&mut client).await;
+        let schema = Schema::new("core", include_str!("store/schema.sql"));
+        schema.init(&mut client).await;
+
         let head = blocks::last_head(&client).await;
         tracing::debug!("head: {:?}", &head);
         let last_address_id = addresses::get_max_id(&mut client).await;

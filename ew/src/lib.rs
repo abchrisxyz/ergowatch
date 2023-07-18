@@ -1,6 +1,7 @@
 pub mod config;
 pub mod core;
 pub mod units;
+pub mod utils;
 
 #[cfg(test)]
 mod tests {
