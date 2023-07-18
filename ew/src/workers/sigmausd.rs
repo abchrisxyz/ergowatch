@@ -9,7 +9,7 @@ use parsing::Parser;
 use store::Store;
 use types::Batch;
 
-pub type Worker = super::Worker<Unit>;
+pub type Worker = super::Worker<SigmaUSD>;
 
 // SigmaUSD V2 launched at height 453064.
 // Starting a bit earlier to enusure we have valid oracle data when reaching 453064.
@@ -17,7 +17,7 @@ pub type Worker = super::Worker<Unit>;
 
 pub struct Cache {}
 
-pub struct Unit {
+pub struct SigmaUSD {
     cache: Cache,
     parser: Parser,
     store: Store,
@@ -29,11 +29,11 @@ use crate::core::types::Output;
 use async_trait::async_trait;
 
 #[async_trait]
-impl super::Workflow for Unit {
+impl super::Workflow for SigmaUSD {
     async fn new(pgconf: &PostgresConfig) -> Self {
         let cache = Cache {};
         let store = Store::new(pgconf.clone()).await;
-        let parser = Parser {};
+        let parser = Parser::new();
         Self {
             cache,
             parser,
@@ -53,7 +53,7 @@ impl super::Workflow for Unit {
         todo!();
     }
 
-    async fn get_head(&self) -> Head {
+    async fn head(&self) -> Head {
         todo!()
     }
 }

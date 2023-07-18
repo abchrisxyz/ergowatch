@@ -12,39 +12,42 @@ use crate::core::types::Output;
 
 pub mod sigmausd;
 
+/// Workflows extract and store domain specfic data.
 #[async_trait]
 pub trait Workflow {
-    /// Create and initialize and new unit
+    /// Create and initialize and new workflow.
     async fn new(pgconf: &PostgresConfig) -> Self;
 
-    /// Handle genesis boxes
+    /// Handle genesis boxes.
     async fn include_genesis_boxes(&mut self, boxes: &Vec<Output>);
 
     /// Process new block data.
     async fn include_block(&mut self, data: &CoreData);
 
-    /// Roll back a block
+    /// Roll back a block.
     async fn roll_back(&mut self, height: Height);
 
-    async fn get_head(&self) -> Head;
+    /// Get last processed head.
+    async fn head(&self) -> Head;
 }
 
+/// Workers listen to tracker events and drive a workflow.
 pub struct Worker<W: Workflow> {
     id: String,
     rx: Receiver<TrackingMessage>,
-    unit: W,
+    workflow: W,
 }
 
 impl<W: Workflow> Worker<W> {
     pub async fn new(id: &str, pgconf: &PostgresConfig, tracker: &mut Tracker) -> Self {
-        let unit = W::new(pgconf).await;
-        let head = unit.get_head().await;
+        let workflow = W::new(pgconf).await;
+        let head = workflow.head().await;
         let rx = tracker.add_cursor(id.to_owned(), head.clone());
 
         Self {
             id: String::from(id),
             rx,
-            unit,
+            workflow,
         }
     }
 
@@ -57,16 +60,12 @@ impl<W: Workflow> Worker<W> {
                 },
                 msg = self.rx.recv() => {
                     match msg.expect("message is some") {
-                        TrackingMessage::Genesis(boxes) => self.unit.include_genesis_boxes(&boxes).await,
-                        TrackingMessage::Include(data) => self.include_block(&data).await,
-                        TrackingMessage::Rollback(height) => self.unit.roll_back(height).await,
+                        TrackingMessage::Genesis(boxes) => self.workflow.include_genesis_boxes(&boxes).await,
+                        TrackingMessage::Include(data) => self.workflow.include_block(&data).await,
+                        TrackingMessage::Rollback(height) => self.workflow.roll_back(height).await,
                     };
                 },
             }
         }
-    }
-
-    async fn include_block(&mut self, data: &CoreData) {
-        self.unit.include_block(data).await;
     }
 }

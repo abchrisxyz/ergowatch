@@ -2,9 +2,8 @@ use std::env;
 use tokio;
 
 use ew::core::tracking::Tracker;
-use ew::core::types::Head;
 use ew::core::Node;
-use ew::units;
+use ew::workers;
 
 /// Gives some time to tracing subscriber
 async fn sleep_some() {
@@ -42,7 +41,7 @@ async fn main() -> Result<(), &'static str> {
     let mut tracker = Tracker::new(node, pgconf.clone()).await;
 
     // Workers - just one for now
-    let mut sigmausd = units::sigmausd::Worker::new("sigmausd", &pgconf, &mut tracker).await;
+    let mut sigmausd = workers::sigmausd::Worker::new("sigmausd", &pgconf, &mut tracker).await;
 
     // Start tracker
     tokio::spawn(async move {
@@ -57,22 +56,6 @@ async fn main() -> Result<(), &'static str> {
     tokio::spawn(async move {
         sigmausd.start().await;
     });
-
-    // // Dummy sink implementation
-    // tracing::info!("starting dummy sink");
-    // loop {
-    //     tokio::select! {
-    //         _ = tokio::signal::ctrl_c() => {break;},
-    //         msg = rx.recv() => {
-    //             let s = match msg.expect("message is some") {
-    //                 ew::core::tracking::TrackingMessage::Genesis(_) => String::from("genesis"),
-    //                 ew::core::tracking::TrackingMessage::Include(d) => format!("include {}", d.block.header.height),
-    //                 ew::core::tracking::TrackingMessage::Rollback(h) => format!("rollback {}", h),
-    //             };
-    //             tracing::debug!("dummy sink got message: {}", s);
-    //         },
-    //     }
-    // }
 
     // Wait for ctrl-c
     _ = tokio::signal::ctrl_c().await;
