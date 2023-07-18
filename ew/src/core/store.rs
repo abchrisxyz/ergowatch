@@ -58,7 +58,7 @@ impl Store {
     }
 
     pub(super) async fn include_genesis_boxes(&mut self, boxes: String) {
-        tracing::info!("Including genesis boxes");
+        tracing::info!("including genesis boxes");
         assert!(self.head.is_initial());
         self.head = Head::genesis();
         let pgtx = self.client.transaction().await.unwrap();
