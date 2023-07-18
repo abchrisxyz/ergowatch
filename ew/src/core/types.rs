@@ -15,6 +15,7 @@ pub type TransactionID = Digest32;
 pub type Version = u8;
 pub type Value = i64;
 pub type Votes = [i8; 3];
+pub type NanoERG = i64;
 
 const ZERO_HEADER: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 

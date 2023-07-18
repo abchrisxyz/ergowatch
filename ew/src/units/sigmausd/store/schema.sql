@@ -11,7 +11,7 @@ insert into sigmausd.head(height, header_id) values (-1, '');
 
 /*
     Tables `bank_transactions` and `oracle_postings` store contract and oracle changes.
-    Both have records retrievable by height to enable roll backs.
+    Both have records retrievable by height to enable rollbacks.
     All other tables can be derived (and rolled back) using data from those two.
 */
 create table sigmausd.bank_transactions (
@@ -29,7 +29,7 @@ create table sigmausd.bank_transactions (
     -- Service fee in nanoERG
     service_fee bigint not null,
     -- Address collecting the service fee, if any
-    service_address_id bigint
+    service_address_id bigint,
 );
 create index on sigmausd.bank_transactions using brin(height);
 
@@ -53,41 +53,11 @@ create table sigmausd.history (
     circ_sc bigint not null,
     circ_rc bigint not null,
     reserves bigint not null,
-    -- track erg in - erg out from sc and rc transactions
-    -- can always be derived from bank_transactions...
-    -- sc_nano_net bigint not null
-    -- rc_nano_net bigint not null
+    -- net nanoERG into bank from SC transactions
+    sc_nano_net bigint
+    -- net nanoERG into bank from RC transactions
+    rc_nano_net bigint
 );
-
--- 
-create table sigmausd.totals (
-    -- minted SC
-    sc_minted numeric,
-    -- redeemed SC
-    sc_redeemed numeric,
-    -- nanoERG into bank from minting SC
-    sc_nano_in numeric,
-    -- nanoERG out of bank from redeeming SC
-    sc_nano_out numeric,
-    -- minted RC
-    rc_minted numeric,
-    -- redeemed RC
-    rc_redeemed numeric,
-    -- nanoERG into bank from minting RC
-    rc_nano_in numeric,
-    -- nanoERG out of bank from redeeming RC
-    rc_nano_out numeric,
-    -- singleton
-    singleton int primary key default 1,
-    check(singleton = 1)
-
-    -- OR, maintain ROI's directly...
-    -- net nanoERG into bank from SC transaction
-    sc_nano_net
-
-    -- SC roi = liabilities / sc_nano_net - 1
-);
-
 
 /*
     Tracks usage of and fees accumulated by services (e.g. TokenJay, sigmausd.io, ...).
@@ -112,9 +82,36 @@ create table sigmausd.services (
     check(volume >= 0)
 );
 
+-- Daily OHLC data
+create table sigmausd.rc_ohlc_daily (
+    t date unique not null,
+    o real not null,
+    h real not null,
+    l real not null,
+    c real not null
+);
+
+-- Weekly OHLC data
+create table sigmausd.rc_ohlc_weekly (
+    t date unique not null,
+    o real not null,
+    h real not null,
+    l real not null,
+    c real not null
+);
+
+-- Monthly OHLC data
+create table sigmausd.rc_ohlc_monthly (
+    t date unique not null,
+    o real not null,
+    h real not null,
+    l real not null,
+    c real not null
+);
+
 -- Convenience view for debugging?
 create view sigmausd.details as
-    select 1; -- todo
+    select 'todo' as todo;
 
 
 

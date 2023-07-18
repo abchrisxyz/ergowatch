@@ -41,11 +41,8 @@ async fn main() -> Result<(), &'static str> {
     let pgconf = ew::config::PostgresConfig::new(&pg_uri);
     let mut tracker = Tracker::new(node, pgconf.clone()).await;
 
-    // Dummy sink for now
-    // let mut rx = tracker.add_cursor("main".to_string(), Head::initial());
-
-    let mut sigmausd = units::sigmausd::SigWorker::new("sigmausd", &pgconf, &mut tracker).await;
-    // let mut sigmausd = units::sigmausd::SigWorker::new(rx);
+    // Workers - just one for now
+    let mut sigmausd = units::sigmausd::Worker::new("sigmausd", &pgconf, &mut tracker).await;
 
     // Start tracker
     tokio::spawn(async move {
