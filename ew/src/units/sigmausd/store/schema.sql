@@ -7,6 +7,7 @@ create table sigmausd.head (
     header_id text not null,
     check(singleton = 1)
 );
+insert into sigmausd.head(height, header_id) values (-1, '');
 
 /*
     Tables `bank_transactions` and `oracle_postings` store contract and oracle changes.

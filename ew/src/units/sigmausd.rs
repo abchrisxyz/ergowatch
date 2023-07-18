@@ -1,50 +1,50 @@
 mod store;
-
-use async_trait::async_trait;
-use tokio::sync::mpsc::Receiver;
+mod types;
 
 use crate::config::PostgresConfig;
 use crate::core::tracking::Tracker;
-use crate::core::tracking::TrackingMessage;
 use crate::core::types::CoreData;
-use crate::core::types::Head;
-use crate::core::types::Height;
 use crate::core::types::Output;
 
-use super::Unit;
-use store::Store;
+use super::Parser;
+use super::Worker;
+use store::SigStore;
 
-pub struct Worker {
-    id: String,
-    store: Store,
-    rx: Receiver<TrackingMessage>,
+// SigmaUSD V2 launched at height 453064.
+// Starting a bit earlier to enusure we have valid oracle data when reaching 453064.
+// const START_HEIGHT: Height = 450000;
+
+/// Data extracted from a block and ready to be stored.
+pub struct Batch {
+    pub i: i32,
 }
 
-#[async_trait]
-impl Unit for Worker {
-    async fn new(id: &str, pgconf: &PostgresConfig, tracker: &mut Tracker) -> Self {
-        let store = Store::new(pgconf.clone());
-        let head = store.head().await;
+pub type SigWorker = Worker<SigParser, SigStore>;
+
+pub struct SigParser;
+
+impl Parser for SigParser {
+    type B = Batch;
+
+    fn parse_genesis_boxes(&self, outputs: &Vec<Output>) -> Self::B {
+        todo!()
+    }
+
+    fn parse(&self, data: &CoreData) -> Batch {
+        Batch { i: 3 }
+    }
+}
+
+impl SigWorker {
+    pub async fn new(id: &str, pgconf: &PostgresConfig, tracker: &mut Tracker) -> Self {
+        let store = SigStore::new(pgconf.clone()).await;
+        let head = store.get_head();
+        let rx = tracker.add_cursor(id.to_owned(), head.clone());
         Self {
             id: String::from(id),
-            store: store,
-            rx: tracker.add_cursor(id.to_owned(), head),
+            rx,
+            parser: SigParser {},
+            store,
         }
-    }
-
-    async fn next(&mut self) -> Option<TrackingMessage> {
-        self.rx.recv().await
-    }
-
-    async fn handle_genesis(&mut self, genesis_blocks: Vec<Output>) {
-        tracing::warn!("todo - handle genesis blocks")
-    }
-
-    async fn include(&mut self, data: &CoreData) {
-        tracing::warn!("todo - handle block {}", data.block.header.height);
-    }
-
-    async fn roll_back(&mut self, height: Height) {
-        todo!();
     }
 }

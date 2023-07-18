@@ -5,8 +5,6 @@ use ew::core::tracking::Tracker;
 use ew::core::types::Head;
 use ew::core::Node;
 use ew::units;
-use ew::units::Unit;
-use tracing::Instrument;
 
 /// Gives some time to tracing subscriber
 async fn sleep_some() {
@@ -46,7 +44,8 @@ async fn main() -> Result<(), &'static str> {
     // Dummy sink for now
     // let mut rx = tracker.add_cursor("main".to_string(), Head::initial());
 
-    let mut sigmausd = units::sigmausd::Worker::new("sigmausd", &pgconf, &mut tracker).await;
+    let mut sigmausd = units::sigmausd::SigWorker::new("sigmausd", &pgconf, &mut tracker).await;
+    // let mut sigmausd = units::sigmausd::SigWorker::new(rx);
 
     // Start tracker
     tokio::spawn(async move {

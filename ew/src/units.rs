@@ -1,67 +1,71 @@
 use async_trait::async_trait;
+
 use tokio::sync::mpsc::Receiver;
 
-use crate::config::PostgresConfig;
-use crate::core::tracking::Tracker;
 use crate::core::tracking::TrackingMessage;
 use crate::core::types::CoreData;
-use crate::core::types::Head;
 use crate::core::types::Height;
 use crate::core::types::Output;
 
 pub mod sigmausd;
 
-// /// Helper function to register worker with tracker
-// async fn attach(unit: &mut impl Unit, tracker: &mut Tracker) {
-//     let head = unit.head().await;
-//     let name = String::from("name");
-//     let rx = tracker.add_cursor(name, head);
-//     unit.set_rx(rx)
-// }
+/// A parser extracts domain specific data from a block.
+pub trait Parser {
+    type B;
+    fn parse_genesis_boxes(&self, outputs: &Vec<Output>) -> Self::B;
+    fn parse(&self, data: &CoreData) -> Self::B;
+}
 
+/// A store handles persistence of domain specific data
 #[async_trait]
-pub trait Unit {
-    async fn new(name: &str, pgconf: &PostgresConfig, tracker: &mut Tracker) -> Self;
+pub trait Store {
+    type B;
+    async fn process(&self, batch: Self::B);
+    async fn roll_back(&self, height: Height);
+}
 
-    fn name(&self) -> String {
-        String::from("blabla")
-    }
+/// Workers listen for incoming events and arrange parsing and storage.
+pub struct Worker<P, S>
+where
+    P: Parser,
+    S: Store<B = P::B>,
+{
+    id: String,
+    rx: Receiver<TrackingMessage>,
+    parser: P,
+    store: S,
+}
 
-    // /// Registers workers to receive events from tracker.
-    // async fn attach(&mut self, tracker: &mut Tracker) {
-    //     let head = self.head().await;
-    //     let rx = tracker.add_cursor(self.name(), head);
-    // }
-
-    /// Run the worker
-    // async fn start(mut self);
-
-    async fn start(&mut self) {
+impl<P, S> Worker<P, S>
+where
+    P: Parser,
+    S: Store<B = P::B>,
+{
+    pub async fn start(&mut self) {
         loop {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
-                    tracing::info!("got a ctrl-c message");
+                    tracing::info!("[{}] got a ctrl-c message", self.id);
                     break;
                 },
-                msg = self.next() => {
+                msg = self.rx.recv() => {
                     match msg.expect("message is some") {
-                        TrackingMessage::Genesis(blocks) => &mut self.handle_genesis(blocks).await,
+                        TrackingMessage::Genesis(boxes) => &mut self.include_genesis_boxes(&boxes).await,
                         TrackingMessage::Include(data) => &mut self.include(&data).await,
-                        TrackingMessage::Rollback(height) => &mut self.roll_back(height).await,
+                        TrackingMessage::Rollback(height) => &self.store.roll_back(height).await,
                     };
                 },
             }
         }
     }
 
-    /// Returns current head
-    // async fn head(&self) -> Head;
+    async fn include_genesis_boxes(&self, outputs: &Vec<Output>) {
+        let batch = self.parser.parse_genesis_boxes(outputs);
+        self.store.process(batch).await;
+    }
 
-    async fn next(&mut self) -> Option<TrackingMessage>;
-
-    async fn handle_genesis(&mut self, genesis_blocks: Vec<Output>);
-
-    async fn include(&mut self, data: &CoreData);
-
-    async fn roll_back(&mut self, height: Height);
+    async fn include(&self, data: &CoreData) {
+        let batch = self.parser.parse(data);
+        self.store.process(batch).await;
+    }
 }
