@@ -1,5 +1,6 @@
 use super::ergo;
 use super::node;
+pub use super::node::models::Asset;
 
 pub type Address = String;
 pub type AddressID = i64;
@@ -114,7 +115,7 @@ impl From<node::models::Header> for Header {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Transaction {
     pub id: Digest32,
     pub index: i32,
@@ -229,4 +230,182 @@ fn decode_register(value: &serde_json::Value, id: i16) -> Option<Register> {
         });
     }
     panic!("Non string value in register: {}", value);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::node::models::Asset;
+    use rand::distributions::Alphanumeric;
+    use rand::distributions::DistString;
+
+    fn random_digest32() -> Digest32 {
+        Alphanumeric.sample_string(&mut rand::thread_rng(), 64)
+    }
+
+    impl Transaction {
+        pub fn dummy() -> Self {
+            Self {
+                id: random_digest32(),
+                index: 0,
+                outputs: vec![],
+                inputs: vec![],
+                data_inputs: vec![],
+            }
+        }
+
+        /// Returns tx with appended input. Sets the input's index.
+        pub fn add_input(&self, input: Input) -> Self {
+            let mut tx = self.clone();
+            let idx = self.inputs.len() as i32;
+            tx.inputs.push(input.index(idx));
+            tx
+        }
+
+        /// Returns tx with appended output. Sets the output's index.
+        pub fn add_output(&self, output: Output) -> Self {
+            let mut tx = self.clone();
+            let idx = self.outputs.len() as i32;
+            tx.outputs.push(output.index(idx));
+            tx
+        }
+    }
+
+    impl Output {
+        pub fn dummy() -> Self {
+            Self {
+                box_id: Alphanumeric.sample_string(&mut rand::thread_rng(), 64),
+                creation_height: 0,
+                address_id: 0,
+                index: 0,
+                value: 1000000000,
+                additional_registers: "{}".into(),
+                assets: vec![],
+                size: 100,
+            }
+        }
+
+        /// Returns output with modified value
+        pub fn value(&self, value: NanoERG) -> Self {
+            let mut output = self.clone();
+            output.value = value;
+            output
+        }
+
+        /// Returns output with modified address id
+        pub fn address_id(&self, address_id: AddressID) -> Self {
+            let mut output = self.clone();
+            output.address_id = address_id;
+            output
+        }
+
+        /// Returns output with modified index
+        pub fn index(&self, index: i32) -> Self {
+            let mut output = self.clone();
+            output.index = index;
+            output
+        }
+
+        /// Returns output with asset added
+        pub fn add_asset(&self, token_id: &str, amount: i64) -> Self {
+            let mut output = self.clone();
+            let asset = Asset {
+                token_id: token_id.into(),
+                amount,
+            };
+            output.assets.push(asset);
+            output
+        }
+    }
+
+    impl Input {
+        pub fn dummy() -> Self {
+            Self {
+                box_id: Alphanumeric.sample_string(&mut rand::thread_rng(), 64),
+                creation_height: 0,
+                address_id: 0,
+                index: 0,
+                value: 1000000000,
+                additional_registers: "{}".into(),
+                assets: vec![],
+                size: 100,
+                creation_timestamp: 1683634223508,
+            }
+        }
+
+        /// Returns input with modified value
+        pub fn value(&self, value: NanoERG) -> Self {
+            let mut input = self.clone();
+            input.value = value;
+            input
+        }
+
+        /// Returns input with modified address id
+        pub fn address_id(&self, address_id: AddressID) -> Self {
+            let mut input = self.clone();
+            input.address_id = address_id;
+            input
+        }
+
+        /// Returns input with modified index
+        pub fn index(&self, index: i32) -> Self {
+            let mut input = self.clone();
+            input.index = index;
+            input
+        }
+
+        /// Returns input with asset added
+        pub fn add_asset(&self, token_id: &str, amount: i64) -> Self {
+            let mut input = self.clone();
+            let asset = Asset {
+                token_id: token_id.into(),
+                amount,
+            };
+            input.assets.push(asset);
+            input
+        }
+    }
+
+    #[test]
+    fn test_output_helpers() {
+        let output = Output::dummy()
+            .index(3)
+            .address_id(123)
+            .value(12345)
+            .add_asset("some-token", 420);
+        assert_eq!(output.index, 3);
+        assert_eq!(output.address_id, 123);
+        assert_eq!(output.value, 12345);
+        assert_eq!(output.assets[0].token_id, String::from("some-token"));
+        assert_eq!(output.assets[0].amount, 420);
+    }
+
+    #[test]
+    fn test_input_helpers() {
+        let input = Input::dummy()
+            .index(3)
+            .address_id(123)
+            .value(12345)
+            .add_asset("some-token", 420);
+        assert_eq!(input.index, 3);
+        assert_eq!(input.address_id, 123);
+        assert_eq!(input.value, 12345);
+        assert_eq!(input.assets[0].token_id, String::from("some-token"));
+        assert_eq!(input.assets[0].amount, 420);
+    }
+
+    #[test]
+    fn test_transaction_helpers() {
+        let tx = Transaction::dummy();
+        // inputs
+        assert!(tx.inputs.is_empty());
+        let tx = tx.add_input(Input::dummy().index(5));
+        assert!(tx.inputs.len() == 1);
+        assert!(tx.inputs[0].index == 0);
+        // outputs
+        assert!(tx.outputs.is_empty());
+        let tx = tx.add_output(Output::dummy().index(5));
+        assert!(tx.outputs.len() == 1);
+        assert!(tx.outputs[0].index == 0);
+    }
 }

@@ -10,22 +10,30 @@ use crate::core::types::Timestamp;
 /// Data extracted from a block and ready to be stored.
 pub struct Batch {
     pub head: Head,
-    pub bank_transactions: Vec<BankTransaction>,
-    pub oracle_posting: Option<OraclePosting>,
+    pub events: Vec<Event>,
     pub history_record: Option<HistoryRecord>,
-    pub ohlc_diff: Option<OHLCDiff>,
+    pub ohlc_records: Vec<OHLCRecord>,
     pub service_diffs: Vec<ServiceStats>,
+}
+
+pub enum Event {
+    /// New oracle price
+    Oracle(OraclePosting),
+    /// Bank creation
+    // InitialBankTx(BankTransaction),
+    /// New bank transaction
+    BankTx(BankTransaction),
 }
 
 pub struct BankTransaction {
     pub index: i32,
     pub height: Height,
     pub reserves_diff: NanoERG,
-    pub sc_diff: i64,
-    pub rc_diff: i64,
+    pub circ_sc_diff: i64,
+    pub circ_rc_diff: i64,
     pub box_id: BoxID,
     pub service_fee: NanoERG,
-    pub service_address_id: AddressID,
+    pub service_address_id: Option<AddressID>,
 }
 
 pub struct OraclePosting {
@@ -34,6 +42,7 @@ pub struct OraclePosting {
     pub box_id: BoxID,
 }
 
+#[derive(Clone)]
 pub struct HistoryRecord {
     pub height: Height,
     pub oracle: i64,
@@ -44,6 +53,12 @@ pub struct HistoryRecord {
     pub rc_net: NanoERG,
 }
 
+pub enum OHLCRecord {
+    Daily(OHLC),
+    Weekly(OHLC),
+    Monthly(OHLC),
+}
+
 pub struct OHLC {
     pub t: time::Date,
     pub o: f32,
@@ -52,7 +67,7 @@ pub struct OHLC {
     pub c: f32,
 }
 
-pub struct OHLCDiff {
+pub struct OHLCGroup {
     pub daily: OHLC,
     pub weekly: OHLC,
     pub monthly: OHLC,

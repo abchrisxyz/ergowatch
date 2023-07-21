@@ -7,7 +7,6 @@ create table sigmausd.head (
     header_id text not null,
     check(singleton = 1)
 );
-insert into sigmausd.head(height, header_id) values (-1, '');
 
 /*
     Tables `bank_transactions` and `oracle_postings` store contract and oracle changes.
@@ -21,9 +20,9 @@ create table sigmausd.bank_transactions (
     -- Change in bank reserves (nanoERG)
     reserves_diff bigint not null,
     -- Change in circulating stable coins
-    sc_diff bigint not null,
+    circ_sc_diff bigint not null,
     -- Change in circulating reserve coins
-    rc_diff bigint not null,
+    circ_rc_diff bigint not null,
     -- Tx output box id
     box_id text unique not null,
     -- Service fee in nanoERG
@@ -84,7 +83,7 @@ create table sigmausd.services (
 
 -- Daily OHLC data
 create table sigmausd.rc_ohlc_daily (
-    t date unique not null,
+    t date primary key not null,
     o real not null,
     h real not null,
     l real not null,
@@ -93,7 +92,7 @@ create table sigmausd.rc_ohlc_daily (
 
 -- Weekly OHLC data
 create table sigmausd.rc_ohlc_weekly (
-    t date unique not null,
+    t date primary key not null,
     o real not null,
     h real not null,
     l real not null,
@@ -102,7 +101,7 @@ create table sigmausd.rc_ohlc_weekly (
 
 -- Monthly OHLC data
 create table sigmausd.rc_ohlc_monthly (
-    t date unique not null,
+    t date primary key not null,
     o real not null,
     h real not null,
     l real not null,
@@ -113,5 +112,52 @@ create table sigmausd.rc_ohlc_monthly (
 create view sigmausd.details as
     select 'todo' as todo;
 
+-----------------------------------------------------------------------------------------
+-- Initialize state
+-----------------------------------------------------------------------------------------
+insert into sigmausd.head (height, header_id)
+values (453064, 'fd35b157811f0950169e0f86b8f7e9ae0f13c49a46848ff40aa8dad26b030fde');
 
+insert into sigmausd.history (
+    height,
+    oracle,
+    circ_sc,
+    circ_rc,
+    reserves,
+    sc_nano_net,
+    rc_nano_net
+) values (
+    453064, -- height
+    0, -- oracle, circ_sc is zero anyways
+    0, -- circ_sc
+    0, -- circ_rc
+    10000000, -- reserves: 0.001 ERG
+    0, -- sc_nano_net
+    0 -- rc_nano_net
+);
 
+-- Default SigRSV ratio is 1 ERG = 1000000 SigRSV
+insert into sigmausd.rc_ohlc_daily (t, o, h, l, c)
+values (
+    '2021-03-25'::date,
+    1000000,
+    1000000,
+    1000000,
+    1000000,
+);
+insert into sigmausd.rc_ohlc_weekly (t, o, h, l, c)
+values (
+    '2021-03-22'::date,
+    1000000,
+    1000000,
+    1000000,
+    1000000,
+);
+insert into sigmausd.rc_ohlc_monthly (t, o, h, l, c)
+values (
+    '2021-03-01'::date,
+    1000000,
+    1000000,
+    1000000,
+    1000000,
+);  

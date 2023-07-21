@@ -5,9 +5,13 @@ use crate::core::types::Head;
 use crate::core::types::Height;
 use crate::utils::Schema;
 
+use super::parsing::ParserCache;
 use super::Batch;
 
+mod bank_transactions;
 mod head;
+mod history;
+mod ohlcs;
 mod oracle_postings;
 
 pub struct Store {
@@ -42,21 +46,25 @@ impl Store {
         &self.head
     }
 
-    async fn persist(&mut self, batch: Batch) {
+    pub(super) async fn load_parser_cache(&self) -> ParserCache {
+        ParserCache {
+            bank_transaction_count: bank_transactions::get_count(&self.client).await,
+            last_oracle_posting: oracle_postings::get_latest(&self.client).await,
+            last_history_record: history::get_latest(&self.client).await,
+            last_ohlc_group: ohlcs::get_latest_group(&self.client).await,
+        }
+    }
+
+    pub(super) async fn persist(&mut self, batch: Batch) {
         tracing::debug!("persisting data for block {}", batch.head.height);
         let pgtx = self.client.transaction().await.unwrap();
 
         // Head
         head::update(&pgtx, &batch.head).await;
 
-        // Bank transactions
-        for bank_tx in &batch.bank_transactions {
+        // Events
+        for event in &batch.events {
             todo!()
-        }
-
-        // Oracle posting
-        if let Some(op) = batch.oracle_posting {
-            oracle_postings::insert(&pgtx, &op).await;
         }
 
         // History record
@@ -64,16 +72,17 @@ impl Store {
             todo!()
         }
 
+        // OHLC's
+
         // Service diffs
         for diff in &batch.service_diffs {
             todo!()
         }
 
-        // OHLC's
-
         pgtx.commit().await.unwrap();
     }
-    async fn roll_back(&mut self, height: Height) {
+
+    pub(super) async fn roll_back(&mut self, height: Height) {
         tracing::debug!("rolling back block {}", height);
         todo!()
     }
