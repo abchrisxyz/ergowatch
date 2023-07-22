@@ -161,7 +161,7 @@ impl Store {
         for (box_id, utxo) in input_boxes.into_iter() {
             // let box_id = utxo.output.box_id.clone();
             let address_id = address_ids[&utxo.output.ergo_tree];
-            let size = match ergo::parsing::calc_box_size(&utxo.output) {
+            let size = match ergo::boxes::calc_box_size(&utxo.output) {
                 Some(s) => s,
                 None => 0,
             };

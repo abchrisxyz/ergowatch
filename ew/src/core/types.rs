@@ -146,7 +146,7 @@ pub struct Output {
 
 impl Output {
     pub fn from_node_output(output: node::models::Output, address_id: AddressID) -> Self {
-        let size = match ergo::parsing::calc_box_size(&output) {
+        let size = match ergo::boxes::calc_box_size(&output) {
             Some(s) => s,
             None => 0,
         };
