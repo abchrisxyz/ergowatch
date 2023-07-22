@@ -19,6 +19,7 @@ use super::types::Head;
 use super::types::Height;
 use super::types::Input;
 use super::types::Output;
+use super::types::Registers;
 use super::types::Transaction;
 use crate::config::PostgresConfig;
 use crate::utils::Schema;
@@ -170,7 +171,7 @@ impl Store {
                 address_id: address_id,
                 index: utxo.output.index,
                 value: utxo.output.value,
-                additional_registers: utxo.output.additional_registers,
+                additional_registers: Registers::new(utxo.output.additional_registers),
                 assets: utxo.output.assets,
                 size: size,
                 creation_height: utxo.height,

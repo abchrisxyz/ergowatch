@@ -9,7 +9,6 @@ pub type Digest32 = String;
 pub type ErgoTree = String;
 pub type HeaderID = Digest32;
 pub type Height = i32;
-pub type Registers = serde_json::Value;
 pub type Timestamp = i64;
 pub type TokenID = Digest32;
 pub type TransactionID = Digest32;
@@ -139,7 +138,7 @@ pub struct Output {
     pub address_id: AddressID,
     pub index: i32,
     pub value: i64,
-    pub additional_registers: serde_json::Value,
+    pub additional_registers: Registers,
     pub assets: Vec<node::models::Asset>,
     pub size: i32,
 }
@@ -156,7 +155,7 @@ impl Output {
             address_id: address_id,
             index: output.index,
             value: output.value,
-            additional_registers: output.additional_registers,
+            additional_registers: Registers(output.additional_registers),
             assets: output.assets,
             size: size,
         }
@@ -169,11 +168,39 @@ pub struct Input {
     pub address_id: AddressID,
     pub index: i32,
     pub value: i64,
-    pub additional_registers: serde_json::Value,
+    pub additional_registers: Registers,
     pub assets: Vec<node::models::Asset>,
     pub size: i32,
     pub creation_height: Height,
     pub creation_timestamp: Timestamp,
+}
+
+/// Wraps registers json and provides parsing methods
+#[derive(Debug, Clone)]
+pub struct Registers(serde_json::Value);
+
+impl Registers {
+    pub fn new(json: serde_json::Value) -> Self {
+        Self(json)
+    }
+
+    /// Rendered R4 register
+    pub fn r4(&self) -> Option<Register> {
+        self.render_register("R4", 4)
+    }
+
+    fn render_register(&self, key: &str, id: i16) -> Option<Register> {
+        match &self.0 {
+            serde_json::Value::Null => None,
+            serde_json::Value::Object(map) => match map.get(key) {
+                Some(v) => decode_register(v, id),
+                None => None,
+            },
+            _ => {
+                panic!("Non map object for additional registers: {:?}", &self.0);
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -182,41 +209,6 @@ pub struct Register {
     pub stype: String,
     pub serialized_value: String,
     pub rendered_value: String,
-}
-
-fn parse_additional_registers(regs: &serde_json::Value) -> [Option<Register>; 6] {
-    match regs {
-        serde_json::Value::Null => [None, None, None, None, None, None],
-        serde_json::Value::Object(map) => [
-            match map.get("R4") {
-                Some(v) => decode_register(&v, 4),
-                None => None,
-            },
-            match map.get("R5") {
-                Some(v) => decode_register(&v, 5),
-                None => None,
-            },
-            match map.get("R6") {
-                Some(v) => decode_register(&v, 6),
-                None => None,
-            },
-            match map.get("R7") {
-                Some(v) => decode_register(&v, 7),
-                None => None,
-            },
-            match map.get("R8") {
-                Some(v) => decode_register(&v, 8),
-                None => None,
-            },
-            match map.get("R9") {
-                Some(v) => decode_register(&v, 9),
-                None => None,
-            },
-        ],
-        _ => {
-            panic!("Non map object for additional registers: {:?}", &regs);
-        }
-    }
 }
 
 fn decode_register(value: &serde_json::Value, id: i16) -> Option<Register> {
@@ -279,7 +271,7 @@ mod tests {
                 address_id: 0,
                 index: 0,
                 value: 1000000000,
-                additional_registers: "{}".into(),
+                additional_registers: Registers::dummy(),
                 assets: vec![],
                 size: 100,
             }
@@ -316,6 +308,14 @@ mod tests {
             output.assets.push(asset);
             output
         }
+
+        /// Set serialized register value
+        pub fn set_registers(&self, json: &str) -> Self {
+            let mut output = self.clone();
+            // output.additional_registers = Registers::new(json.into());
+            output.additional_registers = Registers::new(serde_json::from_str(json).unwrap());
+            output
+        }
     }
 
     impl Input {
@@ -326,7 +326,7 @@ mod tests {
                 address_id: 0,
                 index: 0,
                 value: 1000000000,
-                additional_registers: "{}".into(),
+                additional_registers: Registers::dummy(),
                 assets: vec![],
                 size: 100,
                 creation_timestamp: 1683634223508,
@@ -366,18 +366,29 @@ mod tests {
         }
     }
 
+    impl Registers {
+        pub fn dummy() -> Self {
+            Self("{}".into())
+        }
+    }
+
     #[test]
     fn test_output_helpers() {
         let output = Output::dummy()
             .index(3)
             .address_id(123)
             .value(12345)
-            .add_asset("some-token", 420);
+            .add_asset("some-token", 420)
+            .set_registers(r#"{"R4": "05baafd2a302"}"#);
         assert_eq!(output.index, 3);
         assert_eq!(output.address_id, 123);
         assert_eq!(output.value, 12345);
         assert_eq!(output.assets[0].token_id, String::from("some-token"));
         assert_eq!(output.assets[0].amount, 420);
+        assert_eq!(
+            output.additional_registers.r4().expect("R4").rendered_value,
+            "305810397"
+        );
     }
 
     #[test]

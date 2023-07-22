@@ -10,7 +10,6 @@ use crate::core::types::TokenID;
 use crate::core::types::TransactionID;
 use crate::core::types::Version;
 use crate::core::types::Value;
-use crate::core::types::Registers;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -107,7 +106,7 @@ pub struct Output {
     pub ergo_tree: ErgoTree,
     pub assets: Vec<Asset>,
     pub creation_height: Height,
-    pub additional_registers: Registers,
+    pub additional_registers: serde_json::Value,
     pub transaction_id: TransactionID,
     pub index: i32,
 }
