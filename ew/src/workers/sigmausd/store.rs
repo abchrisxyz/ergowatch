@@ -6,6 +6,7 @@ use crate::core::types::Height;
 use crate::utils::Schema;
 
 use super::parsing::ParserCache;
+use super::types::Event;
 use super::Batch;
 
 mod bank_transactions;
@@ -13,6 +14,7 @@ mod head;
 mod history;
 mod ohlcs;
 mod oracle_postings;
+mod services;
 
 pub struct Store {
     client: tokio_postgres::Client,
@@ -35,15 +37,14 @@ impl Store {
         let schema = Schema::new("core", include_str!("store/schema.sql"));
         schema.init(&mut client).await;
 
-        tracing::warn!("Using dummy head");
-        let head = Head::initial(); //blocks::last_head(&client).await;
+        let head = head::get(&client).await;
         tracing::debug!("head: {:?}", &head);
 
         Self { client, head }
     }
 
-    pub(super) fn get_head(&self) -> &Head {
-        &self.head
+    pub(super) async fn get_head(&self) -> Head {
+        head::get(&self.client).await
     }
 
     pub(super) async fn load_parser_cache(&self) -> ParserCache {
@@ -64,19 +65,31 @@ impl Store {
 
         // Events
         for event in &batch.events {
-            todo!()
+            match event {
+                Event::Oracle(op) => oracle_postings::insert(&pgtx, op).await,
+                Event::BankTx(btx) => bank_transactions::insert(&pgtx, btx).await,
+            }
         }
 
         // History record
         if let Some(hr) = batch.history_record {
-            todo!()
+            history::insert(&pgtx, &hr).await;
         }
 
         // OHLC's
+        for record in &batch.daily_ohlc_records {
+            ohlcs::update_daily(&pgtx, &record).await;
+        }
+        for record in &batch.weekly_ohlc_records {
+            ohlcs::update_weekly(&pgtx, &record).await;
+        }
+        for record in &batch.monthly_ohlc_records {
+            ohlcs::update_monthly(&pgtx, &record).await;
+        }
 
         // Service diffs
         for diff in &batch.service_diffs {
-            todo!()
+            services::upsert(&pgtx, diff).await;
         }
 
         pgtx.commit().await.unwrap();

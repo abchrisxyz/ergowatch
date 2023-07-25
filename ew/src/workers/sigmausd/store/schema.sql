@@ -61,6 +61,9 @@ create table sigmausd.history (
 /*
     Tracks usage of and fees accumulated by services (e.g. TokenJay, sigmausd.io, ...).
     Includes direct interaction with sigmausd contract as a special case.
+
+    Roll backs are handled by recreating the table from scratch by querying
+    the bank_transactions table.
 */
 create table sigmausd.services (
     -- address id of service or null for direct interaction
@@ -108,9 +111,40 @@ create table sigmausd.rc_ohlc_monthly (
     c real not null
 );
 
--- Convenience view for debugging?
-create view sigmausd.details as
-    select 'todo' as todo;
+-- OHLC log tables for rollbacks.
+-- When hitting a rollback for height h, log records for h are deleted
+-- and the resulting lastest log record is copied over to the ohlc data
+-- table.
+-- Older log records may get deleted periodically.
+create table sigmausd._log_rc_ohlc_daily (
+    height int primary key not null,
+    t data not null,
+    o real not null,
+    h real not null,
+    l real not null,
+    c real not null
+);
+
+-- Daily OHLC log
+create table sigmausd._log_rc_ohlc_weekly (
+    height int primary key not null,
+    t data not null,
+    o real not null,
+    h real not null,
+    l real not null,
+    c real not null
+);
+
+-- Monthly OHLC log
+create table sigmausd._log_rc_ohlc_monthly (
+    height int primary key not null,
+    t data not null,
+    o real not null,
+    h real not null,
+    l real not null,
+    c real not null
+);
+
 
 -----------------------------------------------------------------------------------------
 -- Initialize state

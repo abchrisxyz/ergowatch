@@ -29,3 +29,10 @@ pub const RC_SUPPLY: i64 = 10000000000001;
 
 /// Default protocol price for reserve coin
 pub const DEFAULT_RSV_PRICE: i64 = 1000000; // TODO
+
+/// ERG/USD oracle pool (v1) NFT
+pub const ORACLE_NFT: &'static str =
+    "011d3364de07e5a26f0c4eef0852cddb387039a921b7154ef3cab22c6eda887f";
+
+/// Oracle epoch preparation address id
+pub const ORACLE_EPOCH_PREP_ADDRESS_ID: AddressID = 153537;

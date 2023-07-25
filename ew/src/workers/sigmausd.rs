@@ -50,6 +50,6 @@ impl super::Workflow for SigmaUSD {
     }
 
     async fn head(&self) -> Head {
-        todo!()
+        self.store.get_head().await
     }
 }

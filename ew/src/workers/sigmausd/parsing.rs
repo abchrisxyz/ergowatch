@@ -1,23 +1,21 @@
 use std::collections::HashMap;
-use std::hash::Hash;
-use std::ops::Deref;
 
 use super::constants::BANK_NFT;
 use super::constants::CONTRACT_ADDRESS_ID;
 use super::constants::CONTRACT_CREATION_HEIGHT;
 use super::constants::NETWORK_FEE_ADDRESS_ID;
+use super::constants::ORACLE_EPOCH_PREP_ADDRESS_ID;
+use super::constants::ORACLE_NFT;
 use super::constants::RC_TOKEN_ID;
 use super::constants::SC_TOKEN_ID;
 use super::types::BankTransaction;
 use super::types::Batch;
+use super::types::DailyOHLC;
 use super::types::Event;
 use super::types::HistoryRecord;
-use super::types::OHLCRecord;
 use super::types::OraclePosting;
 use super::types::ServiceStats;
-use super::types::OHLC;
 use crate::core::types::AddressID;
-use crate::core::types::Asset;
 use crate::core::types::Block;
 use crate::core::types::CoreData;
 use crate::core::types::Head;
@@ -54,19 +52,37 @@ impl Parser {
         let block = &data.block;
         let head = Head::new(block.header.height, block.header.id.clone());
         assert!(head.height > CONTRACT_CREATION_HEIGHT);
+
+        // Extract events from block transactions
         let events = extract_events(block, self.cache.bank_transaction_count);
-        let history_record = extract_history_record(&events, &self.cache.last_history_record);
-        let ohlc_records = extract_ohlc_records(
-            block.header.timestamp,
-            &history_record,
-            &self.cache.last_ohlc_group,
-        );
-        let service_diffs = extract_service_diffs(&events);
+
+        // Convert events to history records
+        let history_records = generate_history_records(&events, &self.cache.last_history_record);
+
+        // Derive a SigRSV for each history records
+        let rc_prices: Vec<NanoERG> = history_records.iter().map(|r| r.rc_price()).collect();
+
+        let history_record = history_records.last().map(|hr| hr.clone());
+
+        // OHLC's
+        let block_daily = DailyOHLC::from_prices(block.header.timestamp, &rc_prices);
+        let block_weekly = block_daily.to_weekly();
+        let block_monthly = block_daily.to_monthly();
+        let daily_ohlc_records = block_daily.fill_since(&self.cache.last_ohlc_group.daily);
+        let weekly_ohlc_records = block_weekly.fill_since(&self.cache.last_ohlc_group.weekly);
+        let monthly_ohlc_records = block_monthly.fill_since(&self.cache.last_ohlc_group.monthly);
+
+        // Services
+        let service_diffs = extract_service_diffs(block.header.timestamp, &events);
+
+        // Pack new batch
         Batch {
             head,
             events,
             history_record,
-            ohlc_records,
+            daily_ohlc_records,
+            weekly_ohlc_records,
+            monthly_ohlc_records,
             service_diffs,
         }
     }
@@ -87,15 +103,22 @@ fn extract_event(tx: &Transaction, height: Height, bank_tx_count: &mut i32) -> O
     // Look for presence of bank box in outputs
     if tx_has_bank_box(tx) {
         return Some(Event::BankTx(extract_bank_tx(tx, height, bank_tx_count)));
+    } else if tx_has_oracle_prep_box(tx) {
+        return Some(Event::Oracle(extract_oracle_posting(tx, height)));
     }
-
-    // Look for presence of oracle prep box
     None
 }
 
 fn tx_has_bank_box(tx: &Transaction) -> bool {
     tx.outputs.iter().any(|o| {
         o.address_id == CONTRACT_ADDRESS_ID && o.assets.iter().any(|a| a.token_id == BANK_NFT)
+    })
+}
+
+fn tx_has_oracle_prep_box(tx: &Transaction) -> bool {
+    tx.outputs.iter().any(|o| {
+        o.address_id == ORACLE_EPOCH_PREP_ADDRESS_ID
+            && o.assets.iter().any(|a| a.token_id == ORACLE_NFT)
     })
 }
 
@@ -237,56 +260,84 @@ fn extract_bank_tx(tx: &Transaction, height: Height, bank_tx_count: &mut i32) ->
     }
 }
 
-/// Derive new record by applying `events` to `last` one.
-fn extract_history_record(events: &Vec<Event>, last: &HistoryRecord) -> Option<HistoryRecord> {
-    if events.is_empty() {
-        return None;
+/// Build an oracle posting from a tx known to contain an oracle prep box
+fn extract_oracle_posting(tx: &Transaction, height: Height) -> OraclePosting {
+    // Find the new prep box
+    let prep_boxes: Vec<&Output> = tx
+        .outputs
+        .iter()
+        .filter(|o| o.address_id == ORACLE_EPOCH_PREP_ADDRESS_ID)
+        .filter(|o| o.assets.iter().any(|a| a.token_id == ORACLE_NFT))
+        .collect();
+    assert_eq!(prep_boxes.len(), 1);
+    let prep_box: &Output = prep_boxes[0];
+
+    // Read datapoint
+    let datapoint: i64 = match prep_box.additional_registers.r4() {
+        Some(register) => register.rendered_value.parse::<i64>().unwrap(),
+        None => panic!("expected R4 for oracle prep box"),
+    };
+
+    OraclePosting {
+        height,
+        datapoint,
+        box_id: prep_box.box_id.clone(),
     }
-    let mut hr = last.clone();
+}
+
+/// Derive new records by applying `events` to `last` one.
+fn generate_history_records(events: &Vec<Event>, last: &HistoryRecord) -> Vec<HistoryRecord> {
+    if events.is_empty() {
+        return vec![];
+    }
+    let mut records: Vec<HistoryRecord> = vec![];
+    let mut prev = last;
     for event in events {
+        let mut new = prev.clone();
         match event {
             Event::Oracle(oracle_posting) => {
-                hr.height = oracle_posting.height;
-                hr.oracle = oracle_posting.datapoint;
+                new.height = oracle_posting.height;
+                new.oracle = oracle_posting.datapoint;
             }
             Event::BankTx(bank_tx) => {
-                hr.height = bank_tx.height;
-                hr.circ_sc += bank_tx.circ_sc_diff;
-                hr.circ_rc += bank_tx.circ_rc_diff;
-                hr.reserves += bank_tx.reserves_diff;
+                new.height = bank_tx.height;
+                new.circ_sc += bank_tx.circ_sc_diff;
+                new.circ_rc += bank_tx.circ_rc_diff;
+                new.reserves += bank_tx.reserves_diff;
                 // Assuming no txs will ever modify both SC and RC.
                 // Might be better to use oracle and rsv price instead.
                 if bank_tx.circ_sc_diff != 0 {
                     assert_eq!(bank_tx.circ_rc_diff, 0);
-                    hr.sc_net += bank_tx.reserves_diff;
+                    new.sc_net += bank_tx.reserves_diff;
                 } else if bank_tx.circ_rc_diff != 0 {
                     assert_eq!(bank_tx.circ_sc_diff, 0);
-                    hr.rc_net += bank_tx.reserves_diff;
+                    new.rc_net += bank_tx.reserves_diff;
                 }
             }
         }
+        records.push(new);
+        prev = records.last().unwrap();
     }
-    Some(hr)
+    records
 }
 
-/// Generate new OHLC records
-///
-/// t: timestamp of current block
-/// hr: history record derived from current block
-/// last: last known OHLC
-///
-/// NEED TO ACCOUNT FOR possible empty periods between last and current history record.
-/// This will need to be assessed at each block, not just when there's a sigmausd event.
-fn extract_ohlc_records(
-    t: Timestamp,
-    hr: &Option<HistoryRecord>,
-    last: &OHLCGroup,
-) -> Vec<OHLCRecord> {
-    todo!()
-}
-
-fn extract_service_diffs(events: &Vec<Event>) -> Vec<ServiceStats> {
-    todo!()
+fn extract_service_diffs(timestamp: Timestamp, events: &Vec<Event>) -> Vec<ServiceStats> {
+    let mut diffs = vec![];
+    for event in events {
+        if let Event::BankTx(btx) = event {
+            if let Some(aid) = btx.service_address_id {
+                diffs.push(ServiceStats {
+                    address_id: aid,
+                    tx_count: 1,
+                    first_tx: timestamp,
+                    last_tx: timestamp,
+                    fees: btx.service_fee.into(),
+                    volume: btx.reserves_diff.into(),
+                });
+            }
+        }
+    }
+    diffs
 }
 
 #[cfg(test)]
@@ -524,5 +575,112 @@ mod tests {
             }
         }
         assert_eq!(new_bank_tx_count, bank_tx_count + 1);
+    }
+
+    #[test]
+    fn test_extract_event_oracle_posting() {
+        // Actual prep tx would be spending a live epoch box,
+        // but we don't rely on that so can just a dummy.
+        let dummy_input = Input::dummy();
+        let prep_output = Output::dummy()
+            .address_id(ORACLE_EPOCH_PREP_ADDRESS_ID)
+            .add_asset(ORACLE_NFT, 1)
+            .set_registers(r#"{"R4": "05baafd2a302"}"#);
+
+        let tx = Transaction::dummy()
+            .add_input(dummy_input)
+            .add_output(prep_output);
+
+        let height = 600;
+        let bank_tx_count = 5;
+        let mut new_bank_tx_count = bank_tx_count;
+        match extract_event(&tx, height, &mut new_bank_tx_count).unwrap() {
+            Event::Oracle(posting) => {
+                assert_eq!(posting.height, height);
+                assert_eq!(posting.datapoint, 305810397);
+                assert_eq!(posting.box_id, tx.outputs[0].box_id);
+            }
+            _ => {
+                panic!("fail")
+            }
+        }
+        assert_eq!(new_bank_tx_count, bank_tx_count);
+    }
+
+    #[test]
+    pub fn test_history_no_events() {
+        let last = HistoryRecord {
+            height: 1000,
+            oracle: 305810397,
+            circ_sc: 1000,
+            circ_rc: 50000,
+            reserves: 1000,
+            sc_net: 500,
+            rc_net: 2000,
+        };
+        let events = vec![];
+        let records = generate_history_records(&events, &last);
+        assert!(records.is_empty());
+    }
+
+    #[test]
+    pub fn test_history_with_bank_event() {
+        let last = HistoryRecord {
+            height: 1000,
+            oracle: 305810397,
+            circ_sc: 1000,
+            circ_rc: 50000,
+            reserves: 1000,
+            sc_net: 500,
+            rc_net: 2000,
+        };
+        let events = vec![Event::BankTx(BankTransaction {
+            index: 5,
+            height: 1020,
+            reserves_diff: 100,
+            circ_sc_diff: 200,
+            circ_rc_diff: 0,
+            box_id: "dummy".to_string(),
+            service_fee: 0,
+            service_address_id: None,
+        })];
+        let records = generate_history_records(&events, &last);
+        assert_eq!(records.len(), 1);
+        let rec = &records[0];
+        assert!(rec.height == 1020);
+        assert!(rec.oracle == last.oracle);
+        assert!(rec.circ_sc == last.circ_sc + 200);
+        assert!(rec.circ_rc == last.circ_rc);
+        assert!(rec.reserves == last.reserves + 100);
+        assert!(rec.sc_net == last.sc_net + 100);
+        assert!(rec.rc_net == last.rc_net);
+    }
+
+    #[test]
+    pub fn test_history_with_oracle_event() {
+        let last = HistoryRecord {
+            height: 1000,
+            oracle: 305810397,
+            circ_sc: 1000,
+            circ_rc: 50000,
+            reserves: 1000,
+            sc_net: 500,
+            rc_net: 2000,
+        };
+        let events = vec![Event::Oracle(OraclePosting {
+            height: 1020,
+            datapoint: 305810397 + 1,
+            box_id: "dummy".to_string(),
+        })];
+        let records = generate_history_records(&events, &last);
+        assert_eq!(records.len(), 1);
+        let rec = &records[0];
+        assert!(rec.height == 1020);
+        assert!(rec.oracle == last.oracle + 1);
+        assert!(rec.circ_sc == last.circ_sc);
+        assert!(rec.circ_rc == last.circ_rc);
+        assert!(rec.reserves == last.reserves);
+        assert!(rec.sc_net == last.sc_net);
+        assert!(rec.rc_net == last.rc_net);
     }
 }
