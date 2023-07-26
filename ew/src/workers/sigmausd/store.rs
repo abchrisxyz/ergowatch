@@ -54,7 +54,6 @@ impl Store {
     pub(super) async fn load_parser_cache(&self) -> ParserCache {
         ParserCache {
             bank_transaction_count: bank_transactions::get_count(&self.client).await,
-            last_oracle_posting: oracle_postings::get_latest(&self.client).await,
             last_history_record: history::get_latest(&self.client).await,
             last_ohlc_group: ohlcs::get_latest_group(&self.client).await,
         }

@@ -19,7 +19,6 @@ use super::types::ServiceStats;
 use crate::core::types::AddressID;
 use crate::core::types::Block;
 use crate::core::types::CoreData;
-use crate::core::types::Head;
 use crate::core::types::Height;
 use crate::core::types::NanoERG;
 use crate::core::types::Output;
@@ -36,8 +35,6 @@ pub struct Parser {
 pub struct ParserCache {
     // Number of bank transactions so far (used to derive bank tx indices)
     pub bank_transaction_count: i32,
-    // Last oracle posting
-    pub last_oracle_posting: OraclePosting,
     // Last history record
     pub last_history_record: HistoryRecord,
     // Last OHLC records
@@ -73,14 +70,34 @@ impl Parser {
         let block_daily = DailyOHLC::from_prices(block.header.timestamp, &rc_prices);
         let block_weekly = block_daily.to_weekly();
         let block_monthly = block_daily.to_monthly();
-        let daily_ohlc_records = block_daily.fill_since(&self.cache.last_ohlc_group.daily);
-        let weekly_ohlc_records = block_weekly.fill_since(&self.cache.last_ohlc_group.weekly);
-        let monthly_ohlc_records = block_monthly.fill_since(&self.cache.last_ohlc_group.monthly);
+        let mut daily_ohlc_records = block_daily.fill_since(&self.cache.last_ohlc_group.daily);
+        let mut weekly_ohlc_records = block_weekly.fill_since(&self.cache.last_ohlc_group.weekly);
+        let mut monthly_ohlc_records =
+            block_monthly.fill_since(&self.cache.last_ohlc_group.monthly);
 
         // Services
         let service_diffs = extract_service_diffs(block.header.timestamp, &events);
 
-        todo!("update parser cache");
+        // Update cached history record
+        if let Some(hr) = &history_record {
+            self.cache.last_history_record = hr.clone();
+        }
+        // Update cached bank tx count
+        let n_bank_txs = events
+            .iter()
+            .filter(|r| matches!(r, Event::BankTx(_)))
+            .count() as i32;
+        self.cache.bank_transaction_count += n_bank_txs;
+        // Update cached OHLC records
+        if let Some(daily) = daily_ohlc_records.pop() {
+            self.cache.last_ohlc_group.daily = daily;
+        }
+        if let Some(weekly) = weekly_ohlc_records.pop() {
+            self.cache.last_ohlc_group.weekly = weekly;
+        }
+        if let Some(monthly) = monthly_ohlc_records.pop() {
+            self.cache.last_ohlc_group.monthly = monthly;
+        }
 
         // Pack new batch
         Batch {
