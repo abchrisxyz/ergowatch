@@ -1,6 +1,8 @@
 use tokio_postgres::Client;
 use tokio_postgres::Transaction;
 
+use crate::core::types::Height;
+
 use super::super::types::BankTransaction;
 
 pub(super) async fn get_count(client: &Client) -> i32 {
@@ -37,4 +39,11 @@ pub(super) async fn insert(pgtx: &Transaction<'_>, btx: &BankTransaction) {
     )
     .await
     .unwrap();
+}
+
+/// Delete records at `height`.
+pub(super) async fn detele_at(pgtx: &Transaction<'_>, height: Height) {
+    let sql = "delete from sigmausd.bank_transactions where height = $1;";
+
+    pgtx.execute(sql, &[&height]).await.unwrap();
 }

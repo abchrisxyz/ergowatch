@@ -46,7 +46,8 @@ impl super::Workflow for SigmaUSD {
     }
 
     async fn roll_back(&mut self, height: Height) {
-        todo!();
+        self.store.roll_back(height).await;
+        todo!("reload parser cache");
     }
 
     async fn head(&self) -> Head {

@@ -2,6 +2,7 @@ use tokio_postgres::Client;
 use tokio_postgres::Transaction;
 
 use super::super::types::HistoryRecord;
+use crate::core::types::Height;
 
 pub(super) async fn get_latest(client: &Client) -> HistoryRecord {
     let sql = "
@@ -53,4 +54,9 @@ pub(super) async fn insert(pgtx: &Transaction<'_>, hr: &HistoryRecord) {
     )
     .await
     .unwrap();
+}
+
+pub(super) async fn delete_at(pgtx: &Transaction<'_>, at: Height) {
+    let sql = "delete from sigmausd.history where height = $1;";
+    pgtx.execute(sql, &[&at]).await.unwrap();
 }

@@ -1,11 +1,11 @@
 create schema sigmausd;
 
--- Last processed block
-create table sigmausd.head (
-    singleton int primary key default 1,
-    height integer not null,
-    header_id text not null,
-    check(singleton = 1)
+-- Selected header fields from included blocks.
+-- Would be available from core.headers too but we try to keep schemas self contained.
+create table sigmausd.headers (
+    height integer primary key not null,
+    timestamp bigint not null,
+    id text not null
 );
 
 /*
@@ -16,7 +16,11 @@ create table sigmausd.head (
 create table sigmausd.bank_transactions (
     -- Bank box transaction index 
     idx integer primary key,
+    -- Height of inclusion block
     height integer not null,
+    -- Timestamp of inclusion block
+    -- Having it duplicated here makes restoring service stats after a rollback
+    -- much easier.
     -- Change in bank reserves (nanoERG)
     reserves_diff bigint not null,
     -- Change in circulating stable coins
@@ -149,8 +153,8 @@ create table sigmausd._log_rc_ohlc_monthly (
 -----------------------------------------------------------------------------------------
 -- Initialize state
 -----------------------------------------------------------------------------------------
-insert into sigmausd.head (height, header_id)
-values (453064, 'fd35b157811f0950169e0f86b8f7e9ae0f13c49a46848ff40aa8dad26b030fde');
+insert into sigmausd.headers (height, timestamp, id)
+values (453064, 1616706545437, 'fd35b157811f0950169e0f86b8f7e9ae0f13c49a46848ff40aa8dad26b030fde');
 
 insert into sigmausd.history (
     height,

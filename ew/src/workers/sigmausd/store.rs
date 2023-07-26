@@ -10,7 +10,7 @@ use super::types::Event;
 use super::Batch;
 
 mod bank_transactions;
-mod head;
+mod headers;
 mod history;
 mod ohlcs;
 mod oracle_postings;
@@ -37,14 +37,18 @@ impl Store {
         let schema = Schema::new("core", include_str!("store/schema.sql"));
         schema.init(&mut client).await;
 
-        let head = head::get(&client).await;
+        let head = headers::get(&client).await.head();
         tracing::debug!("head: {:?}", &head);
 
         Self { client, head }
     }
 
     pub(super) async fn get_head(&self) -> Head {
-        head::get(&self.client).await
+        let header = headers::get(&self.client).await;
+        Head {
+            height: header.height,
+            header_id: header.id,
+        }
     }
 
     pub(super) async fn load_parser_cache(&self) -> ParserCache {
@@ -57,11 +61,11 @@ impl Store {
     }
 
     pub(super) async fn persist(&mut self, batch: Batch) {
-        tracing::debug!("persisting data for block {}", batch.head.height);
+        tracing::debug!("persisting data for block {}", batch.header.height);
         let pgtx = self.client.transaction().await.unwrap();
 
-        // Head
-        head::update(&pgtx, &batch.head).await;
+        // Header
+        headers::insert(&pgtx, &batch.header).await;
 
         // Events
         for event in &batch.events {
@@ -77,14 +81,15 @@ impl Store {
         }
 
         // OHLC's
+        let height = batch.header.height;
         for record in &batch.daily_ohlc_records {
-            ohlcs::update_daily(&pgtx, &record).await;
+            ohlcs::upsert_daily(&pgtx, &record, height).await;
         }
         for record in &batch.weekly_ohlc_records {
-            ohlcs::update_weekly(&pgtx, &record).await;
+            ohlcs::upsert_weekly(&pgtx, &record, height).await;
         }
         for record in &batch.monthly_ohlc_records {
-            ohlcs::update_monthly(&pgtx, &record).await;
+            ohlcs::upsert_monthly(&pgtx, &record, height).await;
         }
 
         // Service diffs
@@ -93,10 +98,38 @@ impl Store {
         }
 
         pgtx.commit().await.unwrap();
+
+        // Update head
+        self.head = batch.header.head();
     }
 
+    /// Roll back changes from last block.
     pub(super) async fn roll_back(&mut self, height: Height) {
         tracing::debug!("rolling back block {}", height);
-        todo!()
+        assert_eq!(self.head.height, height);
+
+        let pgtx = self.client.transaction().await.unwrap();
+
+        // Delete bank txs at h
+        bank_transactions::detele_at(&pgtx, height).await;
+
+        // Delete oracle postings at h
+        oracle_postings::delete_at(&pgtx, height).await;
+
+        // Delete history at h
+        history::delete_at(&pgtx, height).await;
+
+        // Recreate service stats from scratch
+        services::refresh(&pgtx).await;
+
+        // Restore ohlc from log
+        ohlcs::roll_back_daily(&pgtx, height).await;
+        ohlcs::roll_back_weekly(&pgtx, height).await;
+        ohlcs::roll_back_monthly(&pgtx, height).await;
+
+        pgtx.commit().await.unwrap();
+
+        // Reload head
+        self.head = self.get_head().await;
     }
 }

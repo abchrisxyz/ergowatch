@@ -13,6 +13,7 @@ use super::types::Batch;
 use super::types::DailyOHLC;
 use super::types::Event;
 use super::types::HistoryRecord;
+use super::types::MiniHeader;
 use super::types::OraclePosting;
 use super::types::ServiceStats;
 use crate::core::types::AddressID;
@@ -50,8 +51,12 @@ impl Parser {
 
     pub(super) fn extract_batch(&mut self, data: &CoreData) -> Batch {
         let block = &data.block;
-        let head = Head::new(block.header.height, block.header.id.clone());
-        assert!(head.height > CONTRACT_CREATION_HEIGHT);
+        assert!(block.header.height > CONTRACT_CREATION_HEIGHT);
+        let header = MiniHeader::new(
+            block.header.height,
+            block.header.timestamp,
+            block.header.id.clone(),
+        );
 
         // Extract events from block transactions
         let events = extract_events(block, self.cache.bank_transaction_count);
@@ -75,9 +80,11 @@ impl Parser {
         // Services
         let service_diffs = extract_service_diffs(block.header.timestamp, &events);
 
+        todo!("update parser cache");
+
         // Pack new batch
         Batch {
-            head,
+            header,
             events,
             history_record,
             daily_ohlc_records,

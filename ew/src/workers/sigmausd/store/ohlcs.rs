@@ -6,6 +6,7 @@ use super::super::types::MonthlyOHLC;
 use super::super::types::OHLCGroup;
 use super::super::types::WeeklyOHLC;
 use super::super::types::OHLC;
+use crate::core::types::Height;
 
 pub(super) async fn get_latest_group(client: &Client) -> OHLCGroup {
     OHLCGroup {
@@ -72,10 +73,41 @@ async fn get_latest_monthly(client: &Client) -> MonthlyOHLC {
     })
 }
 
-pub(super) async fn update_daily(pgtx: &Transaction<'_>, rec: &DailyOHLC) {
-    log_daily(pgtx).await;
+pub(super) async fn upsert_daily(pgtx: &Transaction<'_>, rec: &DailyOHLC, height: Height) {
+    // Upsert new record
     let sql = "
-        update sigmausd.rc_ohlc_daily
+        insert into sigmausd.rc_ohlc_daily (t, o, h, l, c)
+        values ($1, $2, $3, $4, $5)
+        on conflict (t) do update
+        set t = $1
+            , o = $2
+            , h = $3
+            , l = $4
+            , c = $5;
+        ";
+    pgtx.execute(sql, &[&rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c])
+        .await
+        .unwrap();
+
+    // Then copy new record to log as well
+    let sql = "
+        insert into sigmausd._log_rc_ohlc_daily (h, t, o, h, l, c)
+        values ($1, $2, $3, $4, $5, $6);
+    ";
+    pgtx.execute(
+        sql,
+        &[&height, &rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c],
+    )
+    .await
+    .unwrap();
+}
+
+pub(super) async fn upsert_weekly(pgtx: &Transaction<'_>, rec: &WeeklyOHLC, height: Height) {
+    // Upsert new record
+    let sql = "
+        insert into sigmausd.rc_ohlc_weekly (t, o, h, l, c)
+        values ($1, $2, $3, $4, $5)
+        on conflict (t) do update
         set t = $1
             , o = $2
             , h = $3
@@ -85,12 +117,26 @@ pub(super) async fn update_daily(pgtx: &Transaction<'_>, rec: &DailyOHLC) {
     pgtx.execute(sql, &[&rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c])
         .await
         .unwrap();
+
+    // Then copy new record to log as well
+    let sql = "
+        insert into sigmausd._log_rc_ohlc_weekly (h, t, o, h, l, c)
+        values ($1, $2, $3, $4, $5, $6);
+    ";
+    pgtx.execute(
+        sql,
+        &[&height, &rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c],
+    )
+    .await
+    .unwrap();
 }
 
-pub(super) async fn update_weekly(pgtx: &Transaction<'_>, rec: &WeeklyOHLC) {
-    log_weekly(pgtx).await;
+pub(super) async fn upsert_monthly(pgtx: &Transaction<'_>, rec: &MonthlyOHLC, height: Height) {
+    // Upsert new record
     let sql = "
-        update sigmausd.rc_ohlc_weekly
+        insert into sigmausd.rc_ohlc_monthly (t, o, h, l, c)
+        values ($1, $2, $3, $4, $5)
+        on conflict (t) do update
         set t = $1
             , o = $2
             , h = $3
@@ -100,61 +146,79 @@ pub(super) async fn update_weekly(pgtx: &Transaction<'_>, rec: &WeeklyOHLC) {
     pgtx.execute(sql, &[&rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c])
         .await
         .unwrap();
+
+    // Then copy new record to log as well
+    let sql = "
+        insert into sigmausd._log_rc_ohlc_monthly (h, t, o, h, l, c)
+        values ($1, $2, $3, $4, $5, $6);
+    ";
+    pgtx.execute(
+        sql,
+        &[&height, &rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c],
+    )
+    .await
+    .unwrap();
 }
 
-pub(super) async fn update_monthly(pgtx: &Transaction<'_>, rec: &MonthlyOHLC) {
-    log_monthly(pgtx).await;
-    let sql = "
-        update sigmausd.rc_ohlc_monthly
-        set t = $1
-            , o = $2
-            , h = $3
-            , l = $4
-            , c = $5;
-    ";
-    pgtx.execute(sql, &[&rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c])
+/// Restores previous known state if current block modified it.
+pub(super) async fn roll_back_daily(pgtx: &Transaction<'_>, height: Height) {
+    roll_back(pgtx, height, "daily").await;
+}
+
+/// Restores previous known state if current block modified it.
+pub(super) async fn roll_back_weekly(pgtx: &Transaction<'_>, height: Height) {
+    roll_back(pgtx, height, "weekly").await;
+}
+
+/// Restores previous known state if current block modified it.
+pub(super) async fn roll_back_monthly(pgtx: &Transaction<'_>, height: Height) {
+    roll_back(pgtx, height, "monthly").await;
+}
+
+async fn roll_back(pgtx: &Transaction<'_>, height: Height, window: &str) {
+    // Get log entries for height to roll back
+    let sql = format!(
+        "
+        select t
+        from sigmausd._log_rc_ohlc_{window}
+        where height = $1;"
+    );
+    let dates: Vec<time::Date> = pgtx
+        .query(&sql, &[&height])
         .await
-        .unwrap();
-}
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
 
-/// Copies current daily ohlc record to log
-async fn log_daily(pgtx: &Transaction<'_>) {
-    let sql = "
-        insert into sigmausd._log_rc_ohlc_daily (t, o, h, l, c)
-        select t
-            , o
-            , h
-            , l
-            , c
-        from sigmausd.rc_ohlc_daily;
-    ";
-    pgtx.execute(sql, &[]).await.unwrap();
-}
+    // delete from ohlc
+    for date in &dates {
+        let sql = format!(
+            "
+            delete from sigmausd.rc_ohlc_{window}
+            where t = $1;"
+        );
+        pgtx.execute(&sql, &[date]).await.unwrap();
+    }
 
-/// Copies current weekly ohlc record to log
-async fn log_weekly(pgtx: &Transaction<'_>) {
-    let sql = "
-        insert into sigmausd._log_rc_ohlc_weekly (t, o, h, l, c)
-        select t
-            , o
-            , h
-            , l
-            , c
-        from sigmausd.rc_ohlc_weekly;
-    ";
-    pgtx.execute(sql, &[]).await.unwrap();
-}
+    // then delete from logs
+    let sql = format!(
+        "
+        delete from sigmausd._log_rc_ohlc_{window}
+        where height = $1;"
+    );
+    pgtx.execute(&sql, &[&height]).await.unwrap();
 
-/// Copies current monthly ohlc record to log
-async fn log_monthly(pgtx: &Transaction<'_>) {
-    let sql = "
-        insert into sigmausd._log_rc_ohlc_monthly (t, o, h, l, c)
-        select t
-            , o
-            , h
-            , l
-            , c
-        from sigmausd.rc_ohlc_monthly;
-    ";
-    pgtx.execute(sql, &[]).await.unwrap();
+    // insert back most recent logs
+    // conflicts can be ignored as record would be the same
+    // new ones get inserted.
+    let sql = format!(
+        "
+        insert into sigmausd.rc_ohlc_{window} (t, o, h, l, c)
+        select t, o, h, l, c
+        from sigmausd._log_rc_ohlc_{window}
+        where height = (select max(height) from sigmausd._log_rc_ohlc_{window})
+        on conflict do nothing;"
+    );
+    pgtx.execute(&sql, &[]).await.unwrap();
 }
