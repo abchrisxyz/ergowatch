@@ -7,6 +7,8 @@ use crate::core::types::Height;
 use crate::core::types::NanoERG;
 use crate::core::types::Timestamp;
 
+use super::constants::DEFAULT_RSV_PRICE;
+
 /// Data extracted from a block and ready to be stored.
 pub struct Batch {
     pub head: Head,
@@ -57,7 +59,13 @@ pub struct HistoryRecord {
 
 impl HistoryRecord {
     pub fn rc_price(&self) -> NanoERG {
-        todo!()
+        let liabilities: NanoERG = self.oracle * self.circ_sc / 100;
+        let equity = i64::max(0, self.reserves - liabilities);
+        if self.circ_rc > 0 && equity > 0 {
+            equity / self.circ_rc
+        } else {
+            DEFAULT_RSV_PRICE
+        }
     }
 }
 
@@ -253,6 +261,48 @@ pub struct ServiceStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_history_record_rc_price() {
+        let hr = HistoryRecord {
+            height: 10,
+            oracle: 847457627,   // 1 ERG = 1.18 USD
+            circ_sc: 44_837_610, // in cents
+            circ_rc: 2_700_966_369,
+            reserves: 1_494_997_124_719_372,
+            sc_net: 0,
+            rc_net: 0,
+        };
+        assert_eq!(hr.rc_price(), 412821);
+    }
+
+    #[test]
+    fn test_history_record_rc_price_no_equity() {
+        let hr = HistoryRecord {
+            height: 10,
+            oracle: 8474576270,  // 1 ERG = 10.18 USD
+            circ_sc: 44_837_610, // in cents
+            circ_rc: 2_700_966_369,
+            reserves: 1_494_997_124_719_372,
+            sc_net: 0,
+            rc_net: 0,
+        };
+        assert_eq!(hr.rc_price(), DEFAULT_RSV_PRICE);
+    }
+
+    #[test]
+    fn test_history_record_rc_price_no_circ_rc() {
+        let hr = HistoryRecord {
+            height: 10,
+            oracle: 847457627,   // 1 ERG = 1.18 USD
+            circ_sc: 44_837_610, // in cents
+            circ_rc: 0,
+            reserves: 1_494_997_124_719_372,
+            sc_net: 0,
+            rc_net: 0,
+        };
+        assert_eq!(hr.rc_price(), DEFAULT_RSV_PRICE);
+    }
 
     #[test]
     fn test_daily_ohlc_from_prices() {

@@ -28,7 +28,7 @@ pub const SC_SUPPLY: i64 = 10000000000001;
 pub const RC_SUPPLY: i64 = 10000000000001;
 
 /// Default protocol price for reserve coin
-pub const DEFAULT_RSV_PRICE: i64 = 1000000; // TODO
+pub const DEFAULT_RSV_PRICE: i64 = 1000000; // 0.001 ERG
 
 /// ERG/USD oracle pool (v1) NFT
 pub const ORACLE_NFT: &'static str =
