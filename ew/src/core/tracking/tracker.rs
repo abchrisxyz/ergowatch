@@ -36,9 +36,22 @@ impl Tracker {
         // Create new channel
         let (tx, rx) = mpsc::channel(CHANNEL_CAPACITY);
 
+        // New cursor cannot point past tracker's head,
+        // so we cap it to tracker's head if needed.
+        let max_head = self.store.head();
+        let capped_head = if head.height > max_head.height {
+            info!(
+                "cursor [{}] is ahead of tracker - using tracker's height",
+                name
+            );
+            max_head
+        } else {
+            head
+        };
+
         // Check for existing cursors at same position
         for cur in &mut self.cursors {
-            if cur.is_at(head.height, &head.header_id) {
+            if cur.is_at(capped_head.height, &capped_head.header_id) {
                 cur.txs.push(tx);
                 return rx;
             }
@@ -46,8 +59,8 @@ impl Tracker {
 
         let cur = Cursor {
             name,
-            height: head.height,
-            header_id: head.header_id,
+            height: capped_head.height,
+            header_id: capped_head.header_id,
             node: self.node.clone(),
             txs: vec![tx],
             polling_interval: tokio::time::Duration::from_millis(5000),

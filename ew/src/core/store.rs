@@ -58,6 +58,10 @@ impl Store {
         }
     }
 
+    pub(super) fn head(&self) -> Head {
+        self.head.clone()
+    }
+
     pub(super) async fn include_genesis_boxes(&mut self, boxes: String) {
         tracing::info!("including genesis boxes");
         assert!(self.head.is_initial());

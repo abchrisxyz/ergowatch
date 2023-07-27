@@ -2,6 +2,10 @@
 @list:
   just --list
 
+# Start the docker compose test environment
+compose:
+  docker compose -f docker-compose-test.yml up
+
 # Run all integration tests, single threaded
 test:
-    cargo test --test '*' -- --test-threads=1
+  cargo test --test '*' -- --test-threads=1

@@ -154,9 +154,31 @@ async fn test_straight_chain_three_cursors() {
     // Start a fake node to be queried by the tracker
     let mock_node = TestNode::run(&block_ids).await;
 
-    // Configure tracker
+    // Prepare empty db
+    let pgconf = prep_db("test_tracker_2").await;
+
+    {
+        // First, run a single cursor tracker to prepare the store.
+        // Configure tracker
+        let node = Node::new("test-node", mock_node.url());
+        let mut tracker = Tracker::new(node, pgconf.clone()).await;
+        // Cursor is at genesis
+        let mut rx = tracker.add_cursor("dummy".to_string(), Head::initial());
+
+        // Start tracker
+        tokio::spawn(async move {
+            tracker.start().await;
+        });
+
+        // Collect messages to ensure tracker is done.
+        for _ in 0..6 {
+            rx.recv().await.unwrap();
+        }
+    }
+
+    // Now configure a new tracker with 3 cursors, using the same db.
     let node = Node::new("test-node", mock_node.url());
-    let mut tracker = Tracker::new(node, prep_db("test_tracker_2").await).await;
+    let mut tracker = Tracker::new(node, pgconf).await;
     // First cursor is on last block
     let mut rx_a = tracker.add_cursor(
         "A".to_string(),
