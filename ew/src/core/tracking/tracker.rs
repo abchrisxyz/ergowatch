@@ -85,7 +85,7 @@ impl Tracker {
     /// Attempts to merge cursors when at the same height
     fn merge_cursors(&mut self) {
         // The new collection of cursors with just the first cursor, for now
-        let mut merged: Vec<Cursor> = vec![self.cursors.pop().unwrap()];
+        let mut merged: Vec<Cursor> = vec![self.cursors.remove(0)];
 
         // Assume first cursor is highest
         let mut head = &mut merged[0];
