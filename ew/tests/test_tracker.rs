@@ -34,9 +34,6 @@ async fn sleep_some(guard: &Option<tracing::subscriber::DefaultGuard>) {
     }
 }
 
-const I: &str = "Include";
-const R: &str = "Rollback";
-
 /// Prepare a test db and return corresponfing config.
 async fn prep_db(db_name: &str) -> PostgresConfig {
     tracing::info!("Preparing test db: {}", db_name);
