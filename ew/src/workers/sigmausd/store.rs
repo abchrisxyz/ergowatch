@@ -43,12 +43,8 @@ impl Store {
         Self { client, head }
     }
 
-    pub(super) async fn get_head(&self) -> Head {
-        let header = headers::get(&self.client).await;
-        Head {
-            height: header.height,
-            header_id: header.id,
-        }
+    pub(super) fn get_head(&self) -> &Head {
+        &self.head
     }
 
     pub(super) async fn load_parser_cache(&self) -> ParserCache {
@@ -129,6 +125,10 @@ impl Store {
         pgtx.commit().await.unwrap();
 
         // Reload head
-        self.head = self.get_head().await;
+        let header = headers::get(&self.client).await;
+        self.head = Head {
+            height: header.height,
+            header_id: header.id,
+        }
     }
 }

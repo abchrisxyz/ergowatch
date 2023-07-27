@@ -52,7 +52,7 @@ impl super::Workflow for SigmaUSD {
         self.parser = Parser::new(cache);
     }
 
-    async fn head(&self) -> Head {
-        self.store.get_head().await
+    fn head<'a>(&'a self) -> &'a Head {
+        self.store.get_head()
     }
 }

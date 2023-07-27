@@ -28,7 +28,7 @@ pub trait Workflow {
     async fn roll_back(&mut self, height: Height);
 
     /// Get last processed head.
-    async fn head(&self) -> Head;
+    fn head<'a>(&'a self) -> &'a Head;
 }
 
 /// Workers listen to tracker events and drive a workflow.
@@ -41,7 +41,7 @@ pub struct Worker<W: Workflow> {
 impl<W: Workflow> Worker<W> {
     pub async fn new(id: &str, pgconf: &PostgresConfig, tracker: &mut Tracker) -> Self {
         let workflow = W::new(pgconf).await;
-        let head = workflow.head().await;
+        let head = workflow.head();
         let rx = tracker.add_cursor(id.to_owned(), head.clone());
 
         Self {
@@ -61,8 +61,21 @@ impl<W: Workflow> Worker<W> {
                 msg = self.rx.recv() => {
                     match msg.expect("message is some") {
                         TrackingMessage::Genesis(boxes) => self.workflow.include_genesis_boxes(&boxes).await,
-                        TrackingMessage::Include(data) => self.workflow.include_block(&data).await,
-                        TrackingMessage::Rollback(height) => self.workflow.roll_back(height).await,
+                        TrackingMessage::Include(data) => {
+                            let head = self.workflow.head();
+                            // Capped cursor may dispatch events prior to workflow's head. Ignore them.
+                            if data.block.header.height <= head.height {continue;}
+                            // Check next block is indeed child of last included one
+                            assert_eq!(data.block.header.height, head.height + 1);
+                            assert_eq!(data.block.header.parent_id, head.header_id);
+                            // All good, proceed
+                            self.workflow.include_block(&data).await
+                        },
+                        TrackingMessage::Rollback(height) => {
+                            let head = self.workflow.head();
+                            assert_eq!(height, head.height);
+                            self.workflow.roll_back(height).await
+                        },
                     };
                 },
             }
