@@ -67,13 +67,22 @@ impl Parser {
         let history_record = history_records.last().map(|hr| hr.clone());
 
         // OHLC's
-        let block_daily = DailyOHLC::from_prices(block.header.timestamp, &rc_prices);
+        // Could have a new day/week/month without any events, just time passing.
+        // Use daily OHLC from current block if any events available.
+        // Otherwise use cached one with updated date.
+        let block_daily = match DailyOHLC::from_prices(block.header.timestamp, &rc_prices) {
+            Some(daily) => daily,
+            None => self
+                .cache
+                .last_ohlc_group
+                .daily
+                .with_timestamp(block.header.timestamp),
+        };
         let block_weekly = block_daily.to_weekly();
         let block_monthly = block_daily.to_monthly();
-        let mut daily_ohlc_records = block_daily.fill_since(&self.cache.last_ohlc_group.daily);
-        let mut weekly_ohlc_records = block_weekly.fill_since(&self.cache.last_ohlc_group.weekly);
-        let mut monthly_ohlc_records =
-            block_monthly.fill_since(&self.cache.last_ohlc_group.monthly);
+        let daily_ohlc_records = block_daily.fill_since(&self.cache.last_ohlc_group.daily);
+        let weekly_ohlc_records = block_weekly.fill_since(&self.cache.last_ohlc_group.weekly);
+        let monthly_ohlc_records = block_monthly.fill_since(&self.cache.last_ohlc_group.monthly);
 
         // Services
         let service_diffs = extract_service_diffs(block.header.timestamp, &events);

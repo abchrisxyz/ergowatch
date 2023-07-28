@@ -124,7 +124,10 @@ pub struct MonthlyOHLC(pub OHLC);
 
 impl DailyOHLC {
     /// New daily OHLC from a collection of prices
-    pub fn from_prices(t: Timestamp, rc_prices: &Vec<NanoERG>) -> Self {
+    pub fn from_prices(t: Timestamp, rc_prices: &Vec<NanoERG>) -> Option<Self> {
+        if rc_prices.is_empty() {
+            return None;
+        }
         let date = time::OffsetDateTime::from_unix_timestamp(t / 1000)
             .unwrap()
             .date();
@@ -135,7 +138,21 @@ impl DailyOHLC {
             l: *rc_prices.iter().min().unwrap(),
             c: *rc_prices.last().unwrap(),
         };
-        Self(ohlc)
+        Some(Self(ohlc))
+    }
+
+    /// Returns a copy with date modified according to timestamp
+    pub fn with_timestamp(&self, t: Timestamp) -> Self {
+        let date = time::OffsetDateTime::from_unix_timestamp(t / 1000)
+            .unwrap()
+            .date();
+        Self(OHLC {
+            t: date,
+            o: self.0.o,
+            h: self.0.h,
+            l: self.0.l,
+            c: self.0.c,
+        })
     }
 
     /// Returns a copy with date rounded to week's Monday.
