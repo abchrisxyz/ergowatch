@@ -118,8 +118,13 @@ impl OHLC {
     }
 }
 
+#[derive(Clone)]
 pub struct DailyOHLC(pub OHLC);
+
+#[derive(Clone)]
 pub struct WeeklyOHLC(pub OHLC);
+
+#[derive(Clone)]
 pub struct MonthlyOHLC(pub OHLC);
 
 impl DailyOHLC {
@@ -300,6 +305,57 @@ pub struct ServiceStats {
 mod tests {
     use super::*;
 
+    impl OHLC {
+        pub fn dummy() -> Self {
+            Self {
+                t: time::macros::date!(2023 - 01 - 13),
+                o: 2,
+                h: 4,
+                l: 1,
+                c: 3,
+            }
+        }
+    }
+
+    impl DailyOHLC {
+        pub fn dummy() -> Self {
+            Self(OHLC::dummy())
+        }
+
+        /// Return clone with modified date
+        pub fn date(&self, date: time::Date) -> Self {
+            let mut new = self.clone();
+            new.0.t = date;
+            new
+        }
+    }
+
+    impl WeeklyOHLC {
+        pub fn dummy() -> Self {
+            Self(OHLC::dummy())
+        }
+
+        /// Return clone with modified date
+        pub fn date(&self, date: time::Date) -> Self {
+            let mut new = self.clone();
+            new.0.t = date;
+            new
+        }
+    }
+
+    impl MonthlyOHLC {
+        pub fn dummy() -> Self {
+            Self(OHLC::dummy())
+        }
+
+        /// Return clone with modified date
+        pub fn date(&self, date: time::Date) -> Self {
+            let mut new = self.clone();
+            new.0.t = date;
+            new
+        }
+    }
+
     #[test]
     fn test_history_record_rc_price() {
         let hr = HistoryRecord {
@@ -346,7 +402,7 @@ mod tests {
     fn test_daily_ohlc_from_prices() {
         let t = 1635347405599; // WED 2021-10-27;
         let rc_prices = vec![2, 1, 5, 3];
-        let daily = DailyOHLC::from_prices(t, &rc_prices).0;
+        let daily = DailyOHLC::from_prices(t, &rc_prices).unwrap().0;
         assert_eq!(
             daily.t,
             time::Date::from_calendar_date(2021, time::Month::October, 27).unwrap()
@@ -361,7 +417,7 @@ mod tests {
     fn test_daily_ohlc_from_single_price() {
         let t = 1635347405599; // WED 2021-10-27;
         let rc_prices = vec![5];
-        let daily = DailyOHLC::from_prices(t, &rc_prices).0;
+        let daily = DailyOHLC::from_prices(t, &rc_prices).unwrap().0;
         assert_eq!(
             daily.t,
             time::Date::from_calendar_date(2021, time::Month::October, 27).unwrap()
@@ -370,6 +426,13 @@ mod tests {
         assert_eq!(daily.h, 5);
         assert_eq!(daily.l, 5);
         assert_eq!(daily.c, 5);
+    }
+
+    #[test]
+    fn test_daily_ohlc_from_empty_prices() {
+        let t = 1635347405599; // WED 2021-10-27;
+        let rc_prices = vec![];
+        assert!(DailyOHLC::from_prices(t, &rc_prices).is_none());
     }
 
     #[test]

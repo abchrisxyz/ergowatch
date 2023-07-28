@@ -375,11 +375,13 @@ fn extract_service_diffs(timestamp: Timestamp, events: &Vec<Event>) -> Vec<Servi
 
 #[cfg(test)]
 mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::super::types::MonthlyOHLC;
+    use super::super::types::WeeklyOHLC;
     use super::*;
     use crate::core::types::Input;
     use crate::core::types::Output;
     use crate::core::types::Transaction;
+    use time::macros::date;
 
     #[test]
     fn test_extract_event_nothing() {
@@ -715,5 +717,124 @@ mod tests {
         assert!(rec.reserves == last.reserves);
         assert!(rec.sc_net == last.sc_net);
         assert!(rec.rc_net == last.rc_net);
+    }
+
+    impl ParserCache {
+        pub fn dummy() -> Self {
+            let hr = HistoryRecord {
+                height: 1000,
+                oracle: 305810397,
+                circ_sc: 1000,
+                circ_rc: 50000,
+                reserves: 1000,
+                sc_net: 500,
+                rc_net: 2000,
+            };
+            let og = OHLCGroup {
+                // Wednesday 13 Jul
+                daily: DailyOHLC::dummy().date(time::macros::date!(2021 - 07 - 15)),
+                // Monday of the week
+                weekly: WeeklyOHLC::dummy().date(time::macros::date!(2021 - 07 - 11)),
+                // First of the month
+                monthly: MonthlyOHLC::dummy().date(time::macros::date!(2021 - 07 - 01)),
+            };
+            Self {
+                bank_transaction_count: 123,
+                last_history_record: hr,
+                last_ohlc_group: og,
+            }
+        }
+    }
+
+    #[test]
+    pub fn test_parser_cache_no_events() {
+        let cache = ParserCache::dummy();
+        let mut parser = Parser::new(cache);
+        let data = CoreData {
+            block: Block::dummy()
+                .height(533_000)
+                .timestamp(1626396302125) // 2021-07-16
+                .add_tx(
+                    Transaction::dummy()
+                        .add_input(Input::dummy().value(1000))
+                        .add_output(Output::dummy().value(1000)),
+                )
+                .add_tx(Transaction::dummy()),
+        };
+        // Check state before
+        assert_eq!(parser.cache.bank_transaction_count, 123);
+        assert_eq!(parser.cache.last_history_record.height, 1000);
+        assert_eq!(
+            parser.cache.last_ohlc_group.daily.0.t,
+            date!(2021 - 07 - 15)
+        );
+
+        let _batch = parser.extract_batch(&data);
+
+        // Check state after
+        assert_eq!(parser.cache.bank_transaction_count, 123);
+        assert_eq!(parser.cache.last_history_record.height, 1000);
+        assert_eq!(
+            parser.cache.last_ohlc_group.daily.0.t,
+            date!(2021 - 07 - 16)
+        );
+    }
+
+    #[test]
+    pub fn test_parser_cache_with_event() {
+        let cache = ParserCache::dummy();
+        let mut parser = Parser::new(cache);
+        let user: AddressID = 12345;
+        let data = CoreData {
+            block: Block::dummy()
+                .height(533_000)
+                .timestamp(1626396302125) // 2021-07-16
+                .add_tx(
+                    Transaction::dummy()
+                        // bank input
+                        .add_input(
+                            Input::dummy()
+                                .address_id(CONTRACT_ADDRESS_ID)
+                                .value(1000)
+                                .add_asset(BANK_NFT, 1)
+                                .add_asset(SC_TOKEN_ID, 500),
+                        )
+                        // user input
+                        .add_input(Input::dummy().address_id(user).value(5000))
+                        // bank output
+                        .add_output(
+                            Output::dummy()
+                                .address_id(CONTRACT_ADDRESS_ID)
+                                .value(1100)
+                                .add_asset(BANK_NFT, 1)
+                                .add_asset(SC_TOKEN_ID, 300),
+                        )
+                        // user output
+                        .add_output(
+                            Output::dummy()
+                                .address_id(user)
+                                .value(4900)
+                                .add_asset(SC_TOKEN_ID, 200),
+                        ),
+                )
+                .add_tx(Transaction::dummy()),
+        };
+        // Check state before
+        assert_eq!(parser.cache.bank_transaction_count, 123);
+        assert_eq!(parser.cache.last_history_record.height, 1000);
+        assert_eq!(
+            parser.cache.last_ohlc_group.daily.0.t,
+            date!(2021 - 07 - 15)
+        );
+
+        let _batch = parser.extract_batch(&data);
+
+        // Check state after
+        assert_eq!(parser.cache.bank_transaction_count, 124);
+        assert_eq!(parser.cache.last_history_record.height, 533_000);
+        assert_eq!(
+            parser.cache.last_ohlc_group.daily.0.t,
+            date!(2021 - 07 - 16)
+        );
     }
 }
