@@ -89,14 +89,14 @@ impl Parser {
             .count() as i32;
         self.cache.bank_transaction_count += n_bank_txs;
         // Update cached OHLC records
-        if let Some(daily) = daily_ohlc_records.pop() {
-            self.cache.last_ohlc_group.daily = daily;
+        if let Some(daily) = daily_ohlc_records.last() {
+            self.cache.last_ohlc_group.daily = daily.clone();
         }
-        if let Some(weekly) = weekly_ohlc_records.pop() {
-            self.cache.last_ohlc_group.weekly = weekly;
+        if let Some(weekly) = weekly_ohlc_records.last() {
+            self.cache.last_ohlc_group.weekly = weekly.clone();
         }
-        if let Some(monthly) = monthly_ohlc_records.pop() {
-            self.cache.last_ohlc_group.monthly = monthly;
+        if let Some(monthly) = monthly_ohlc_records.last() {
+            self.cache.last_ohlc_group.monthly = monthly.clone();
         }
 
         // Pack new batch
