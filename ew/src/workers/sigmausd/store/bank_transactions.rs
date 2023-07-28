@@ -18,7 +18,7 @@ pub(super) async fn insert(pgtx: &Transaction<'_>, btx: &BankTransaction) {
             reserves_diff,
             circ_sc_diff,
             circ_rc_diff,
-            box_id text,
+            box_id,
             service_fee,
             service_address_id
         )

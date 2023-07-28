@@ -32,7 +32,7 @@ create table sigmausd.bank_transactions (
     -- Service fee in nanoERG
     service_fee bigint not null,
     -- Address collecting the service fee, if any
-    service_address_id bigint,
+    service_address_id bigint
 );
 create index on sigmausd.bank_transactions using brin(height);
 
@@ -57,7 +57,7 @@ create table sigmausd.history (
     circ_rc bigint not null,
     reserves bigint not null,
     -- net nanoERG into bank from SC transactions
-    sc_nano_net bigint
+    sc_nano_net bigint,
     -- net nanoERG into bank from RC transactions
     rc_nano_net bigint
 );
@@ -83,7 +83,7 @@ create table sigmausd.services (
     volume numeric not null,
     -- some checks
     check(tx_count > 0),
-    check(lat_tx >= first_tx),
+    check(last_tx >= first_tx),
     check(fees >= 0),
     check(volume >= 0)
 );
@@ -122,7 +122,7 @@ create table sigmausd.rc_ohlc_monthly (
 -- Older log records may get deleted periodically.
 create table sigmausd._log_rc_ohlc_daily (
     height int primary key not null,
-    t data not null,
+    t date not null,
     o real not null,
     h real not null,
     l real not null,
@@ -132,7 +132,7 @@ create table sigmausd._log_rc_ohlc_daily (
 -- Daily OHLC log
 create table sigmausd._log_rc_ohlc_weekly (
     height int primary key not null,
-    t data not null,
+    t date not null,
     o real not null,
     h real not null,
     l real not null,
@@ -142,7 +142,7 @@ create table sigmausd._log_rc_ohlc_weekly (
 -- Monthly OHLC log
 create table sigmausd._log_rc_ohlc_monthly (
     height int primary key not null,
-    t data not null,
+    t date not null,
     o real not null,
     h real not null,
     l real not null,
@@ -181,7 +181,7 @@ values (
     1000000,
     1000000,
     1000000,
-    1000000,
+    1000000
 );
 insert into sigmausd.rc_ohlc_weekly (t, o, h, l, c)
 values (
@@ -189,7 +189,7 @@ values (
     1000000,
     1000000,
     1000000,
-    1000000,
+    1000000
 );
 insert into sigmausd.rc_ohlc_monthly (t, o, h, l, c)
 values (
@@ -197,5 +197,5 @@ values (
     1000000,
     1000000,
     1000000,
-    1000000,
+    1000000
 );  
