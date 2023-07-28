@@ -52,6 +52,7 @@ pub struct Header {
 }
 
 #[derive(Deserialize, Debug)]
+#[cfg_attr(test, derive(Clone))]
 pub struct POWSolutions {
     pub pk: String,
     pub w: String,
@@ -120,6 +121,7 @@ pub struct Asset {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(Clone))]
 pub struct Extension {
     pub header_id: HeaderID,
     pub digest: Digest32,
@@ -127,6 +129,7 @@ pub struct Extension {
 }
 
 #[derive(Deserialize, Debug)]
+#[cfg_attr(test, derive(Clone))]
 pub struct ExtensionField {
     pub key: String,
     pub value: String,
@@ -134,6 +137,7 @@ pub struct ExtensionField {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(Clone))]
 pub struct ADProofs {
     pub header_id: HeaderID,
     pub proof_bytes: String,

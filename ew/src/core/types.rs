@@ -26,6 +26,7 @@ pub struct CoreData {
 
 /// Pre-processed block data
 #[derive(Debug)]
+#[cfg_attr(test, derive(Clone))]
 pub struct Block {
     pub header: Header,
     pub transactions: Vec<Transaction>,
@@ -70,6 +71,7 @@ impl Head {
 }
 
 #[derive(Debug)]
+#[cfg_attr(test, derive(Clone))]
 pub struct Header {
     pub extension_id: String,
     pub difficulty: String,
@@ -227,12 +229,88 @@ fn decode_register(value: &serde_json::Value, id: i16) -> Option<Register> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::node::models::ADProofs;
     use crate::core::node::models::Asset;
+    use crate::core::node::models::Extension;
+    use crate::core::node::models::POWSolutions;
     use rand::distributions::Alphanumeric;
     use rand::distributions::DistString;
 
     fn random_digest32() -> Digest32 {
         Alphanumeric.sample_string(&mut rand::thread_rng(), 64)
+    }
+
+    impl Block {
+        pub fn dummy() -> Self {
+            Block {
+                header: Header::dummy(),
+                transactions: vec![],
+                extension: Extension {
+                    header_id: random_digest32(),
+                    digest: random_digest32(),
+                    fields: vec![],
+                },
+                ad_proofs: ADProofs {
+                    header_id: random_digest32(),
+                    proof_bytes: "".to_string(),
+                    digest: random_digest32(),
+                    size: 7112,
+                },
+                size: 8488,
+            }
+        }
+
+        /// Returns block with modified header height.
+        pub fn height(&self, height: Height) -> Self {
+            let mut block = self.clone();
+            block.header.height = height;
+            block
+        }
+
+        /// Returns block with modified header timestamp.
+        pub fn timestamp(&self, t: Timestamp) -> Self {
+            let mut block = self.clone();
+            block.header.timestamp = t;
+            block
+        }
+
+        /// Returns block with appended transaction.
+        pub fn add_tx(&self, tx: Transaction) -> Self {
+            let mut block = self.clone();
+            block.transactions.push(tx);
+            block
+        }
+    }
+
+    impl Header {
+        pub fn dummy() -> Self {
+            Header {
+                extension_id: random_digest32(),
+                difficulty: "2187147670978560".to_string(),
+                votes: [0, 0, 0],
+                timestamp: 1634511451404,
+                size: 221,
+                state_root: random_digest32(),
+                height: 600_000,
+                n_bits: 117949747,
+                version: 2,
+                id: random_digest32(),
+                ad_proofs_root: "".to_string(),
+                transactions_root: "".to_string(),
+                extension_hash: "".to_string(),
+                pow_solutions: POWSolutions {
+                    d: 0.,
+                    n: "6d33ee4161329eec".to_string(),
+                    pk: "029ed28cae37942d25d5cc5f0ade4b1b2e03e18b05c4f3233018bf67c817709f93"
+                        .to_string(),
+                    w: "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+                        .to_string(),
+                },
+                ad_proofs_id: "".to_string(),
+                transactions_id: "".to_string(),
+                parent_id: random_digest32(),
+            }
+        }
     }
 
     impl Transaction {
