@@ -225,6 +225,15 @@ fn decode_register(value: &serde_json::Value, id: i16) -> Option<Register> {
     }
     panic!("Non string value in register: {}", value);
 }
+#[cfg(test)]
+pub mod testing {
+    use super::Output;
+    impl Output {
+        pub fn voila() -> i32 {
+            5
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
