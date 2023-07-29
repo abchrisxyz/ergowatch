@@ -7,7 +7,11 @@ use super::super::types::BankTransaction;
 
 pub(super) async fn get_count(client: &Client) -> i32 {
     let sql = "select count(*) from sigmausd.bank_transactions;";
-    client.query_one(sql, &[]).await.unwrap().get(0)
+    client
+        .query_one(sql, &[])
+        .await
+        .unwrap()
+        .get::<usize, i64>(0) as i32
 }
 
 pub(super) async fn insert(pgtx: &Transaction<'_>, btx: &BankTransaction) {
