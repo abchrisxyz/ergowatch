@@ -99,28 +99,28 @@ create table sigmausd.services (
 -- Daily OHLC data
 create table sigmausd.rc_ohlc_daily (
     t date primary key not null,
-    o real not null,
-    h real not null,
-    l real not null,
-    c real not null
+    o bigint not null,
+    h bigint not null,
+    l bigint not null,
+    c bigint not null
 );
 
 -- Weekly OHLC data
 create table sigmausd.rc_ohlc_weekly (
     t date primary key not null,
-    o real not null,
-    h real not null,
-    l real not null,
-    c real not null
+    o bigint not null,
+    h bigint not null,
+    l bigint not null,
+    c bigint not null
 );
 
 -- Monthly OHLC data
 create table sigmausd.rc_ohlc_monthly (
     t date primary key not null,
-    o real not null,
-    h real not null,
-    l real not null,
-    c real not null
+    o bigint not null,
+    h bigint not null,
+    l bigint not null,
+    c bigint not null
 );
 
 -- OHLC log tables for rollbacks.
@@ -131,30 +131,30 @@ create table sigmausd.rc_ohlc_monthly (
 create table sigmausd._log_rc_ohlc_daily (
     height int primary key not null,
     t date not null,
-    o real not null,
-    h real not null,
-    l real not null,
-    c real not null
+    o bigint not null,
+    h bigint not null,
+    l bigint not null,
+    c bigint not null
 );
 
 -- Daily OHLC log
 create table sigmausd._log_rc_ohlc_weekly (
     height int primary key not null,
     t date not null,
-    o real not null,
-    h real not null,
-    l real not null,
-    c real not null
+    o bigint not null,
+    h bigint not null,
+    l bigint not null,
+    c bigint not null
 );
 
 -- Monthly OHLC log
 create table sigmausd._log_rc_ohlc_monthly (
     height int primary key not null,
     t date not null,
-    o real not null,
-    h real not null,
-    l real not null,
-    c real not null
+    o bigint not null,
+    h bigint not null,
+    l bigint not null,
+    c bigint not null
 );
 
 
