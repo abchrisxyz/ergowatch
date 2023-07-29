@@ -15,7 +15,7 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 # Build application
 COPY . .
-RUN cargo build --release --bin ew
+RUN cargo build --release --no-default-features --bin ew
 
 # We do not need the Rust toolchain to run the binary!
 FROM debian:11-slim AS runtime

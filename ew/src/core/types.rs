@@ -26,7 +26,7 @@ pub struct CoreData {
 
 /// Pre-processed block data
 #[derive(Debug)]
-#[cfg_attr(test, derive(Clone))]
+#[cfg_attr(feature = "test-utilities", derive(Clone))]
 pub struct Block {
     pub header: Header,
     pub transactions: Vec<Transaction>,
@@ -71,7 +71,7 @@ impl Head {
 }
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(Clone))]
+#[cfg_attr(feature = "test-utilities", derive(Clone))]
 pub struct Header {
     pub extension_id: String,
     pub difficulty: String,
@@ -225,19 +225,10 @@ fn decode_register(value: &serde_json::Value, id: i16) -> Option<Register> {
     }
     panic!("Non string value in register: {}", value);
 }
-#[cfg(test)]
-pub mod testing {
-    use super::Output;
-    impl Output {
-        pub fn voila() -> i32 {
-            5
-        }
-    }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[cfg(feature = "test-utilities")]
+pub mod testutils {
+    pub use super::*;
     use crate::core::node::models::ADProofs;
     use crate::core::node::models::Asset;
     use crate::core::node::models::Extension;
@@ -458,6 +449,13 @@ mod tests {
             Self("{}".into())
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Input;
+    use super::Output;
+    use super::Transaction;
 
     #[test]
     fn test_output_helpers() {

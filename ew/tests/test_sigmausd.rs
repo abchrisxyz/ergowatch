@@ -32,11 +32,11 @@ async fn prep_db(db_name: &str) -> PostgresConfig {
 }
 
 #[test]
-#[cfg(tests)]
-fn test_dev() {
+#[cfg(feature = "test-utilities")]
+fn test_wip() {
     // let block = ew::core::types::Output::voila();
-    let i = ew::core::types::testing::Output::voila();
-    assert_eq!(i, 5);
+    let output = ew::core::types::testutils::Output::dummy();
+    assert_eq!(output.size, 100);
 }
 
 // #[tokio::test]

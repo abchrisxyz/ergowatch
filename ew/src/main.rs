@@ -5,6 +5,8 @@ use ew::core::tracking::Tracker;
 use ew::core::Node;
 use ew::workers;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Gives some time to tracing subscriber
 async fn sleep_some() {
     let ms = 100;
@@ -19,14 +21,19 @@ async fn main() -> Result<(), &'static str> {
         Ok(_) => tracing::Level::DEBUG,
         _ => tracing::Level::INFO,
     };
-    tracing::info!("found EW_POSTGRES_URI environment variable");
+
     let subscriber = tracing_subscriber::fmt()
         .compact()
         .with_max_level(level)
         .finish();
     let _guard = tracing::subscriber::set_global_default(subscriber);
 
-    tracing::info!("starting EW");
+    tracing::info!("starting ew v{VERSION}");
+    if cfg!(feature = "test-utilities") {
+        tracing::warn!("build includes test-utilities, use cargo's `--no-default-features` flag");
+    } else {
+        tracing::debug!("compiled without test-utilities");
+    }
 
     // Env variables
     let pg_uri = env::var("EW_POSTGRES_URI").unwrap();
