@@ -34,7 +34,7 @@ impl Store {
             }
         });
 
-        let schema = Schema::new("core", include_str!("store/schema.sql"));
+        let schema = Schema::new("sigmausd", include_str!("store/schema.sql"));
         schema.init(&mut client).await;
 
         let head = headers::get(&client).await.head();

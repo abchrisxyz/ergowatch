@@ -30,8 +30,8 @@ impl Schema {
 
     async fn schema_revision(&self, client: &Client) -> Revision {
         tracing::debug!("reading current revision");
-        let qry = "select rev_major, rev_minor from core._meta;";
-        match client.query_one(qry, &[]).await {
+        let qry = format!("select rev_major, rev_minor from {}._meta;", self.name);
+        match client.query_one(&qry, &[]).await {
             Ok(row) => Revision {
                 major: row.get(0),
                 minor: row.get(1),
@@ -46,9 +46,9 @@ impl Schema {
         select exists(
             select schema_name
             from information_schema.schemata
-            where schema_name = 'core'
+            where schema_name = $1
         );";
-        client.query_one(qry, &[]).await.unwrap().get(0)
+        client.query_one(qry, &[&self.name]).await.unwrap().get(0)
     }
 
     async fn load_schema(&self, client: &mut Client) {
