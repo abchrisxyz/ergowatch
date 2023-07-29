@@ -1,12 +1,11 @@
-use ew::config::PostgresConfig;
+use tokio_postgres::NoTls;
 
+use ew::config::PostgresConfig;
 use ew::core::types::Block;
 use ew::core::types::CoreData;
 use ew::core::types::Output;
 use ew::workers::sigmausd::SigmaUSD;
 use ew::workers::Workflow;
-
-use tokio_postgres::NoTls;
 
 /// Prepare a test db and return corresponfing config.
 async fn prep_db(db_name: &str) -> PostgresConfig {
@@ -31,70 +30,11 @@ async fn prep_db(db_name: &str) -> PostgresConfig {
     PostgresConfig::new(&uri)
 }
 
-#[test]
-#[cfg(feature = "test-utilities")]
-fn test_wip() {
-    // let block = ew::core::types::Output::voila();
-    let output = ew::core::types::testutils::Output::dummy();
-    assert_eq!(output.size, 100);
+#[tokio::test]
+async fn test_empty_block() {
+    let pgconf = prep_db("sigmausd_empty_block").await;
+    let block = Block::dummy();
+    let data = CoreData { block };
+    let mut workflow = SigmaUSD::new(&pgconf).await;
+    workflow.include_block(&data).await;
 }
-
-// #[tokio::test]
-// async fn test_dummy_block() {
-//     let pgconf = prep_db("sigmausd_empty_batch").await;
-// let block = Block::dummy();
-// let block = ew::core::types::Output::dummy();
-// let data = CoreData { block };
-// let workflow = SigmaUSD::new(&pgconf).await;
-// let batch: Batch = Batch {
-//     header: MiniHeader {
-//         height: 1_000_000,
-//         timestamp: 1683634223508,
-//         id: "dummy".to_string(),
-//     },
-//     events: vec![],
-//     history_record: None,
-//     daily_ohlc_records: vec![],
-//     weekly_ohlc_records: vec![],
-//     monthly_ohlc_records: vec![],
-//     service_diffs: vec![],
-// };
-// store.persist(batch).await;
-// }
-
-// #[tokio::test]
-// async fn test_populated_batch() {
-//     let pgconf = prep_db("sigmausd_populated_batch").await;
-//     let mut store = Store::new(pgconf).await;
-//     let batch: Batch = Batch {
-//         header: MiniHeader {
-//             height: 1_000_000,
-//             timestamp: 1683634223508,
-//             id: "dummy".to_string(),
-//         },
-//         events: vec![Event::BankTx(BankTransaction {
-//             index: 25,
-//             height: 1_000_000,
-//             reserves_diff: 100,
-//             circ_sc_diff: 200,
-//             circ_rc_diff: 0,
-//             box_id: "bank_box_id_x".to_string(),
-//             service_fee: 0,
-//             service_address_id: None,
-//         })],
-//         history_record: Some(HistoryRecord {
-//             height: 1_000_000,
-//             oracle: 123456789,
-//             circ_sc: 1_000_100,
-//             circ_rc: 1_000_000_000,
-//             reserves: 2_000_000,
-//             sc_net: 10_000_000_000,
-//             rc_net: 20_000_000_000,
-//         }),
-//         daily_ohlc_records: vec![],
-//         weekly_ohlc_records: vec![],
-//         monthly_ohlc_records: vec![],
-//         service_diffs: vec![],
-//     };
-//     store.persist(batch).await;
-// }
