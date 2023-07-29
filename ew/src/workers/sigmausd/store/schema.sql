@@ -125,7 +125,7 @@ create table sigmausd.rc_ohlc_monthly (
 
 -- OHLC log tables for rollbacks.
 -- When hitting a rollback for height h, log records for h are deleted
--- and the resulting lastest log record is copied over to the ohlc data
+-- and the resulting latest log record is copied over to the ohlc data
 -- table.
 -- Older log records may get deleted periodically.
 create table sigmausd._log_rc_ohlc_daily (
