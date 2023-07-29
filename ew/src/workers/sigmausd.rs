@@ -3,10 +3,13 @@ mod parsing;
 mod store;
 mod types;
 
-use crate::config::PostgresConfig;
-use crate::core::tracking::Tracker;
-use crate::core::types::Head;
+use async_trait::async_trait;
 
+use crate::config::PostgresConfig;
+use crate::core::types::CoreData;
+use crate::core::types::Head;
+use crate::core::types::Height;
+use crate::core::types::Output;
 use constants::CONTRACT_CREATION_HEIGHT;
 use parsing::Parser;
 use store::Store;
@@ -18,11 +21,6 @@ pub struct SigmaUSD {
     parser: Parser,
     store: Store,
 }
-
-use crate::core::types::CoreData;
-use crate::core::types::Height;
-use crate::core::types::Output;
-use async_trait::async_trait;
 
 #[async_trait]
 impl super::Workflow for SigmaUSD {
