@@ -153,8 +153,6 @@ impl Store {
             compile_address_ids(&pgtx, &node_block, &input_boxes, self.last_address_id).await;
         self.last_address_id = max_address_id;
 
-        pgtx.commit().await.unwrap();
-
         // Update head
         if is_next_block {
             self.head.height = node_block.header.height;
@@ -219,6 +217,8 @@ impl Store {
             ad_proofs: node_block.ad_proofs,
             size: node_block.size,
         };
+
+        pgtx.commit().await.unwrap();
 
         CoreData { block: core_block }
     }
