@@ -77,15 +77,9 @@ impl Store {
 
         // OHLC's
         let height = batch.header.height;
-        for record in &batch.daily_ohlc_records {
-            ohlcs::upsert_daily(&pgtx, &record, height).await;
-        }
-        for record in &batch.weekly_ohlc_records {
-            ohlcs::upsert_weekly(&pgtx, &record, height).await;
-        }
-        for record in &batch.monthly_ohlc_records {
-            ohlcs::upsert_monthly(&pgtx, &record, height).await;
-        }
+        ohlcs::upsert_daily_records(&pgtx, &batch.daily_ohlc_records, height).await;
+        ohlcs::upsert_weekly_records(&pgtx, &batch.weekly_ohlc_records, height).await;
+        ohlcs::upsert_monthly_records(&pgtx, &batch.monthly_ohlc_records, height).await;
 
         // Service diffs
         for diff in &batch.service_diffs {

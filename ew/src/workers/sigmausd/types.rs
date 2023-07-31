@@ -133,9 +133,7 @@ impl DailyOHLC {
         if rc_prices.is_empty() {
             return None;
         }
-        let date = time::OffsetDateTime::from_unix_timestamp(t / 1000)
-            .unwrap()
-            .date();
+        let date = Self::date_from_timestamp(t);
         let ohlc = OHLC {
             t: date,
             o: *rc_prices.first().unwrap(),
@@ -146,11 +144,16 @@ impl DailyOHLC {
         Some(Self(ohlc))
     }
 
+    /// Helper to convert ergo timestamps to rounded dates.
+    pub fn date_from_timestamp(t: Timestamp) -> time::Date {
+        time::OffsetDateTime::from_unix_timestamp(t / 1000)
+            .unwrap()
+            .date()
+    }
+
     /// Returns a copy with date modified according to timestamp
     pub fn with_timestamp(&self, t: Timestamp) -> Self {
-        let date = time::OffsetDateTime::from_unix_timestamp(t / 1000)
-            .unwrap()
-            .date();
+        let date = Self::date_from_timestamp(t);
         Self(OHLC {
             t: date,
             o: self.0.o,
@@ -158,20 +161,6 @@ impl DailyOHLC {
             l: self.0.l,
             c: self.0.c,
         })
-    }
-
-    /// Returns a copy with date rounded to week's Monday.
-    pub fn to_weekly(&self) -> WeeklyOHLC {
-        let mut ohlc = self.0.clone();
-        ohlc.t = self.0.t.prev_occurrence(time::Weekday::Monday);
-        WeeklyOHLC(ohlc)
-    }
-
-    /// Returns a copy with date rounded to first of month.
-    pub fn to_monthly(&self) -> MonthlyOHLC {
-        let mut ohlc = self.0.clone();
-        ohlc.t = ohlc.t.replace_day(1).unwrap();
-        MonthlyOHLC(ohlc)
     }
 
     /// Generate daily OHLC series from `since` up to `self`.
@@ -193,20 +182,40 @@ impl DailyOHLC {
         records
     }
 
-    /// Returns copy of `self` with date incremented to next day.
-    pub fn next(&self) -> Self {
+    /// Returns any records between `self` and future `timestamp`.
+    ///
+    /// New records will have all prices set to `self`'s close.
+    pub fn propagate_to(&self, to_date: &time::Date) -> Vec<Self> {
+        assert!(to_date >= &self.0.t);
+        let mut records = vec![];
+        let n_days = (*to_date - self.0.t).whole_days();
+        for _ in 0..n_days {
+            records.push(self.next());
+        }
+        records
+    }
+
+    /// Returns new record with date incremented to next day and prices set to previous close.
+    fn next(&self) -> Self {
         let ohlc = &self.0;
         Self(OHLC {
             t: ohlc.t.next_day().unwrap(),
-            o: ohlc.o,
-            h: ohlc.h,
-            l: ohlc.l,
+            o: ohlc.c,
+            h: ohlc.c,
+            l: ohlc.c,
             c: ohlc.c,
         })
     }
 }
 
 impl WeeklyOHLC {
+    /// Returns a copy of `daily` with date rounded to week's Monday.
+    pub fn from_daily(daily: &DailyOHLC) -> WeeklyOHLC {
+        let mut ohlc = daily.0.clone();
+        ohlc.t = Self::round_date(&ohlc.t);
+        WeeklyOHLC(ohlc)
+    }
+
     /// Generate weekly OHLC series from `since` up to `self`.
     /// Merges `since` and `self` if both are on the same week.
     pub fn fill_since(self, since: &Self) -> Vec<Self> {
@@ -226,20 +235,49 @@ impl WeeklyOHLC {
         records
     }
 
-    /// Returns copy of `self` with date incremented to next week.
-    pub fn next(&self) -> Self {
+    /// Returns any records between `self` and future `timestamp`.
+    ///
+    /// New records will have all prices set to `self`'s close.
+    pub fn propagate_to(&self, date: &time::Date) -> Vec<Self> {
+        let to_date = Self::round_date(date);
+        assert!(to_date >= self.0.t);
+        let mut records = vec![];
+        let n_weeks = (to_date - self.0.t).whole_weeks();
+        for _ in 0..n_weeks {
+            records.push(self.next());
+        }
+        records
+    }
+
+    /// Round date to monday of same week.
+    fn round_date(date: &time::Date) -> time::Date {
+        match date.weekday() {
+            time::Weekday::Monday => date.clone(),
+            _ => date.prev_occurrence(time::Weekday::Monday),
+        }
+    }
+
+    /// Returns new record with date incremented to next week and prices set to previous close.
+    fn next(&self) -> Self {
         let ohlc = &self.0;
         Self(OHLC {
             t: ohlc.t + time::Duration::WEEK,
-            o: ohlc.o,
-            h: ohlc.h,
-            l: ohlc.l,
+            o: ohlc.c,
+            h: ohlc.c,
+            l: ohlc.c,
             c: ohlc.c,
         })
     }
 }
 
 impl MonthlyOHLC {
+    /// Returns a copy of `daily` with date rounded to first of month.
+    pub fn from_daily(daily: &DailyOHLC) -> MonthlyOHLC {
+        let mut ohlc = daily.0.clone();
+        ohlc.t = Self::round_date(&ohlc.t);
+        MonthlyOHLC(ohlc)
+    }
+
     /// Generate monthly OHLC series from `since` up to `self`.
     /// Merges `since` and `self` if both are on the same month.
     pub fn fill_since(self, since: &Self) -> Vec<Self> {
@@ -264,8 +302,32 @@ impl MonthlyOHLC {
         records
     }
 
-    /// Returns copy of `self` with date incremented to next month.
-    pub fn next(&self) -> Self {
+    /// Returns any records between `self` and future `timestamp`.
+    ///
+    /// New records will have all prices set to `self`'s close.
+    pub fn propagate_to(&self, date: &time::Date) -> Vec<Self> {
+        let to_date = Self::round_date(date);
+        assert!(to_date >= self.0.t);
+        let mut records = vec![];
+        let dy = to_date.year() - self.0.t.year();
+        let n_months = match dy {
+            0 => to_date.month() as i32 - self.0.t.month() as i32,
+            1 => to_date.month() as i32 + 12 - self.0.t.month() as i32,
+            _ => to_date.month() as i32 + 12 - self.0.t.month() as i32 + dy * 12,
+        };
+        for _ in 0..n_months {
+            records.push(self.next());
+        }
+        records
+    }
+
+    /// Round date to first of month.
+    fn round_date(date: &time::Date) -> time::Date {
+        date.replace_day(1).unwrap()
+    }
+
+    /// Returns new record with date incremented to next month and prices set to previous close.
+    fn next(&self) -> Self {
         let ohlc = &self.0;
         let date = match ohlc.t.month() {
             time::Month::December => ohlc
@@ -278,9 +340,9 @@ impl MonthlyOHLC {
         .unwrap();
         Self(OHLC {
             t: date,
-            o: ohlc.o,
-            h: ohlc.h,
-            l: ohlc.l,
+            o: ohlc.c,
+            h: ohlc.c,
+            l: ohlc.c,
             c: ohlc.c,
         })
     }
@@ -304,6 +366,7 @@ pub struct ServiceStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use time::macros::date;
 
     impl OHLC {
         pub fn dummy() -> Self {
@@ -436,48 +499,6 @@ mod tests {
     }
 
     #[test]
-    fn test_daily_ohlc_to_weekly() {
-        // WED 27 October 2021
-        let daily = DailyOHLC(OHLC {
-            t: time::Date::from_calendar_date(2021, time::Month::October, 27).unwrap(),
-            o: 2,
-            h: 5,
-            l: 1,
-            c: 3,
-        });
-        let weekly = daily.to_weekly();
-        assert_eq!(
-            weekly.0.t,
-            time::Date::from_calendar_date(2021, time::Month::October, 25).unwrap()
-        );
-        assert_eq!(weekly.0.o, daily.0.o);
-        assert_eq!(weekly.0.h, daily.0.h);
-        assert_eq!(weekly.0.l, daily.0.l);
-        assert_eq!(weekly.0.c, daily.0.c);
-    }
-
-    #[test]
-    fn test_daily_ohlc_to_monthly() {
-        // WED 27 October 2021
-        let daily = DailyOHLC(OHLC {
-            t: time::Date::from_calendar_date(2021, time::Month::October, 27).unwrap(),
-            o: 2,
-            h: 5,
-            l: 1,
-            c: 3,
-        });
-        let monthly = daily.to_monthly();
-        assert_eq!(
-            monthly.0.t,
-            time::Date::from_calendar_date(2021, time::Month::October, 1).unwrap()
-        );
-        assert_eq!(monthly.0.o, daily.0.o);
-        assert_eq!(monthly.0.h, daily.0.h);
-        assert_eq!(monthly.0.l, daily.0.l);
-        assert_eq!(monthly.0.c, daily.0.c);
-    }
-
-    #[test]
     fn test_daily_ohlc_fill_since_same_day() {
         let date = time::Date::from_calendar_date(2021, time::Month::October, 27).unwrap();
         let since = DailyOHLC(OHLC {
@@ -558,9 +579,9 @@ mod tests {
             ohlc.t,
             time::Date::from_calendar_date(2021, time::Month::October, 26).unwrap(),
         );
-        assert_eq!(ohlc.o, since.0.o);
-        assert_eq!(ohlc.h, since.0.h);
-        assert_eq!(ohlc.l, since.0.l);
+        assert_eq!(ohlc.o, since.0.c);
+        assert_eq!(ohlc.h, since.0.c);
+        assert_eq!(ohlc.l, since.0.c);
         assert_eq!(ohlc.c, since.0.c);
 
         let ohlc = &dailys[1].0;
@@ -572,6 +593,77 @@ mod tests {
         assert_eq!(ohlc.h, 9);
         assert_eq!(ohlc.l, 7);
         assert_eq!(ohlc.c, 8);
+    }
+
+    #[test]
+    fn test_daily_ohlc_propagate_to_same_day() {
+        let date = time::Date::from_calendar_date(2021, time::Month::October, 27).unwrap();
+        let daily = DailyOHLC(OHLC {
+            t: date,
+            o: 2,
+            h: 5,
+            l: 1,
+            c: 3,
+        });
+        let to_date = date!(2021 - 10 - 27); // WED 2021-10-27;
+        let dailys = daily.propagate_to(&to_date);
+        assert!(dailys.is_empty());
+    }
+
+    #[test]
+    fn test_daily_ohlc_propagate_to_next_day() {
+        let date = time::Date::from_calendar_date(2021, time::Month::October, 26).unwrap();
+        let daily = DailyOHLC(OHLC {
+            t: date,
+            o: 2,
+            h: 5,
+            l: 1,
+            c: 3,
+        });
+        let to_date = date!(2021 - 10 - 27); // WED 2021-10-27;
+        let dailys = daily.propagate_to(&to_date);
+        assert!(dailys.len() == 1);
+        let ohlc = &dailys[0].0;
+        assert_eq!(ohlc.t, time::macros::date!(2021 - 10 - 27));
+        assert_eq!(ohlc.o, daily.0.c);
+        assert_eq!(ohlc.h, daily.0.c);
+        assert_eq!(ohlc.l, daily.0.c);
+        assert_eq!(ohlc.c, daily.0.c);
+    }
+
+    #[test]
+    fn test_weekly_ohlc_round_date() {
+        // MON 25 OCT 2021 to MON 25 OCT 2021
+        assert_eq!(
+            WeeklyOHLC::round_date(&date!(2021 - 10 - 25)),
+            date!(2021 - 10 - 25)
+        );
+        // WED 27 OCT 2021 to MON 25 OCT 2021
+        assert_eq!(
+            WeeklyOHLC::round_date(&date!(2021 - 10 - 27)),
+            date!(2021 - 10 - 25)
+        );
+    }
+
+    #[test]
+    fn test_weekly_ohlc_from_daily() {
+        // WED 27 October 2021
+        let daily = DailyOHLC(OHLC {
+            t: time::Date::from_calendar_date(2021, time::Month::October, 27).unwrap(),
+            o: 2,
+            h: 5,
+            l: 1,
+            c: 3,
+        });
+        let weekly = WeeklyOHLC::from_daily(&daily);
+        assert_eq!(
+            weekly.0.t,
+            time::Date::from_calendar_date(2021, time::Month::October, 25).unwrap()
+        );
+        assert_eq!(weekly.0.o, daily.0.o);
+        assert_eq!(weekly.0.h, daily.0.h);
+        assert_eq!(weekly.0.l, daily.0.l);
+        assert_eq!(weekly.0.c, daily.0.c);
     }
 
     #[test]
@@ -655,9 +747,9 @@ mod tests {
             ohlc.t,
             time::Date::from_calendar_date(2021, time::Month::October, 18).unwrap(),
         );
-        assert_eq!(ohlc.o, since.0.o);
-        assert_eq!(ohlc.h, since.0.h);
-        assert_eq!(ohlc.l, since.0.l);
+        assert_eq!(ohlc.o, since.0.c);
+        assert_eq!(ohlc.h, since.0.c);
+        assert_eq!(ohlc.l, since.0.c);
         assert_eq!(ohlc.c, since.0.c);
 
         let ohlc = &weeklys[1].0;
@@ -669,6 +761,74 @@ mod tests {
         assert_eq!(ohlc.h, 9);
         assert_eq!(ohlc.l, 7);
         assert_eq!(ohlc.c, 8);
+    }
+
+    #[test]
+    fn test_weekly_ohlc_propagate_to_same_week() {
+        let date = time::Date::from_calendar_date(2021, time::Month::October, 25).unwrap();
+        let weekly = WeeklyOHLC(OHLC {
+            t: date,
+            o: 2,
+            h: 5,
+            l: 1,
+            c: 3,
+        });
+        let to_date = date!(2021 - 10 - 27); // WED 2021-10-27;
+        let weeklys = weekly.propagate_to(&to_date);
+        assert!(weeklys.is_empty());
+    }
+
+    #[test]
+    fn test_weekly_ohlc_propagate_to_next_week() {
+        let date = time::Date::from_calendar_date(2021, time::Month::October, 25).unwrap();
+        let weekly = WeeklyOHLC(OHLC {
+            t: date,
+            o: 2,
+            h: 5,
+            l: 1,
+            c: 3,
+        });
+        let weeklys = weekly.propagate_to(&date!(2021 - 11 - 02)); // TUE 2021-11-02;
+        assert_eq!(weeklys.len(), 1);
+        let ohlc = &weeklys[0].0;
+        assert_eq!(ohlc.t, date!(2021 - 11 - 01));
+        assert_eq!(ohlc.o, weekly.0.c);
+        assert_eq!(ohlc.h, weekly.0.c);
+        assert_eq!(ohlc.l, weekly.0.c);
+        assert_eq!(ohlc.c, weekly.0.c);
+    }
+
+    #[test]
+    fn test_monthly_ohlc_round_date() {
+        assert_eq!(
+            MonthlyOHLC::round_date(&date!(2021 - 01 - 25)),
+            date!(2021 - 01 - 01)
+        );
+        assert_eq!(
+            MonthlyOHLC::round_date(&date!(2021 - 12 - 27)),
+            date!(2021 - 12 - 01)
+        );
+    }
+
+    #[test]
+    fn test_monthly_ohlc_from_daily() {
+        // WED 27 October 2021
+        let daily = DailyOHLC(OHLC {
+            t: time::Date::from_calendar_date(2021, time::Month::October, 27).unwrap(),
+            o: 2,
+            h: 5,
+            l: 1,
+            c: 3,
+        });
+        let monthly = MonthlyOHLC::from_daily(&daily);
+        assert_eq!(
+            monthly.0.t,
+            time::Date::from_calendar_date(2021, time::Month::October, 1).unwrap()
+        );
+        assert_eq!(monthly.0.o, daily.0.o);
+        assert_eq!(monthly.0.h, daily.0.h);
+        assert_eq!(monthly.0.l, daily.0.l);
+        assert_eq!(monthly.0.c, daily.0.c);
     }
 
     #[test]
@@ -752,9 +912,9 @@ mod tests {
             ohlc.t,
             time::Date::from_calendar_date(2022, time::Month::January, 1).unwrap(),
         );
-        assert_eq!(ohlc.o, since.0.o);
-        assert_eq!(ohlc.h, since.0.h);
-        assert_eq!(ohlc.l, since.0.l);
+        assert_eq!(ohlc.o, since.0.c);
+        assert_eq!(ohlc.h, since.0.c);
+        assert_eq!(ohlc.l, since.0.c);
         assert_eq!(ohlc.c, since.0.c);
 
         let ohlc = &monthlys[1].0;
@@ -766,5 +926,38 @@ mod tests {
         assert_eq!(ohlc.h, 9);
         assert_eq!(ohlc.l, 7);
         assert_eq!(ohlc.c, 8);
+    }
+
+    #[test]
+    fn test_monthly_ohlc_propagate_to_same_month() {
+        let monthly = MonthlyOHLC(OHLC {
+            t: date!(2021 - 10 - 01),
+            o: 2,
+            h: 5,
+            l: 1,
+            c: 3,
+        });
+        let to_date = date!(2021 - 10 - 27);
+        let monthlys = monthly.propagate_to(&to_date);
+        assert!(monthlys.is_empty());
+    }
+
+    #[test]
+    fn test_monthly_ohlc_propagate_to_next_month() {
+        let monthly = MonthlyOHLC(OHLC {
+            t: date!(2021 - 10 - 01),
+            o: 2,
+            h: 5,
+            l: 1,
+            c: 3,
+        });
+        let monthlys = monthly.propagate_to(&date!(2021 - 11 - 17));
+        assert_eq!(monthlys.len(), 1);
+        let ohlc = &monthlys[0].0;
+        assert_eq!(ohlc.t, date!(2021 - 11 - 01));
+        assert_eq!(ohlc.o, monthly.0.c);
+        assert_eq!(ohlc.h, monthly.0.c);
+        assert_eq!(ohlc.l, monthly.0.c);
+        assert_eq!(ohlc.c, monthly.0.c);
     }
 }

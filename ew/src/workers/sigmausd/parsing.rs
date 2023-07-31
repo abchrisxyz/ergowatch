@@ -14,8 +14,10 @@ use super::types::DailyOHLC;
 use super::types::Event;
 use super::types::HistoryRecord;
 use super::types::MiniHeader;
+use super::types::MonthlyOHLC;
 use super::types::OraclePosting;
 use super::types::ServiceStats;
+use super::types::WeeklyOHLC;
 use crate::core::types::AddressID;
 use crate::core::types::Block;
 use crate::core::types::CoreData;
@@ -67,22 +69,11 @@ impl Parser {
         let history_record = history_records.last().map(|hr| hr.clone());
 
         // OHLC's
-        // Could have a new day/week/month without any events, just time passing.
-        // Use daily OHLC from current block if any events available.
-        // Otherwise use cached one with updated date.
-        let block_daily = match DailyOHLC::from_prices(block.header.timestamp, &rc_prices) {
-            Some(daily) => daily,
-            None => self
-                .cache
-                .last_ohlc_group
-                .daily
-                .with_timestamp(block.header.timestamp),
-        };
-        let block_weekly = block_daily.to_weekly();
-        let block_monthly = block_daily.to_monthly();
-        let daily_ohlc_records = block_daily.fill_since(&self.cache.last_ohlc_group.daily);
-        let weekly_ohlc_records = block_weekly.fill_since(&self.cache.last_ohlc_group.weekly);
-        let monthly_ohlc_records = block_monthly.fill_since(&self.cache.last_ohlc_group.monthly);
+        let (daily_ohlc_records, weekly_ohlc_records, monthly_ohlc_records) = generate_ohlc_records(
+            block.header.timestamp,
+            &rc_prices,
+            &self.cache.last_ohlc_group,
+        );
 
         // Services
         let service_diffs = extract_service_diffs(block.header.timestamp, &events);
@@ -352,6 +343,37 @@ fn generate_history_records(events: &Vec<Event>, last: &HistoryRecord) -> Vec<Hi
         prev = records.last().unwrap();
     }
     records
+}
+
+/// Generate any new OHLC records.
+fn generate_ohlc_records(
+    timestamp: Timestamp,
+    prices: &Vec<NanoERG>,
+    last: &OHLCGroup,
+) -> (Vec<DailyOHLC>, Vec<WeeklyOHLC>, Vec<MonthlyOHLC>) {
+    // New records are needed if either of two things happen:
+    // - current block has any history records
+    // - current block's timestamp opens a new window
+    if prices.is_empty() {
+        // No price changes in this block.
+        // Just propagate last close to any new windows.
+        let date = DailyOHLC::date_from_timestamp(timestamp);
+        return (
+            last.daily.propagate_to(&date),
+            last.weekly.propagate_to(&date),
+            last.monthly.propagate_to(&date),
+        );
+    }
+    // At least one price, so safe to unwrap.
+    let block_daily = DailyOHLC::from_prices(timestamp, &prices).unwrap();
+    let block_weekly = WeeklyOHLC::from_daily(&block_daily);
+    let block_monthly = MonthlyOHLC::from_daily(&block_daily);
+
+    (
+        block_daily.fill_since(&last.daily),
+        block_weekly.fill_since(&last.weekly),
+        block_monthly.fill_since(&last.monthly),
+    )
 }
 
 fn extract_service_diffs(timestamp: Timestamp, events: &Vec<Event>) -> Vec<ServiceStats> {
@@ -643,7 +665,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_history_no_events() {
+    fn test_history_no_events() {
         let last = HistoryRecord {
             height: 1000,
             oracle: 305810397,
@@ -659,7 +681,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_history_with_bank_event() {
+    fn test_history_with_bank_event() {
         let last = HistoryRecord {
             height: 1000,
             oracle: 305810397,
@@ -692,7 +714,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_history_with_oracle_event() {
+    fn test_history_with_oracle_event() {
         let last = HistoryRecord {
             height: 1000,
             oracle: 305810397,
@@ -747,7 +769,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_parser_cache_no_events() {
+    fn test_parser_cache_no_events() {
         let cache = ParserCache::dummy();
         let mut parser = Parser::new(cache);
         let data = CoreData {
@@ -781,7 +803,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_parser_cache_with_event() {
+    fn test_parser_cache_with_event() {
         let cache = ParserCache::dummy();
         let mut parser = Parser::new(cache);
         let user: AddressID = 12345;
@@ -836,5 +858,41 @@ mod tests {
             parser.cache.last_ohlc_group.daily.0.t,
             date!(2021 - 07 - 16)
         );
+    }
+
+    #[test]
+    fn test_generate_ohlc_records_no_events_next_day() {
+        let last = OHLCGroup {
+            // Tuesday 26 Oct
+            daily: DailyOHLC::dummy().date(time::macros::date!(2021 - 10 - 26)),
+            // Monday of the week
+            weekly: WeeklyOHLC::dummy().date(time::macros::date!(2021 - 10 - 25)),
+            // First of the month
+            monthly: MonthlyOHLC::dummy().date(time::macros::date!(2021 - 10 - 01)),
+        };
+        let rc_prices: Vec<NanoERG> = vec![];
+        let timestamp = 1635347405599; // WED 2021-10-27;
+        let (ds, ws, ms) = generate_ohlc_records(timestamp, &rc_prices, &last);
+        assert_eq!(ds.len(), 1);
+        assert_eq!(ws.len(), 0);
+        assert_eq!(ms.len(), 0);
+    }
+
+    #[test]
+    fn test_generate_ohlc_records_no_events_next_month() {
+        let last = OHLCGroup {
+            // Tuesday 26 Oct
+            daily: DailyOHLC::dummy().date(time::macros::date!(2021 - 10 - 26)),
+            // Monday of the week
+            weekly: WeeklyOHLC::dummy().date(time::macros::date!(2021 - 10 - 25)),
+            // First of the month
+            monthly: MonthlyOHLC::dummy().date(time::macros::date!(2021 - 10 - 01)),
+        };
+        let rc_prices: Vec<NanoERG> = vec![];
+        let timestamp = 1635731294014; // MON 2021-11-01;
+        let (ds, ws, ms) = generate_ohlc_records(timestamp, &rc_prices, &last);
+        assert_eq!(ds.len(), 6);
+        assert_eq!(ws.len(), 1);
+        assert_eq!(ms.len(), 1);
     }
 }

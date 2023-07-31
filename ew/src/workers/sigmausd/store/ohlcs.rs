@@ -73,8 +73,15 @@ async fn get_latest_monthly(client: &Client) -> MonthlyOHLC {
     })
 }
 
-pub(super) async fn upsert_daily(pgtx: &Transaction<'_>, rec: &DailyOHLC, height: Height) {
-    // Upsert new record
+/// Add records to daily OHLC series.
+///
+/// Replaces possible existing record for same date.
+pub(super) async fn upsert_daily_records(
+    pgtx: &Transaction<'_>,
+    recs: &Vec<DailyOHLC>,
+    height: Height,
+) {
+    // Upsert new records
     let sql = "
         insert into sigmausd.rc_ohlc_daily (t, o, h, l, c)
         values ($1, $2, $3, $4, $5)
@@ -85,25 +92,35 @@ pub(super) async fn upsert_daily(pgtx: &Transaction<'_>, rec: &DailyOHLC, height
             , l = $4
             , c = $5;
         ";
-    pgtx.execute(sql, &[&rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c])
+    for rec in recs {
+        pgtx.execute(sql, &[&rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c])
+            .await
+            .unwrap();
+    }
+    // Log last record
+    if let Some(rec) = &recs.last() {
+        let sql = "
+            insert into sigmausd._log_rc_ohlc_daily (height, t, o, h, l, c)
+            values ($1, $2, $3, $4, $5, $6);
+        ";
+        pgtx.execute(
+            sql,
+            &[&height, &rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c],
+        )
         .await
         .unwrap();
-
-    // Then copy new record to log as well
-    let sql = "
-        insert into sigmausd._log_rc_ohlc_daily (h, t, o, h, l, c)
-        values ($1, $2, $3, $4, $5, $6);
-    ";
-    pgtx.execute(
-        sql,
-        &[&height, &rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c],
-    )
-    .await
-    .unwrap();
+    }
 }
 
-pub(super) async fn upsert_weekly(pgtx: &Transaction<'_>, rec: &WeeklyOHLC, height: Height) {
-    // Upsert new record
+/// Add records to weekly OHLC series.
+///
+/// Replaces possible existing record for same date.
+pub(super) async fn upsert_weekly_records(
+    pgtx: &Transaction<'_>,
+    recs: &Vec<WeeklyOHLC>,
+    height: Height,
+) {
+    // Upsert new records
     let sql = "
         insert into sigmausd.rc_ohlc_weekly (t, o, h, l, c)
         values ($1, $2, $3, $4, $5)
@@ -114,25 +131,35 @@ pub(super) async fn upsert_weekly(pgtx: &Transaction<'_>, rec: &WeeklyOHLC, heig
             , l = $4
             , c = $5;
     ";
-    pgtx.execute(sql, &[&rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c])
+    for rec in recs {
+        pgtx.execute(sql, &[&rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c])
+            .await
+            .unwrap();
+    }
+    // Log last record
+    if let Some(rec) = recs.last() {
+        let sql = "
+            insert into sigmausd._log_rc_ohlc_weekly (height, t, o, h, l, c)
+            values ($1, $2, $3, $4, $5, $6);
+        ";
+        pgtx.execute(
+            sql,
+            &[&height, &rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c],
+        )
         .await
         .unwrap();
-
-    // Then copy new record to log as well
-    let sql = "
-        insert into sigmausd._log_rc_ohlc_weekly (h, t, o, h, l, c)
-        values ($1, $2, $3, $4, $5, $6);
-    ";
-    pgtx.execute(
-        sql,
-        &[&height, &rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c],
-    )
-    .await
-    .unwrap();
+    }
 }
 
-pub(super) async fn upsert_monthly(pgtx: &Transaction<'_>, rec: &MonthlyOHLC, height: Height) {
-    // Upsert new record
+/// Add records to monthly OHLC series.
+///
+/// Replaces possible existing record for same date.
+pub(super) async fn upsert_monthly_records(
+    pgtx: &Transaction<'_>,
+    recs: &Vec<MonthlyOHLC>,
+    height: Height,
+) {
+    // Upsert new records
     let sql = "
         insert into sigmausd.rc_ohlc_monthly (t, o, h, l, c)
         values ($1, $2, $3, $4, $5)
@@ -143,21 +170,24 @@ pub(super) async fn upsert_monthly(pgtx: &Transaction<'_>, rec: &MonthlyOHLC, he
             , l = $4
             , c = $5;
     ";
-    pgtx.execute(sql, &[&rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c])
+    for rec in recs {
+        pgtx.execute(sql, &[&rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c])
+            .await
+            .unwrap();
+    }
+    // Log last record
+    if let Some(rec) = recs.last() {
+        let sql = "
+            insert into sigmausd._log_rc_ohlc_monthly (height, t, o, h, l, c)
+            values ($1, $2, $3, $4, $5, $6);
+        ";
+        pgtx.execute(
+            sql,
+            &[&height, &rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c],
+        )
         .await
         .unwrap();
-
-    // Then copy new record to log as well
-    let sql = "
-        insert into sigmausd._log_rc_ohlc_monthly (h, t, o, h, l, c)
-        values ($1, $2, $3, $4, $5, $6);
-    ";
-    pgtx.execute(
-        sql,
-        &[&height, &rec.0.t, &rec.0.o, &rec.0.h, &rec.0.l, &rec.0.c],
-    )
-    .await
-    .unwrap();
+    }
 }
 
 /// Restores previous known state if current block modified it.
