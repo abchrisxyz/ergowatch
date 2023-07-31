@@ -3,8 +3,14 @@ use tokio_postgres::Transaction;
 
 use super::super::types::MiniHeader;
 
-pub async fn get(client: &Client) -> MiniHeader {
-    let qry = "select height, timestamp, id from sigmausd.headers;";
+pub async fn get_last(client: &Client) -> MiniHeader {
+    let qry = "
+        select height
+            , timestamp
+            , id
+        from sigmausd.headers
+        order by height desc
+        limit 1;";
     let row = client.query_one(qry, &[]).await.unwrap();
     MiniHeader {
         height: row.get(0),

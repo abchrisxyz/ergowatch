@@ -37,7 +37,7 @@ impl Store {
         let schema = Schema::new("sigmausd", include_str!("store/schema.sql"));
         schema.init(&mut client).await;
 
-        let head = headers::get(&client).await.head();
+        let head = headers::get_last(&client).await.head();
         tracing::debug!("head: {:?}", &head);
 
         Self { client, head }
@@ -119,7 +119,7 @@ impl Store {
         pgtx.commit().await.unwrap();
 
         // Reload head
-        let header = headers::get(&self.client).await;
+        let header = headers::get_last(&self.client).await;
         self.head = Head {
             height: header.height,
             header_id: header.id,

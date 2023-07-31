@@ -83,8 +83,8 @@ create table sigmausd.services (
     -- total transactions to date
     tx_count bigint not null,
     -- first and last tx timestamps
-    first_tx timestamp not null,
-    last_tx timestamp not null,
+    first_tx bigint not null,
+    last_tx bigint not null,
     -- total fees accumulated to date (nanoERG)
     fees numeric not null,
     -- total nanoERG going in/out of bank through service
