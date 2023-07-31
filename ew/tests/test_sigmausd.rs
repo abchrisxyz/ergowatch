@@ -1,11 +1,24 @@
 use tokio_postgres::NoTls;
 
 use ew::config::PostgresConfig;
+use ew::core::types::AddressID;
 use ew::core::types::Block;
 use ew::core::types::CoreData;
+use ew::core::types::Input;
 use ew::core::types::Output;
+use ew::core::types::Timestamp;
+use ew::core::types::Transaction;
+use ew::workers::sigmausd::constants::BANK_NFT;
+use ew::workers::sigmausd::constants::CONTRACT_ADDRESS_ID;
+use ew::workers::sigmausd::constants::CONTRACT_CREATION_HEIGHT;
+use ew::workers::sigmausd::constants::SC_SUPPLY;
+use ew::workers::sigmausd::constants::SC_TOKEN_ID;
 use ew::workers::sigmausd::SigmaUSD;
 use ew::workers::Workflow;
+
+// Contract was launched 25 MAR 2021.
+// Here's a timestamp rounding up to 26 MAR 2021.
+const TS_26MAR2021: Timestamp = 1616761700471;
 
 /// Prepare a test db and return corresponfing config.
 async fn prep_db(db_name: &str) -> PostgresConfig {
@@ -31,9 +44,70 @@ async fn prep_db(db_name: &str) -> PostgresConfig {
 }
 
 #[tokio::test]
-async fn test_empty_block() {
-    let pgconf = prep_db("sigmausd_empty_block").await;
-    let block = Block::dummy();
+async fn test_empty_block_pre_launch() {
+    let pgconf = prep_db("sigmausd_empty_block_pre").await;
+    let block = Block::dummy().height(100);
+    let data = CoreData { block };
+    let mut workflow = SigmaUSD::new(&pgconf).await;
+    workflow.include_block(&data).await;
+}
+
+#[tokio::test]
+async fn test_empty_block_post_launch() {
+    let pgconf = prep_db("sigmausd_empty_block_post").await;
+    let block = Block::dummy().height(CONTRACT_CREATION_HEIGHT + 100);
+    let data = CoreData { block };
+    let mut workflow = SigmaUSD::new(&pgconf).await;
+    workflow.include_block(&data).await;
+}
+
+#[tokio::test]
+async fn test_no_events() {
+    let pgconf = prep_db("sigmausd_no_events").await;
+    let block = Block::dummy()
+        .height(CONTRACT_CREATION_HEIGHT + 100)
+        .timestamp(TS_26MAR2021);
+    let data = CoreData { block };
+    let mut workflow = SigmaUSD::new(&pgconf).await;
+    workflow.include_block(&data).await;
+}
+
+#[tokio::test]
+async fn test_with_events() {
+    let pgconf = prep_db("sigmausd_with_events").await;
+    let user: AddressID = 12345;
+    let block = Block::dummy()
+        .height(CONTRACT_CREATION_HEIGHT + 100)
+        .timestamp(TS_26MAR2021)
+        // User mints 200 SigUSD for 100 ERG
+        .add_tx(
+            Transaction::dummy()
+                // Bank input
+                .add_input(
+                    Input::dummy()
+                        .address_id(CONTRACT_ADDRESS_ID)
+                        .value(1000_000_000_000)
+                        .add_asset(BANK_NFT, 1)
+                        .add_asset(SC_TOKEN_ID, 500_00),
+                )
+                // User input
+                .add_input(Input::dummy().address_id(user).value(5000_000_000_000))
+                // Bank output
+                .add_output(
+                    Output::dummy()
+                        .address_id(CONTRACT_ADDRESS_ID)
+                        .value(1100_000_000_000)
+                        .add_asset(BANK_NFT, 1)
+                        .add_asset(SC_TOKEN_ID, 300_00),
+                )
+                // User output
+                .add_output(
+                    Output::dummy()
+                        .address_id(user)
+                        .value(4900_000_000_000)
+                        .add_asset(SC_TOKEN_ID, 200_00),
+                ),
+        );
     let data = CoreData { block };
     let mut workflow = SigmaUSD::new(&pgconf).await;
     workflow.include_block(&data).await;

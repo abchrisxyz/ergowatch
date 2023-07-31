@@ -37,7 +37,7 @@ pub(super) async fn insert(pgtx: &Transaction<'_>, hr: &HistoryRecord) {
             circ_rc,
             reserves,
             sc_nano_net,
-            rc_nano_net,
+            rc_nano_net
         ) values ($1, $2, $3, $4, $5, $6, $7);
     ";
     pgtx.execute(
