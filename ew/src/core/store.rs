@@ -350,8 +350,11 @@ async fn compile_address_ids(
         for input in &tx.inputs {
             // tracing::debug!("input box_id: {}", input.box_id);
             let utxo = &input_boxes[&input.box_id];
-            let address = ergo::ergo_tree::base16_to_address(&utxo.output.ergo_tree);
-            if !ids.contains_key(&address) {
+            if !ids.contains_key(&utxo.output.ergo_tree) {
+                let address = ergo::ergo_tree::base16_to_address(&utxo.output.ergo_tree);
+                let address_id = addresses::get_id(&pgtx, &address).await;
+                ids.insert(utxo.output.ergo_tree.clone(), address_id);
+            }
                 let address_id = addresses::get_id(&pgtx, &address).await;
                 ids.insert(utxo.output.ergo_tree.clone(), address_id);
             }
