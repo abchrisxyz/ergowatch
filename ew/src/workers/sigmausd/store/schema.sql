@@ -9,7 +9,7 @@ create table sigmausd._meta (
 insert into sigmausd._meta (rev_major, rev_minor) values (1, 0);
 
 -- Selected header fields from included blocks.
--- Would be available from core.headers too but we try to keep schemas self contained.
+-- Would be available from core.blocks headers too but we try to keep schemas self contained.
 create table sigmausd.headers (
     height integer primary key not null,
     timestamp bigint not null,
