@@ -10,7 +10,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Gives some time to tracing subscriber
 async fn sleep_some() {
     let ms = 100;
-    tracing::info!("sleeping {ms}ms");
+    tracing::debug!("sleeping {ms}ms");
     tokio::time::sleep(tokio::time::Duration::from_millis(ms)).await;
 }
 
