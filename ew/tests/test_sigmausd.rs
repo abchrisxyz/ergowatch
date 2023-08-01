@@ -117,6 +117,7 @@ async fn test_sc_minting() {
 async fn test_rollback() {
     let pgconf = prep_db("sigmausd_rollback").await;
     let user: AddressID = 12345;
+    let service: AddressID = 6789;
     let height = CONTRACT_CREATION_HEIGHT + 100;
     let block = Block::dummy()
         .height(height)
@@ -125,7 +126,7 @@ async fn test_rollback() {
         // delere the only weekly/monthy record that exists (the ones
         // defined in schema.sql).
         .timestamp(TS_01APR2021)
-        // User mints 200 SigUSD for 100 ERG
+        // User mints 200 SigUSD for 100 ERG + 1 ERG service fee.
         .add_tx(
             Transaction::dummy()
                 // Bank input
@@ -150,9 +151,11 @@ async fn test_rollback() {
                 .add_output(
                     Output::dummy()
                         .address_id(user)
-                        .value(4900_000_000_000)
+                        .value(4899_000_000_000)
                         .add_asset(SC_TOKEN_ID, 200_00),
-                ),
+                )
+                // Service output
+                .add_output(Output::dummy().address_id(service).value(1_000_000_000)),
         )
         // Oracle posting
         .add_tx(

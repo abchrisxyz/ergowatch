@@ -4,7 +4,7 @@ use super::super::types::ServiceStats;
 
 pub(super) async fn upsert(pgtx: &Transaction<'_>, diff: &ServiceStats) {
     let sql = "
-        insert into sigmausd.services (
+        insert into sigmausd.services as t (
             address_id,
             tx_count,
             first_tx,
@@ -13,10 +13,10 @@ pub(super) async fn upsert(pgtx: &Transaction<'_>, diff: &ServiceStats) {
             volume
         ) values ($1, $2, $3, $4, $5, $6)
         on conflict (address_id) do update
-        set tx_count = tx_count + EXCLUDED.tx_count
+        set tx_count = t.tx_count + EXCLUDED.tx_count
             , last_tx = EXCLUDED.last_tx
-            , fees = fees + EXCLUDED.fees
-            , volume = volume + EXCLUDED.volume
+            , fees = t.fees + EXCLUDED.fees
+            , volume = t.volume + EXCLUDED.volume
         ;
     ";
     pgtx.execute(
