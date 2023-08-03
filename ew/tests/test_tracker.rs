@@ -14,6 +14,7 @@ use common::node_mockup::TestNode;
 use ew::core::tracking::Tracker;
 use ew::core::tracking::TrackingMessage;
 use ew::core::Node;
+use ew::monitor::Monitor;
 use tokio::sync::mpsc::error::TryRecvError;
 
 fn set_tracing_subscriber(set: bool) -> Option<tracing::dispatcher::DefaultGuard> {
@@ -119,7 +120,8 @@ async fn test_straight_chain_single_cursor() {
     // Configure tracker
     let node = Node::new("test-node", mock_node.url());
     let mut tracker = Tracker::new(node, prep_db("test_tracker_1").await).await;
-    let mut rx = tracker.add_cursor("C1".to_string(), Head::initial());
+    let monitor = Monitor::new();
+    let mut rx = tracker.add_cursor("C1".to_string(), Head::initial(), &monitor.sender());
 
     // Start tracker
     tokio::spawn(async move {
@@ -154,13 +156,16 @@ async fn test_straight_chain_three_cursors() {
     // Prepare empty db
     let pgconf = prep_db("test_tracker_2").await;
 
+    // Monitor
+    let monitor = Monitor::new();
+
     {
         // First, run a single cursor tracker to prepare the store.
         // Configure tracker
         let node = Node::new("test-node", mock_node.url());
         let mut tracker = Tracker::new(node, pgconf.clone()).await;
         // Cursor is at genesis
-        let mut rx = tracker.add_cursor("dummy".to_string(), Head::initial());
+        let mut rx = tracker.add_cursor("dummy".to_string(), Head::initial(), &monitor.sender());
 
         // Start tracker
         tokio::spawn(async move {
@@ -180,13 +185,15 @@ async fn test_straight_chain_three_cursors() {
     let mut rx_a = tracker.add_cursor(
         "A".to_string(),
         Head::new(5, TB::from_id("5").header_id().to_string()),
+        &monitor.sender(),
     );
     // Second cursor is at genesis
-    let mut rx_b = tracker.add_cursor("B".to_string(), Head::initial());
+    let mut rx_b = tracker.add_cursor("B".to_string(), Head::initial(), &monitor.sender());
     // Third cursor is at block 2
     let mut rx_c = tracker.add_cursor(
         "C".to_string(),
         Head::new(2, TB::from_id("2").header_id().to_string()),
+        &monitor.sender(),
     );
 
     // Start tracker
@@ -232,11 +239,13 @@ async fn test_fork_handling_not_a_child() {
     // Configure tracker
     let node = Node::new("test-node", mock_node.url());
     let mut tracker = Tracker::new(node, prep_db("test_tracker_3").await).await;
+    let monitor = Monitor::new();
     // Assuming we've included 1, 2 and 3bis so far
     // Next block will be 4, which isn't a child of 3bis
     let mut rx = tracker.add_cursor(
         "C1".to_string(),
         Head::new(3, TB::from_id("3bis").header_id().to_owned()),
+        &monitor.sender(),
     );
 
     // Start tracker
@@ -274,7 +283,8 @@ async fn test_fork_handling_same_height() {
         prep_db("test_tracker_4").await,
     )
     .await;
-    let mut rx = tracker.add_cursor("C1".to_string(), Head::initial());
+    let monitor = Monitor::new();
+    let mut rx = tracker.add_cursor("C1".to_string(), Head::initial(), &monitor.sender());
 
     // Start tracker
     tokio::spawn(async move {

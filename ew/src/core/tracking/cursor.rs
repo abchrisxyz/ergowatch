@@ -10,6 +10,7 @@ use crate::core::types::CoreData;
 use crate::core::types::Head;
 use crate::core::types::Header;
 use crate::core::types::HeaderID;
+use crate::monitor::MonitorMessage;
 
 pub(super) struct Cursor {
     pub(super) name: String,
@@ -19,6 +20,7 @@ pub(super) struct Cursor {
     /// MPSC channel senders
     pub(super) txs: Vec<mpsc::Sender<TrackingMessage>>,
     pub polling_interval: tokio::time::Duration,
+    pub monitor_tx: mpsc::Sender<MonitorMessage>,
 }
 
 impl Cursor {
@@ -175,6 +177,10 @@ impl Cursor {
         // Update position
         self.height += 1;
         self.header_id = header_id.clone();
+        self.monitor_tx
+            .send(MonitorMessage::CoreUpdate((self.height)))
+            .await
+            .unwrap();
     }
 
     /// Submit block for roll back and update cursor

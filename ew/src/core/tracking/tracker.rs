@@ -7,6 +7,7 @@ use crate::core::store::Store;
 use crate::core::tracking::cursor::Cursor;
 use crate::core::tracking::messages::TrackingMessage;
 use crate::core::types::Head;
+use crate::monitor::MonitorMessage;
 
 /// The capacity of mpsc channels used to communicate tracking events
 const CHANNEL_CAPACITY: usize = 8;
@@ -32,7 +33,12 @@ impl Tracker {
         }
     }
 
-    pub fn add_cursor<'a>(&mut self, name: String, head: Head) -> mpsc::Receiver<TrackingMessage> {
+    pub fn add_cursor<'a>(
+        &mut self,
+        name: String,
+        head: Head,
+        monitor_tx: &mpsc::Sender<MonitorMessage>,
+    ) -> mpsc::Receiver<TrackingMessage> {
         // Create new channel
         let (tx, rx) = mpsc::channel(CHANNEL_CAPACITY);
 
@@ -64,6 +70,7 @@ impl Tracker {
             node: self.node.clone(),
             txs: vec![tx],
             polling_interval: tokio::time::Duration::from_millis(5000),
+            monitor_tx: monitor_tx.clone(),
         };
         self.cursors.push(cur);
         rx

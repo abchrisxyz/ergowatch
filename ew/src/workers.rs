@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 
 use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::Sender;
 
 use crate::config::PostgresConfig;
 use crate::core::tracking::Tracker;
@@ -9,6 +10,7 @@ use crate::core::types::CoreData;
 use crate::core::types::Head;
 use crate::core::types::Height;
 use crate::core::types::Output;
+use crate::monitor::MonitorMessage;
 
 pub mod sigmausd;
 
@@ -36,18 +38,25 @@ pub struct Worker<W: Workflow> {
     id: String,
     rx: Receiver<TrackingMessage>,
     workflow: W,
+    monitor_tx: Sender<MonitorMessage>,
 }
 
 impl<W: Workflow> Worker<W> {
-    pub async fn new(id: &str, pgconf: &PostgresConfig, tracker: &mut Tracker) -> Self {
+    pub async fn new(
+        id: &str,
+        pgconf: &PostgresConfig,
+        tracker: &mut Tracker,
+        monitor_tx: Sender<MonitorMessage>,
+    ) -> Self {
         let workflow = W::new(pgconf).await;
         let head = workflow.head();
-        let rx = tracker.add_cursor(id.to_owned(), head.clone());
+        let rx = tracker.add_cursor(id.to_owned(), head.clone(), &monitor_tx);
 
         Self {
             id: String::from(id),
             rx,
             workflow,
+            monitor_tx,
         }
     }
 
@@ -69,7 +78,9 @@ impl<W: Workflow> Worker<W> {
                             assert_eq!(data.block.header.height, head.height + 1);
                             assert_eq!(data.block.header.parent_id, head.header_id);
                             // All good, proceed
-                            self.workflow.include_block(&data).await
+                            let height = head.height;
+                            self.workflow.include_block(&data).await;
+                            self.monitor_tx.send(MonitorMessage::WorkerUpdate(height)).await.unwrap();
                         },
                         TrackingMessage::Rollback(height) => {
                             let head = self.workflow.head();

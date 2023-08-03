@@ -3,6 +3,7 @@ use tokio;
 
 use ew::core::tracking::Tracker;
 use ew::core::Node;
+use ew::monitor::Monitor;
 use ew::workers;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -42,13 +43,22 @@ async fn main() -> Result<(), &'static str> {
     let node_url = env::var("EW_NODE_URL").unwrap();
     tracing::info!("found EW_NODE_URL environment variable");
 
+    let mut monitor = Monitor::new();
+
     tracing::info!("configuring tracker");
     let node = Node::new("local-node", &node_url);
     let pgconf = ew::config::PostgresConfig::new(&pg_uri);
     let mut tracker = Tracker::new(node, pgconf.clone()).await;
 
     // Workers - just one for now
-    let mut sigmausd = workers::sigmausd::Worker::new("sigmausd", &pgconf, &mut tracker).await;
+    let mut sigmausd =
+        workers::sigmausd::Worker::new("sigmausd", &pgconf, &mut tracker, monitor.sender()).await;
+
+    // Start monitor
+    tokio::spawn(async move {
+        monitor.start().await;
+        sleep_some().await;
+    });
 
     // Start tracker
     tokio::spawn(async move {

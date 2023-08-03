@@ -10,6 +10,7 @@ test-utilities = ["dep:rand"]
 default = ["test-utilities"]
 
 [dependencies]
+axum = { version = "0.6" }
 async-trait = "0.1.71"
 base16 = "0.2.1"
 ergotree-ir = "0.22.0"
