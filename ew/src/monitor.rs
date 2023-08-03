@@ -10,14 +10,46 @@ use crate::core::types::Height;
 
 #[derive(Debug)]
 pub enum MonitorMessage {
-    WorkerUpdate(Height),
-    CoreUpdate(Height),
+    Worker(Height),
+    Cursor(CursorMessage),
 }
 
+#[derive(Debug)]
+pub struct CursorMessage {
+    // name: String,
+    height: Height,
+    time_node_mus: u128,
+    time_store_mus: u128,
+    time_total_mus: u128,
+}
+
+impl CursorMessage {
+    pub fn new(
+        // name: String,
+        height: Height,
+        time_node_mus: u128,
+        time_store_mus: u128,
+        time_total_mus: u128,
+    ) -> Self {
+        Self {
+            // name,
+            height,
+            time_node_mus,
+            time_store_mus,
+            time_total_mus,
+        }
+    }
+}
+
+// TODO: supoprt multiple cursors
 #[derive(Default)]
 struct MonitorData {
     /// Height of last processed block
     pub core_height: Height,
+    pub blocks_since_start: i32,
+    pub core_micros_node: u128,
+    pub core_micros_store: u128,
+    pub core_micros_total: u128,
     /// Height of last processed block
     pub sigmausd_height: Height,
 }
@@ -46,10 +78,15 @@ impl Monitor {
 
         loop {
             match self.rx.recv().await.expect("some message") {
-                MonitorMessage::CoreUpdate(h) => {
-                    state.write().unwrap().core_height = h;
+                MonitorMessage::Cursor(cm) => {
+                    let mut data = state.write().unwrap();
+                    data.core_height = cm.height;
+                    data.blocks_since_start += 1;
+                    data.core_micros_node += cm.time_node_mus;
+                    data.core_micros_store += cm.time_store_mus;
+                    data.core_micros_total += cm.time_total_mus;
                 }
-                MonitorMessage::WorkerUpdate(h) => {
+                MonitorMessage::Worker(h) => {
                     state.write().unwrap().sigmausd_height = h;
                 }
             };
@@ -81,7 +118,7 @@ async fn status(Extension(state): Extension<SharedState>) -> String {
     let data = &state.read().unwrap();
 
     format!(
-        "core height: {}\nsigmausd:    {}",
-        data.core_height, data.sigmausd_height
+        "core height: {}\nsigmausd:    {}\n\nblocks since start: {}\n\ncursor timers:\n  node : {}s\n  store: {}s\n  total: {}s",
+        data.core_height, data.sigmausd_height, data.blocks_since_start, data.core_micros_node / 1_000_000, data.core_micros_store / 1_000_000, data.core_micros_total / 1_000_000
     )
 }

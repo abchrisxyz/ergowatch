@@ -123,8 +123,6 @@ impl Store {
     ///
     /// Skips inclusion if block already processed.
     pub(super) async fn process(&mut self, height: Height, text_block: String) -> CoreData {
-        // check block is child of parent and store json or skip if one of parents
-
         // Parse into node block
         let node_block: node::models::Block = serde_json::from_str(&text_block).unwrap();
         assert_eq!(height, node_block.header.height);

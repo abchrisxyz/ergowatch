@@ -10,6 +10,7 @@ use crate::core::types::CoreData;
 use crate::core::types::Head;
 use crate::core::types::Header;
 use crate::core::types::HeaderID;
+use crate::monitor::CursorMessage;
 use crate::monitor::MonitorMessage;
 
 pub(super) struct Cursor {
@@ -165,8 +166,14 @@ impl Cursor {
             header_id,
             self.height + 1
         );
+        let timer = std::time::Instant::now();
+
         let block_json_string: String = self.node.api.block_raw(header_id).await.unwrap();
+        let microsecs_node = timer.elapsed().as_micros();
+
         let core_data: CoreData = store.process(self.height + 1, block_json_string).await;
+        let microsecs_store = timer.elapsed().as_micros() - microsecs_node;
+
         let payload = Arc::new(core_data);
         // Broadcast inclusion of next block
         for tx in &self.txs {
@@ -177,8 +184,16 @@ impl Cursor {
         // Update position
         self.height += 1;
         self.header_id = header_id.clone();
+
+        // Notify monitor
         self.monitor_tx
-            .send(MonitorMessage::CoreUpdate(self.height))
+            .send(MonitorMessage::Cursor(CursorMessage::new(
+                // self.name.clone(),
+                self.height,
+                microsecs_node,
+                microsecs_store,
+                timer.elapsed().as_micros(),
+            )))
             .await
             .unwrap();
     }

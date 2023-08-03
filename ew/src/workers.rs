@@ -80,7 +80,7 @@ impl<W: Workflow> Worker<W> {
                             // All good, proceed
                             let height = head.height;
                             self.workflow.include_block(&data).await;
-                            self.monitor_tx.send(MonitorMessage::WorkerUpdate(height)).await.unwrap();
+                            self.monitor_tx.send(MonitorMessage::Worker(height)).await.unwrap();
                         },
                         TrackingMessage::Rollback(height) => {
                             let head = self.workflow.head();
