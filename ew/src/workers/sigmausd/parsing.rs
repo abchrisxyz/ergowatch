@@ -465,7 +465,7 @@ fn extract_service_diffs(timestamp: Timestamp, events: &Vec<Event>) -> Vec<Servi
                     first_tx: timestamp,
                     last_tx: timestamp,
                     fees: btx.service_fee.into(),
-                    volume: btx.reserves_diff.into(),
+                    volume: btx.reserves_diff.abs().into(),
                 });
             }
         }
@@ -481,6 +481,7 @@ mod tests {
     use crate::core::types::Input;
     use crate::core::types::Output;
     use crate::core::types::Transaction;
+    use rust_decimal::Decimal;
     use time::macros::date;
 
     #[test]
@@ -1124,5 +1125,65 @@ mod tests {
         assert_eq!(ds.len(), 6);
         assert_eq!(ws.len(), 1);
         assert_eq!(ms.len(), 1);
+    }
+
+    #[test]
+    fn test_extract_service_diffs() {
+        let service_a: AddressID = 123451;
+        let service_b: AddressID = 123452;
+        let events = vec![
+            Event::BankTx(BankTransaction {
+                index: 1,
+                height: 600_000,
+                reserves_diff: 1000,
+                circ_sc_diff: 100,
+                circ_rc_diff: 0,
+                box_id: "dummy1".into(),
+                service_fee: 2,
+                service_address_id: Some(service_a),
+            }),
+            Event::BankTx(BankTransaction {
+                index: 2,
+                height: 600_000,
+                reserves_diff: 2000,
+                circ_sc_diff: 200,
+                circ_rc_diff: 0,
+                box_id: "dummy2".into(),
+                service_fee: 4,
+                service_address_id: Some(service_b),
+            }),
+            Event::BankTx(BankTransaction {
+                index: 3,
+                height: 600_000,
+                reserves_diff: -500,
+                circ_sc_diff: 0,
+                circ_rc_diff: 100,
+                box_id: "dummy3".into(),
+                service_fee: 1,
+                service_address_id: Some(service_a),
+            }),
+        ];
+        let timestamp = 123456789;
+        let service_diffs = extract_service_diffs(timestamp, &events);
+        assert_eq!(service_diffs.len(), 3);
+        assert_eq!(service_diffs[0].address_id, service_a);
+
+        assert_eq!(service_diffs[0].fees, Decimal::from(2));
+        assert_eq!(service_diffs[0].first_tx, timestamp);
+        assert_eq!(service_diffs[0].last_tx, timestamp);
+        assert_eq!(service_diffs[0].volume, Decimal::from(1000));
+
+        assert_eq!(service_diffs[1].address_id, service_b);
+        assert_eq!(service_diffs[1].fees, Decimal::from(4));
+        assert_eq!(service_diffs[1].first_tx, timestamp);
+        assert_eq!(service_diffs[1].last_tx, timestamp);
+        assert_eq!(service_diffs[1].volume, Decimal::from(2000));
+
+        assert_eq!(service_diffs[2].address_id, service_a);
+        assert_eq!(service_diffs[2].fees, Decimal::from(1));
+        assert_eq!(service_diffs[2].first_tx, timestamp);
+        assert_eq!(service_diffs[2].last_tx, timestamp);
+        // Volume diffs always positive
+        assert_eq!(service_diffs[2].volume, Decimal::from(500));
     }
 }
