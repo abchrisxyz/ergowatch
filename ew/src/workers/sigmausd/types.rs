@@ -151,18 +151,6 @@ impl DailyOHLC {
             .date()
     }
 
-    /// Returns a copy with date modified according to timestamp
-    pub fn with_timestamp(&self, t: Timestamp) -> Self {
-        let date = Self::date_from_timestamp(t);
-        Self(OHLC {
-            t: date,
-            o: self.0.o,
-            h: self.0.h,
-            l: self.0.l,
-            c: self.0.c,
-        })
-    }
-
     /// Generate daily OHLC series from `since` up to `self`.
     /// Merges `since` and `self` if both are on the same day.
     pub fn fill_since(self, since: &Self) -> Vec<Self> {

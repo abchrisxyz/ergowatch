@@ -50,11 +50,6 @@ impl TestBlock {
         &self.block.header.id
     }
 
-    /// Returns block's parent header id
-    pub fn parent_id(&self) -> &str {
-        &self.block.header.parent_id
-    }
-
     /// Returns block's height
     pub fn height(&self) -> i32 {
         self.block.header.height

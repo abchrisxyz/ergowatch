@@ -78,5 +78,5 @@ async fn main() -> Result<(), &'static str> {
     _ = tokio::signal::ctrl_c().await;
     tracing::info!("exiting");
     todo!("clean shutdown");
-    Ok(())
+    // Ok(())
 }

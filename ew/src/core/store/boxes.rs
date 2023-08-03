@@ -36,25 +36,6 @@ pub(super) async fn insert_many<'a>(pgtx: &Transaction<'_>, records: Vec<BoxInde
             .unwrap();
     }
 }
-/// Returns collection of UTxO's ordered as in `box_ids`
-pub(super) async fn get_boxes(pgtx: &Transaction<'_>, box_ids: Vec<BoxID>) -> Vec<UTxO> {
-    tracing::debug!("retrieving input boxes");
-    let qry = "
-        select bx.height
-            , bk.block -> 'header' -> 'timestamp'
-            , bk.block -> 'blockTransactions' -> 'transactions' -> bx.tx_index -> 'outputs' -> bx.output_index as box
-        from core.boxes bx
-        join core.blocks bk on bk.height = bx.height
-        where bx.box_id = any($1);";
-    let rows = pgtx.query(qry, &[&box_ids]).await.unwrap();
-    rows.into_iter()
-        .map(|row| UTxO {
-            height: row.get(0),
-            timestamp: serde_json::from_value(row.get(1)).unwrap(),
-            output: serde_json::from_value(row.get(2)).unwrap(),
-        })
-        .collect()
-}
 
 /// Maps `box_ids` to corresponding UTxO's.
 pub(super) async fn map_boxes(

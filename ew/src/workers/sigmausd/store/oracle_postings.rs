@@ -1,4 +1,3 @@
-use tokio_postgres::Client;
 use tokio_postgres::Transaction;
 
 use super::super::types::OraclePosting;

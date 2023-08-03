@@ -178,7 +178,7 @@ impl Cursor {
         self.height += 1;
         self.header_id = header_id.clone();
         self.monitor_tx
-            .send(MonitorMessage::CoreUpdate((self.height)))
+            .send(MonitorMessage::CoreUpdate(self.height))
             .await
             .unwrap();
     }

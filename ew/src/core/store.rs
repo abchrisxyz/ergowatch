@@ -289,9 +289,10 @@ impl Store {
             .collect()
     }
 
-    async fn include(&mut self, h: Height, str_block: &str) {
-        todo!()
-    }
+    // TODO: separate block indexing (new blocks only) from expansion logic (any block)
+    // async fn include(&mut self, h: Height, str_block: &str) {
+    //     todo!()
+    // }
 }
 
 /// Extract box indices for all outputs in a node block
