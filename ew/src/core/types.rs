@@ -32,7 +32,7 @@ pub struct Block {
     pub transactions: Vec<Transaction>,
     // pub transactions_size: i32,
     pub extension: node::models::Extension,
-    pub ad_proofs: node::models::ADProofs,
+    // pub ad_proofs: node::models::ADProofs,
     pub size: i32,
 }
 
@@ -229,7 +229,7 @@ fn decode_register(value: &serde_json::Value, id: i16) -> Option<Register> {
 #[cfg(feature = "test-utilities")]
 pub mod testutils {
     pub use super::*;
-    use crate::core::node::models::ADProofs;
+    // use crate::core::node::models::ADProofs;
     use crate::core::node::models::Asset;
     use crate::core::node::models::Extension;
     use crate::core::node::models::POWSolutions;
@@ -250,12 +250,12 @@ pub mod testutils {
                     digest: random_digest32(),
                     fields: vec![],
                 },
-                ad_proofs: ADProofs {
-                    header_id: random_digest32(),
-                    proof_bytes: "".to_string(),
-                    digest: random_digest32(),
-                    size: 7112,
-                },
+                // ad_proofs: ADProofs {
+                //     header_id: random_digest32(),
+                //     proof_bytes: "".to_string(),
+                //     digest: random_digest32(),
+                //     size: 7112,
+                // },
                 size: 8488,
             }
         }

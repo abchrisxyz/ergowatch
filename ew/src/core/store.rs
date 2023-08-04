@@ -212,7 +212,7 @@ impl Store {
                 })
                 .collect(),
             extension: node_block.extension,
-            ad_proofs: node_block.ad_proofs,
+            // ad_proofs: node_block.ad_proofs,
             size: node_block.size,
         };
 

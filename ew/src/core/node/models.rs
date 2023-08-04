@@ -24,7 +24,7 @@ pub struct Block {
     pub header: Header,
     pub block_transactions: BlockTransactions,
     pub extension: Extension,
-    pub ad_proofs: ADProofs,
+    // pub ad_proofs: ADProofs,
     pub size: i32,
 }
 
