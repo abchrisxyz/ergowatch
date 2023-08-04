@@ -451,6 +451,7 @@ fn generate_ohlc_records(
     )
 }
 
+// TODO: include None for direct txs
 fn extract_service_diffs(timestamp: Timestamp, events: &Vec<Event>) -> Vec<ServiceStats> {
     let mut diffs = vec![];
     for event in events {
