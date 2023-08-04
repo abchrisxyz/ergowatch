@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use std::collections::HashMap;
 
 use super::constants::BANK_NFT;
@@ -247,23 +248,9 @@ fn extract_bank_tx(tx: &Transaction, height: Height, bank_tx_count: &mut i32) ->
         assert!(circ_sc_diff < 0 || circ_rc_diff < 0)
     }
 
-    // Assuming any address receiving erg only could be a service provider
-    // Above works for minting txs, not for redeeming ones.
-    /*
-    Minting:
-        0 -> direct
-        1 -> service
-        2 -> undefined
-    Redeeming:
-        0 -> not possible
-        1 -> direct
-        2 -> lowest diff is service
-        3 -> undefined
-    */
-
     let (service_fee, service_address_id) = match reserves_diff > 0 {
         true => extract_service_from_minting_tx_diffs(&erg_diffs, &sc_diffs, &rc_diffs, &tx.id),
-        false => extract_service_from_redeeming_tx_diffs(&erg_diffs, &tx.id),
+        false => extract_service_from_redeeming_tx_diffs(&erg_diffs, &tx),
     };
 
     // Now build the event
@@ -322,40 +309,50 @@ fn extract_service_from_minting_tx_diffs(
 
 fn extract_service_from_redeeming_tx_diffs(
     erg_diffs: &HashMap<i64, i64>,
-    tx_id: &Digest32,
+    tx: &Transaction,
 ) -> (NanoERG, Option<AddressID>) {
-    // Redeeming txs
-    let mut service_candidates: Vec<&AddressID> = erg_diffs
-        .keys()
-        // Exclude bank and fee addresses
-        .filter(|ai| **ai != CONTRACT_ADDRESS_ID && **ai != NETWORK_FEE_ADDRESS_ID)
-        // Keep addresses credited with erg (positive diffs).
-        // Keys are guaranteed to exists because we're iterating over them.
-        .filter(|ai| erg_diffs[ai] > 0)
+    // List unique output address id's
+    let service_candidates: Vec<AddressID> = tx
+        .outputs
+        .iter()
+        .map(|output| output.address_id)
+        .filter(|ai| *ai != CONTRACT_ADDRESS_ID)
+        .filter(|ai| *ai != NETWORK_FEE_ADDRESS_ID)
+        .unique()
         .collect();
 
-    // Redeeming transactions will have at least one address
-    // with a positive erg diff (redeemed erg).
-    assert!(service_candidates.len() >= 1);
-    // Assuming the service fee is lower than the redeemed amount,
-    // drop the address with the highest erg diff.
-    service_candidates.sort_by_key(|ai| erg_diffs[ai]);
-    service_candidates.pop();
+    // TODO: check redeemed amount vs network fee (+potential service fee) ?
 
     match service_candidates.len() {
-        // Direct interaction - no service involved.
-        0 => (0, None),
-        // This looks like a service.
-        1 => {
-            let ai = service_candidates[0];
-            let fee = erg_diffs[ai];
-            (fee, Some(*ai))
+        0 => {
+            // Could be empty if no service and redeemed amount == tx fee...
+            (0, None)
         }
-        // Unnable to tell what's going on here - log and ignore.
+        1 => {
+            // Only one address in outputs, so can't be a service.
+            // Or corner case where redeemed amount = service + tx fee,
+            // which we might as well ignore.
+            (0, None)
+        }
+        2 => {
+            // Two candidates - assume smallest diff is service fee
+            let ai0 = service_candidates[0];
+            let ai1 = service_candidates[1];
+            let diff0 = erg_diffs[&ai0];
+            let diff1 = erg_diffs[&ai1];
+            assert!(diff0 > 0);
+            assert!(diff1 > 0);
+            if diff0 > diff1 {
+                (diff1, Some(ai1))
+            } else {
+                (diff0, Some(ai0))
+            }
+        }
         _ => {
+            // More than two candidates, can't tell them apart - log and ignore
             tracing::warn!(
                 "multiple service candidates in redeeming transaction {}",
-                tx_id
+                tx.id
             );
             (0, None)
         }
@@ -857,6 +854,54 @@ mod tests {
                 assert_eq!(btx.circ_rc_diff, -200);
                 assert_eq!(btx.service_fee, 2);
                 assert_eq!(btx.service_address_id, Some(service));
+            }
+            _ => {
+                panic!("fail")
+            }
+        }
+        assert_eq!(new_bank_tx_count, bank_tx_count + 1);
+    }
+
+    #[test]
+    fn test_extract_event_rc_redeem_less_than_fee_to_same_address_direct() {
+        // User redeems 1 SigRSV for 1 nanoERG with 9 nanoERG tx fee
+        let user: AddressID = 12345;
+        let bank_input = Input::dummy()
+            .address_id(CONTRACT_ADDRESS_ID)
+            .value(1001)
+            .add_asset(BANK_NFT, 1)
+            .add_asset(RC_TOKEN_ID, 500);
+        let bank_output = Output::dummy()
+            .address_id(CONTRACT_ADDRESS_ID)
+            .value(1000)
+            .add_asset(BANK_NFT, 1)
+            .add_asset(RC_TOKEN_ID, 501);
+        let user_input = Input::dummy()
+            .address_id(user)
+            .value(5010)
+            .add_asset(RC_TOKEN_ID, 1);
+        let user_output = Output::dummy().address_id(user).value(5000);
+        let fee_output = Output::dummy().address_id(NETWORK_FEE_ADDRESS_ID).value(9);
+
+        let tx = Transaction::dummy()
+            .add_input(bank_input)
+            .add_input(user_input)
+            .add_output(bank_output)
+            .add_output(user_output)
+            .add_output(fee_output);
+
+        let height = 600;
+        let bank_tx_count = 5;
+        let mut new_bank_tx_count = bank_tx_count;
+        match extract_event(&tx, height, &mut new_bank_tx_count).unwrap() {
+            Event::BankTx(btx) => {
+                assert_eq!(btx.height, height);
+                assert_eq!(btx.box_id, tx.outputs[0].box_id);
+                assert_eq!(btx.reserves_diff, -1);
+                assert_eq!(btx.circ_sc_diff, 0);
+                assert_eq!(btx.circ_rc_diff, -1);
+                assert_eq!(btx.service_fee, 0);
+                assert_eq!(btx.service_address_id, None);
             }
             _ => {
                 panic!("fail")
