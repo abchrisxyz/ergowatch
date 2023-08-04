@@ -71,7 +71,7 @@ pub(super) async fn map_boxes(
 pub(super) async fn get_genesis_boxes(pgtx: &Transaction<'_>) -> Vec<node::models::Output> {
     tracing::debug!("retrieving genesis boxes");
     let qry = "
-        select json_array_elements(block -> 'blockTransactions' -> 'transactions' -> 0 -> 'outputs') as boxes
+        select jsonb_array_elements(block -> 'blockTransactions' -> 'transactions' -> 0 -> 'outputs') as boxes
         from core.blocks
         where height = 0;";
     let rows = pgtx.query(qry, &[]).await.unwrap();

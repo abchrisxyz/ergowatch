@@ -11,7 +11,7 @@ insert into core._meta (rev_major, rev_minor) values (1, 0);
 
 create table core.blocks (
     height integer primary key not null,
-    block json
+    block jsonb
 );
 
 create table core.boxes (
