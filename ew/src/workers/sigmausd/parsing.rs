@@ -340,12 +340,38 @@ fn extract_service_from_redeeming_tx_diffs(
             let ai1 = service_candidates[1];
             let diff0 = erg_diffs[&ai0];
             let diff1 = erg_diffs[&ai1];
-            assert!(diff0 > 0);
             assert!(diff1 > 0);
-            if diff0 > diff1 {
-                (diff1, Some(ai1))
+
+            // Label both addresses as lo/hi depending on their net diff.
+            // lo is the one with the smaller diff,
+            // hi is the other one.
+            let (lo, hi) = if diff0 < diff1 {
+                ((diff0, ai0), (diff1, ai1))
+            } else if diff0 > diff1 {
+                ((diff1, ai1), (diff0, ai0))
             } else {
-                (diff0, Some(ai0))
+                // Same net diffs, so can't tell them appart.
+                // Could be resolved by checking if one of them was flagged as a service before.
+                // Ignoring for now as it is rare and low impact.
+                tracing::warn!(
+                    "ignoring two service candidates with equal balance diffs in tx {}",
+                    tx.id
+                );
+                return (0, None);
+            };
+
+            // Highest diff expected to be always positive
+            assert!(hi.0 > 0);
+
+            // Need to check lowest diff sign as it could be negative
+            // if the redeemed amount doesn't cover fees.
+            if lo.0 > 0 {
+                // In most casese the lowest diff is positive and we assume it is the service fee.
+                (lo.0, Some(lo.1))
+            } else {
+                // But sometimes, when redeemed amount is less than fees, lowest diff is negative
+                // and so the other address (which has a positive diff) must be the service.
+                (hi.0, Some(hi.1))
             }
         }
         _ => {
