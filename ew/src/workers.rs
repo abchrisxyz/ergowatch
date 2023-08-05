@@ -11,6 +11,7 @@ use crate::core::types::Head;
 use crate::core::types::Height;
 use crate::core::types::Output;
 use crate::monitor::MonitorMessage;
+use crate::monitor::WorkerMessage;
 
 pub mod sigmausd;
 
@@ -78,9 +79,7 @@ impl<W: Workflow> Worker<W> {
                             assert_eq!(data.block.header.height, head.height + 1);
                             assert_eq!(data.block.header.parent_id, head.header_id);
                             // All good, proceed
-                            let height = head.height;
                             self.workflow.include_block(&data).await;
-                            self.monitor_tx.send(MonitorMessage::Worker(height)).await.unwrap();
                         },
                         TrackingMessage::Rollback(height) => {
                             let head = self.workflow.head();
@@ -88,6 +87,14 @@ impl<W: Workflow> Worker<W> {
                             self.workflow.roll_back(height).await
                         },
                     };
+                    self.monitor_tx.send(
+                        MonitorMessage::Worker(
+                            WorkerMessage::new(
+                                self.id.clone(),
+                                self.workflow.head().height
+                            )
+                        )
+                    ).await.unwrap();
                 },
             }
         }

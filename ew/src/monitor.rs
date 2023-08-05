@@ -1,6 +1,9 @@
 use axum::extract::Extension;
 use axum::routing::get;
+use axum::Json;
 use axum::Router;
+use serde::Serialize;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -10,48 +13,80 @@ use crate::core::types::Height;
 
 #[derive(Debug)]
 pub enum MonitorMessage {
-    Worker(Height),
+    Worker(WorkerMessage),
     Cursor(CursorMessage),
 }
 
 #[derive(Debug)]
 pub struct CursorMessage {
-    // name: String,
+    name: String,
     height: Height,
-    time_node_mus: u128,
-    time_store_mus: u128,
-    time_total_mus: u128,
 }
 
 impl CursorMessage {
-    pub fn new(
-        // name: String,
-        height: Height,
-        time_node_mus: u128,
-        time_store_mus: u128,
-        time_total_mus: u128,
-    ) -> Self {
-        Self {
-            // name,
-            height,
-            time_node_mus,
-            time_store_mus,
-            time_total_mus,
-        }
+    pub fn new(name: String, height: Height) -> Self {
+        Self { name, height }
     }
 }
 
-// TODO: supoprt multiple cursors
-#[derive(Default)]
+#[derive(Debug, Serialize)]
+pub struct WorkerMessage {
+    name: String,
+    height: Height,
+}
+
+impl WorkerMessage {
+    pub fn new(name: String, height: Height) -> Self {
+        Self { name, height }
+    }
+}
+
+#[derive(Default, Serialize)]
 struct MonitorData {
-    /// Height of last processed block
-    pub core_height: Height,
-    pub blocks_since_start: i32,
-    pub core_micros_node: u128,
-    pub core_micros_store: u128,
-    pub core_micros_total: u128,
-    /// Height of last processed block
-    pub sigmausd_height: Height,
+    /// Cursor specific timers
+    cursors: HashMap<String, CursorStatus>,
+    /// Workers
+    workers: HashMap<String, Height>,
+}
+
+#[derive(Serialize, Clone)]
+struct CursorStatus {
+    height: Height,
+    blocks_since_start: i32,
+    /// Average blocks per second since start
+    bps_since_start: f32,
+    /// Blocks per second for last 100 blocks
+    bps_last_100: f32,
+
+    #[serde(skip_serializing)]
+    timer_since_start: std::time::Instant,
+    #[serde(skip_serializing)]
+    timer_last_100: std::time::Instant,
+}
+
+impl CursorStatus {
+    pub fn new() -> Self {
+        CursorStatus {
+            height: 0,
+            blocks_since_start: 0,
+            bps_since_start: 0f32,
+            bps_last_100: 0f32,
+            timer_since_start: std::time::Instant::now(),
+            timer_last_100: std::time::Instant::now(),
+        }
+    }
+
+    /// Save time elapsed since last update
+    pub fn update(&mut self, height: Height) {
+        self.height = height;
+        self.blocks_since_start += 1;
+        self.bps_since_start =
+            self.blocks_since_start as f32 / self.timer_since_start.elapsed().as_secs_f32();
+        if self.blocks_since_start % 100 == 0 {
+            self.bps_last_100 = 100f32 / self.timer_last_100.elapsed().as_secs_f32();
+            self.timer_last_100 = std::time::Instant::now();
+        }
+    }
 }
 
 type SharedState = Arc<RwLock<MonitorData>>;
@@ -78,16 +113,19 @@ impl Monitor {
 
         loop {
             match self.rx.recv().await.expect("some message") {
-                MonitorMessage::Cursor(cm) => {
+                MonitorMessage::Cursor(msg) => {
                     let mut data = state.write().unwrap();
-                    data.core_height = cm.height;
-                    data.blocks_since_start += 1;
-                    data.core_micros_node += cm.time_node_mus;
-                    data.core_micros_store += cm.time_store_mus;
-                    data.core_micros_total += cm.time_total_mus;
+                    data.cursors
+                        .entry(msg.name.clone())
+                        .and_modify(|cs| cs.update(msg.height))
+                        .or_insert(CursorStatus::new());
                 }
-                MonitorMessage::Worker(h) => {
-                    state.write().unwrap().sigmausd_height = h;
+                MonitorMessage::Worker(msg) => {
+                    let mut data = state.write().unwrap();
+                    data.workers
+                        .entry(msg.name)
+                        .and_modify(|h| *h = msg.height)
+                        .or_insert(msg.height);
                 }
             };
         }
@@ -114,11 +152,21 @@ impl Monitor {
     }
 }
 
-async fn status(Extension(state): Extension<SharedState>) -> String {
-    let data = &state.read().unwrap();
+#[derive(Serialize)]
+struct Status {
+    // cursors: Vec<CursorStatus>,
+    cursors: HashMap<String, CursorStatus>,
+    workers: Vec<WorkerMessage>,
+}
 
-    format!(
-        "core height: {}\nsigmausd:    {}\n\nblocks since start: {}\n\ncursor timers:\n  node : {}s\n  store: {}s\n  total: {}s",
-        data.core_height, data.sigmausd_height, data.blocks_since_start, data.core_micros_node / 1_000_000, data.core_micros_store / 1_000_000, data.core_micros_total / 1_000_000
-    )
+async fn status(Extension(state): Extension<SharedState>) -> Json<Status> {
+    let data = &state.read().unwrap();
+    // let cursors: Vec<CursorStatus> = data.cursors.values().cloned().collect();
+    let cursors: HashMap<String, CursorStatus> = data.cursors.clone();
+    let workers: Vec<WorkerMessage> = data
+        .workers
+        .iter()
+        .map(|(k, v)| WorkerMessage::new(k.clone(), *v))
+        .collect();
+    Json(Status { cursors, workers })
 }

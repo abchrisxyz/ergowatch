@@ -166,13 +166,10 @@ impl Cursor {
             header_id,
             self.height + 1
         );
-        let timer = std::time::Instant::now();
 
         let block_json_string: String = self.node.api.block_raw(header_id).await.unwrap();
-        let microsecs_node = timer.elapsed().as_micros();
 
         let core_data: CoreData = store.process(self.height + 1, block_json_string).await;
-        let microsecs_store = timer.elapsed().as_micros() - microsecs_node;
 
         let payload = Arc::new(core_data);
         // Broadcast inclusion of next block
@@ -188,11 +185,8 @@ impl Cursor {
         // Notify monitor
         self.monitor_tx
             .send(MonitorMessage::Cursor(CursorMessage::new(
-                // self.name.clone(),
+                self.name.clone(),
                 self.height,
-                microsecs_node,
-                microsecs_store,
-                timer.elapsed().as_micros(),
             )))
             .await
             .unwrap();
