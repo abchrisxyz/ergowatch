@@ -22,6 +22,16 @@ create table core.boxes (
 );
 create index on core.boxes using brin(height);
 
+-- Helper function to obtain tx_id from box_id.
+create function core.box_tx_id(_box_id text) returns text as '
+	select bk.block -> ''blockTransactions'' -> ''transactions'' -> bx.tx_index -> ''id''
+	from core.boxes bx
+	join core.blocks bk on bk.height = bx.height
+	where bx.box_id = $1;'
+    language sql
+    immutable
+    returns null on null input;
+
 create table core.addresses (
 	id bigint primary key not null,
 	spot_height int not null,
