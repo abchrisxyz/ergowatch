@@ -119,7 +119,7 @@ impl Store {
         pgtx.commit().await.unwrap();
     }
 
-    /// Inlude and expand block.
+    /// Include and expand block.
     ///
     /// Skips inclusion if block already processed.
     pub(super) async fn process(&mut self, height: Height, text_block: String) -> CoreData {
