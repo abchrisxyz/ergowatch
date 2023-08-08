@@ -167,9 +167,9 @@ impl Cursor {
             self.height + 1
         );
 
-        let block_json_string: String = self.node.api.block_raw(header_id).await.unwrap();
-
-        let core_data: CoreData = store.process(self.height + 1, block_json_string).await;
+        let block = self.node.api.block(header_id).await.unwrap();
+        assert_eq!(block.header.height, self.height + 1);
+        let core_data: CoreData = store.process(block).await;
 
         let payload = Arc::new(core_data);
         // Broadcast inclusion of next block

@@ -9,28 +9,29 @@ create table core._meta (
 );
 insert into core._meta (rev_major, rev_minor) values (1, 0);
 
-create table core.blocks (
+create table core.headers (
     height integer primary key not null,
-    block jsonb
+    timestamp bigint not null,
+    id text not null
+);
+
+-- Composite type representing a token balance
+create type asset as (
+	asset_id bigint,
+	amount bigint
 );
 
 create table core.boxes (
-	box_id text primary key not null,
+	box_id varchar(64) collate "C" primary key not null,
 	height integer not null,
-	tx_index integer not null,
-	output_index integer not null
+	creation_height integer not null,
+	address_id bigint not null,
+	value bigint not null,
+	size integer not null,
+	assets asset[], -- null when no assets
+	registers json not null
 );
 create index on core.boxes using brin(height);
-
--- Helper function to obtain tx_id from box_id.
-create function core.box_tx_id(_box_id text) returns text as '
-	select bk.block -> ''blockTransactions'' -> ''transactions'' -> bx.tx_index -> ''id''
-	from core.boxes bx
-	join core.blocks bk on bk.height = bx.height
-	where bx.box_id = $1;'
-    language sql
-    immutable
-    returns null on null input;
 
 create table core.addresses (
 	id bigint primary key not null,
@@ -51,6 +52,14 @@ create function core.address_id(_address text) returns bigint as '
     language sql
     immutable
     returns null on null input;
+
+create table core.tokens (
+	asset_id bigint primary key not null,
+	spot_height integer not null,
+	token_id varchar(64) not null
+);
+create index on core.tokens(token_id);
+create index on core.addresses using brin(spot_height);
 
 -- create table core.transactions (
 --     id bigint primary key not null,

@@ -6,10 +6,10 @@ mod types;
 use async_trait::async_trait;
 
 use crate::config::PostgresConfig;
+use crate::core::types::BoxData;
 use crate::core::types::CoreData;
 use crate::core::types::Head;
 use crate::core::types::Height;
-use crate::core::types::Output;
 use constants::CONTRACT_CREATION_HEIGHT;
 use parsing::Parser;
 use store::Store;
@@ -31,7 +31,7 @@ impl super::Workflow for SigmaUSD {
         Self { parser, store }
     }
 
-    async fn include_genesis_boxes(&mut self, _boxes: &Vec<Output>) {
+    async fn include_genesis_boxes(&mut self, _boxes: &Vec<BoxData>) {
         // Nothing to do here
     }
 

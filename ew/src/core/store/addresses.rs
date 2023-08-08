@@ -22,12 +22,6 @@ impl AddressRecord {
     }
 }
 
-/// Retrieve id of an existing address.
-pub(super) async fn get_id(pgtx: &Transaction<'_>, address: &Address) -> AddressID {
-    let qry = "select core.address_id($1);";
-    pgtx.query_one(qry, &[address]).await.unwrap().get(0)
-}
-
 /// Retrieve id of a possibly unknown address.
 pub(super) async fn get_id_opt(pgtx: &Transaction<'_>, address: &Address) -> Option<AddressID> {
     let qry = "select core.address_id($1);";

@@ -1,24 +1,25 @@
 mod addresses;
-mod blocks;
 mod boxes;
+mod headers;
 mod meta;
+mod tokens;
 
+use lru::LruCache;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use tokio_postgres::NoTls;
 
 use super::ergo;
 use super::node;
-use super::types::Address;
 use super::types::AddressID;
+use super::types::Asset;
+use super::types::AssetID;
 use super::types::Block;
+use super::types::BoxData;
 use super::types::BoxID;
 use super::types::CoreData;
-use super::types::ErgoTree;
+use super::types::Digest32;
 use super::types::Head;
 use super::types::Height;
-use super::types::Input;
-use super::types::Output;
 use super::types::Registers;
 use super::types::Transaction;
 use crate::config::PostgresConfig;
@@ -28,7 +29,44 @@ use crate::utils::Schema;
 pub(super) struct Store {
     client: tokio_postgres::Client,
     head: Head,
-    last_address_id: i64,
+    address_cache: AddressCache,
+    asset_cache: AssetCache,
+}
+
+#[derive(Debug)]
+/// Cached data to speed up ergo tree to address id conversion.
+struct AddressCache {
+    /// Keep track of highest address id
+    pub last_address_id: i64,
+    /// Maps ergo trees to an address id (global index)
+    pub lru: LruCache<String, AddressID>,
+}
+
+impl AddressCache {
+    pub fn new(last_address_id: i64) -> Self {
+        Self {
+            last_address_id,
+            lru: LruCache::new(std::num::NonZeroUsize::new(1000).unwrap()),
+        }
+    }
+}
+
+#[derive(Debug)]
+/// Cached asset id's to replace Digest32 token id's.
+struct AssetCache {
+    /// Keep track of highest address id
+    pub last_id: i64,
+    /// Maps Digest32 token id's corresponfing asset id.
+    pub lru: LruCache<Digest32, AssetID>,
+}
+
+impl AssetCache {
+    pub fn new(last_asset_id: AssetID) -> Self {
+        Self {
+            last_id: last_asset_id,
+            lru: LruCache::new(std::num::NonZeroUsize::new(1000).unwrap()),
+        }
+    }
 }
 
 impl Store {
@@ -47,14 +85,16 @@ impl Store {
         let schema = Schema::new("core", include_str!("store/schema.sql"));
         schema.init(&mut client).await;
 
-        let head = blocks::last_head(&client).await;
+        let head = headers::last_head(&client).await;
         tracing::debug!("head: {:?}", &head);
         let last_address_id = addresses::get_max_id(&mut client).await;
-        tracing::debug!(last_address_id);
+        let last_asset_id = tokens::get_max_id(&mut client).await;
+
         Self {
             client,
             head,
-            last_address_id,
+            address_cache: AddressCache::new(last_address_id),
+            asset_cache: AssetCache::new(last_asset_id),
         }
     }
 
@@ -68,116 +108,149 @@ impl Store {
         self.head = Head::genesis();
         let pgtx = self.client.transaction().await.unwrap();
 
-        // Store in dummy json block to be retrievable the same way as other boxes.
-        let block = String::from(format!(
-            r#"
-            {{
-                "header": {{
-                    "height": 0,
-                    "id": "0000000000000000000000000000000000000000000000000000000000000000",
-                    "timestamp": 1561978800000
-                }},
-                "blockTransactions": {{
-                    "transactions": [
-                        {{
-                            "outputs": {}
-                        }}
-                    ]
-                }}
-            }}"#,
-            &boxes
-        ));
-        blocks::insert(&pgtx, 0, block).await;
+        // Genesis timestamp
+        // TODO: factor this out into a constant
+        let timestamp = 1561978800000;
+        let height = self.head.height;
 
-        // Index boxes
+        // Index dummy header for genesis
+        headers::insert(&pgtx, self.head.height, timestamp, &self.head.header_id).await;
+
+        // Index genesis boxes
         let node_boxes: Vec<node::models::Output> = serde_json::from_str(&boxes).unwrap();
-
-        // manually insert box indices for genesis boxes (all have index zero, so enumerate)
-        let box_indices = node_boxes
-            .iter()
-            .enumerate()
-            .map(|(i, b)| boxes::BoxIndex {
-                box_id: &b.box_id,
-                height: 0,
-                tx_index: 0,
-                output_index: i as i32,
-            })
-            .collect();
-        boxes::insert_many(&pgtx, box_indices).await;
-
-        // Index addresses
-        for output in node_boxes {
-            let address = ergo::ergo_tree::base16_to_address(&output.ergo_tree);
-            let spot_height = 0;
-            self.last_address_id += 1;
-            addresses::index_new(
-                &pgtx,
-                &addresses::AddressRecord::new(self.last_address_id, spot_height, address),
-            )
-            .await;
+        let mut box_records: Vec<boxes::BoxRecord> = vec![];
+        for op in &node_boxes {
+            box_records.push(boxes::BoxRecord {
+                box_id: &op.box_id,
+                height,
+                creation_height: op.creation_height,
+                address_id: map_address_id(&pgtx, &op.ergo_tree, height, &mut self.address_cache)
+                    .await,
+                value: op.value,
+                size: ergo::boxes::calc_box_size(&op).unwrap(),
+                assets: map_asset_ids(&pgtx, &op.assets, height, &mut self.asset_cache).await,
+                registers: &op.additional_registers,
+            });
         }
+        boxes::insert_many(&pgtx, &box_records).await;
+
         pgtx.commit().await.unwrap();
     }
 
     /// Include and expand block.
     ///
     /// Skips inclusion if block already processed.
-    pub(super) async fn process(&mut self, height: Height, text_block: String) -> CoreData {
-        // Parse into node block
-        let node_block: node::models::Block = serde_json::from_str(&text_block).unwrap();
-        assert_eq!(height, node_block.header.height);
+    pub(super) async fn process(&mut self, node_block: node::models::Block) -> CoreData {
+        /*
 
-        // Check if block is new or already processed
-        let is_next_block = height > self.head.height;
+        if next block:
+            index new outputs
+                index new addresses
+                index new tokens
+
+        collect boxes
+
+        retrieve input and output boxes
+        build core block
+
+        ------
+        What needs to happen:
+
+        If new block:
+            - Index headers
+            - Index node outputs
+                - replace ergo_tree by address_id
+                - replace asset token_ids by token_gids
+                - compute box size
+            - Convert to core outputs
+
+        If existing block:
+            - Load outputs
+
+        - Load inputs
+        - Prepare core block
+
+
+
+
+        for tx in txs:
+            for box_id in inputs:
+                inputs[box_id] = fetch_input(box_id)
+            for node_output in outputs:
+                outputs[box_id] =
+
+        fetch_input(box_id):
+            if in box_cache, take
+            else fetch from db, don't add to cache
+
+
+        */
+
+        // Check if block is new or already processed.
+        // If new, ensure it is a child of current tip.
+        let is_next_block = node_block.header.height > self.head.height;
         if is_next_block {
-            assert_eq!(height, self.head.height + 1);
+            assert_eq!(node_block.header.height, self.head.height + 1);
             assert_eq!(node_block.header.parent_id, self.head.header_id);
         }
-        tracing::debug!(is_next_block);
 
+        // Wrap everyting in one db transaction
         let pgtx = self.client.transaction().await.unwrap();
+
         if is_next_block {
-            blocks::insert(&pgtx, height, text_block).await;
-            boxes::insert_many(&pgtx, collect_box_indices(&node_block)).await;
+            headers::insert(
+                &pgtx,
+                node_block.header.height,
+                node_block.header.timestamp,
+                &node_block.header.id,
+            )
+            .await;
         }
 
-        // Collect (data-)input box id's
-        let input_box_ids = collect_input_ids(&node_block);
-        // Retrieve corresponding UTxO data mapped by box_id.
-        let input_boxes = boxes::map_boxes(&pgtx, input_box_ids).await;
+        // Index/load outputs
+        let mut outputs: HashMap<BoxID, BoxData> = if is_next_block {
+            index_outputs(
+                &pgtx,
+                &node_block,
+                &mut self.address_cache,
+                &mut self.asset_cache,
+            )
+            .await
+        } else {
+            let output_box_ids: Vec<&BoxID> = node_block
+                .block_transactions
+                .transactions
+                .iter()
+                .flat_map(|tx| tx.outputs.iter().map(|op| &op.box_id))
+                .collect();
+            boxes::map_boxes(&pgtx, output_box_ids).await
+        };
 
-        // Map input and output boxes' ergo trees to corresponding address id's
-        let (max_address_id, address_ids) =
-            compile_address_ids(&pgtx, &node_block, &input_boxes, self.last_address_id).await;
-        self.last_address_id = max_address_id;
+        // Load data-inputs
+        let data_input_box_ids: Vec<&BoxID> = node_block
+            .block_transactions
+            .transactions
+            .iter()
+            .flat_map(|tx| tx.data_inputs.iter().map(|di| &di.box_id))
+            .collect();
+        let data_inputs: HashMap<BoxID, BoxData> =
+            boxes::map_boxes(&pgtx, data_input_box_ids).await;
+
+        // Load inputs
+        // TODO: consider finding some inputs in the outputs (e.g. fee boxes)
+        // TODO: consider caching recent outputs (e.g. emission contract)
+        let input_box_ids: Vec<&BoxID> = node_block
+            .block_transactions
+            .transactions
+            .iter()
+            .flat_map(|tx| tx.inputs.iter().map(|ip| &ip.box_id))
+            .collect();
+        let mut inputs: HashMap<BoxID, BoxData> = boxes::map_boxes(&pgtx, input_box_ids).await;
 
         // Update head
         if is_next_block {
             self.head.height = node_block.header.height;
             self.head.header_id = node_block.header.id.clone();
-        }
-
-        // Convert intermediate input box representations to final input type
-        let mut inputs: HashMap<BoxID, Input> = HashMap::new();
-        for (box_id, utxo) in input_boxes.into_iter() {
-            // let box_id = utxo.output.box_id.clone();
-            let address_id = address_ids[&utxo.output.ergo_tree];
-            let size = match ergo::boxes::calc_box_size(&utxo.output) {
-                Some(s) => s,
-                None => 0,
-            };
-            let input = Input {
-                box_id: utxo.output.box_id,
-                address_id: address_id,
-                index: utxo.output.index,
-                value: utxo.output.value,
-                additional_registers: Registers::new(utxo.output.additional_registers),
-                assets: utxo.output.assets,
-                size: size,
-                creation_height: utxo.height,
-                creation_timestamp: utxo.timestamp,
-            };
-            inputs.insert(box_id, input);
         }
 
         // Convert to core block
@@ -194,20 +267,18 @@ impl Store {
                     outputs: tx
                         .outputs
                         .into_iter()
-                        .map(|op| {
-                            let address_id = address_ids[&op.ergo_tree];
-                            Output::from_node_output(op, address_id)
-                        })
+                        .map(|op| outputs.remove(&op.box_id).unwrap())
+                        .collect(),
+                    // Data inputs first, because inputs will remove entries from the cache
+                    data_inputs: tx
+                        .data_inputs
+                        .iter()
+                        .map(|di| data_inputs.get(&di.box_id).cloned().unwrap())
                         .collect(),
                     inputs: tx
                         .inputs
                         .iter()
-                        .map(|ip| inputs[&ip.box_id].clone())
-                        .collect(),
-                    data_inputs: tx
-                        .data_inputs
-                        .iter()
-                        .map(|di| inputs[&di.box_id].clone())
+                        .map(|ip| inputs.remove(&ip.box_id).unwrap())
                         .collect(),
                 })
                 .collect(),
@@ -230,8 +301,8 @@ impl Store {
 
         let pgtx = self.client.transaction().await.unwrap();
 
-        // Delete block at height h
-        blocks::delete(&pgtx, head.height).await;
+        // Delete header at height h
+        headers::delete(&pgtx, head.height).await;
 
         // Delete boxes registered ar height h
         boxes::delete_at(&pgtx, head.height).await;
@@ -239,10 +310,13 @@ impl Store {
         // Delete addresses spotted at height h
         addresses::delete_at(&pgtx, head.height).await;
 
+        // Delete tokens spotted at height h
+        tokens::delete_at(&pgtx, head.height).await;
+
         pgtx.commit().await.unwrap();
 
         // Retrieve previous head
-        let prev_head = blocks::last_head(&self.client).await;
+        let prev_head = headers::last_head(&self.client).await;
 
         // Decrement store head and return
         self.head = prev_head.clone();
@@ -260,137 +334,166 @@ impl Store {
         self.client.query_one(qry, &[]).await.unwrap().get(0)
     }
 
-    pub(super) async fn get_genesis_boxes(&mut self) -> Vec<Output> {
+    pub(super) async fn get_genesis_boxes(&mut self) -> Vec<BoxData> {
         tracing::debug!("getting genesis boxes");
-        //TODO: simplify - no need for db tx here but using one since called
-        // helpers have no client version.
-        let pgtx = self.client.transaction().await.unwrap();
-        let node_boxes = boxes::get_genesis_boxes(&pgtx).await;
-        // Genesis boxes are guaranteed to have been indexed in store already,
-        // so we can just query their address id's and not worry about handling
-        // any new addresses.
-        let box_addys: Vec<Address> = node_boxes
-            .iter()
-            .map(|nb| ergo::ergo_tree::base16_to_address(&nb.ergo_tree))
-            .collect();
-        let mut address_ids: Vec<AddressID> = vec![];
-        for address in &box_addys {
-            let id = addresses::get_id(&pgtx, address).await;
-            address_ids.push(id);
-        }
-        // Convert to core Outputs
-        pgtx.rollback().await.unwrap();
-        node_boxes
-            .into_iter()
-            .enumerate()
-            .map(|(i, b)| Output::from_node_output(b, address_ids[i]))
-            .collect()
+        boxes::get_genesis_boxes(&self.client).await
     }
-
-    // TODO: separate block indexing (new blocks only) from expansion logic (any block)
-    // async fn include(&mut self, h: Height, str_block: &str) {
-    //     todo!()
-    // }
 }
 
-/// Extract box indices for all outputs in a node block
-fn collect_box_indices(block: &node::models::Block) -> Vec<boxes::BoxIndex> {
-    block
-        .block_transactions
-        .transactions
-        .iter()
-        .enumerate()
-        .flat_map(|(itx, tx)| {
-            tx.outputs.iter().map(move |output| boxes::BoxIndex {
-                box_id: &output.box_id,
-                height: block.header.height,
-                tx_index: itx as i32,
-                output_index: output.index,
-            })
-        })
-        .collect()
-}
-
-/// Extracts all input and data-input box id's from `block`.
-fn collect_input_ids(block: &node::models::Block) -> HashSet<BoxID> {
-    let mut box_ids = HashSet::new();
-    for tx in &block.block_transactions.transactions {
-        for ip in &tx.inputs {
-            box_ids.insert(ip.box_id.clone());
-        }
-        for di in &tx.data_inputs {
-            box_ids.insert(di.box_id.clone());
-        }
-    }
-    box_ids
-}
-
-/// Maps all of a block's ergo trees to address id's.
+/// Saved boxes created in given `node_block` to db and adds entries to the block_cache.
 ///
-/// Indexes any new addresses found in `node_block` outputs.
-/// Returns new highest address id and a tree-to-address-id map.
-async fn compile_address_ids(
+/// Takes care of
+/// - calculating box size
+/// - assigning an address id
+/// - replacing asset token id's with gid's
+async fn index_outputs(
     pgtx: &tokio_postgres::Transaction<'_>,
     node_block: &node::models::Block,
-    input_boxes: &HashMap<BoxID, super::store::boxes::UTxO>,
-    last_address_id: AddressID,
-) -> (AddressID, HashMap<ErgoTree, AddressID>) {
-    // Map to be populated and returned
-    let mut ids: HashMap<ErgoTree, AddressID> = HashMap::new();
-
-    // Keeps track of last address_id
-    let mut max_address_id = last_address_id;
-
-    // Going over each tx in turn to handle outputs spent in same block.
-    // This allows assuming all inputs will have an allocated address id already.
+    address_cache: &mut AddressCache,
+    asset_cache: &mut AssetCache,
+) -> HashMap<BoxID, BoxData> {
+    let height = node_block.header.height;
+    let mut box_records: Vec<boxes::BoxRecord> = vec![];
     for tx in &node_block.block_transactions.transactions {
-        // tracing::debug!("tx: {}", tx.id);
-        // Inputs and data-inputs have all been registered so just retrieve their address id
-        for input in &tx.inputs {
-            // tracing::debug!("input box_id: {}", input.box_id);
-            let utxo = &input_boxes[&input.box_id];
-            if !ids.contains_key(&utxo.output.ergo_tree) {
-                let address = ergo::ergo_tree::base16_to_address(&utxo.output.ergo_tree);
-                let address_id = addresses::get_id(&pgtx, &address).await;
-                ids.insert(utxo.output.ergo_tree.clone(), address_id);
-            }
-        }
-        for input in &tx.data_inputs {
-            // tracing::debug!("data input box_id: {}", input.box_id);
-            let utxo = &input_boxes[&input.box_id];
-            if !ids.contains_key(&utxo.output.ergo_tree) {
-                let address = ergo::ergo_tree::base16_to_address(&utxo.output.ergo_tree);
-                let address_id = addresses::get_id(&pgtx, &address).await;
-                ids.insert(utxo.output.ergo_tree.clone(), address_id);
-            }
-        }
-
-        // Outputs will contain some new addresses
-        for output in &tx.outputs {
-            if ids.contains_key(&output.ergo_tree) {
-                continue;
-            }
-            let address = ergo::ergo_tree::base16_to_address(&output.ergo_tree);
-            let address_id = match addresses::get_id_opt(&pgtx, &address).await {
-                Some(id) => id,
-                None => {
-                    let spot_height = node_block.header.height;
-                    max_address_id += 1;
-                    addresses::index_new(
-                        &pgtx,
-                        &addresses::AddressRecord::new(max_address_id, spot_height, address),
-                    )
-                    .await;
-                    max_address_id
-                }
+        for op in &tx.outputs {
+            let address_id = map_address_id(pgtx, &op.ergo_tree, height, address_cache).await;
+            let assets = map_asset_ids(pgtx, &op.assets, height, asset_cache).await;
+            let size = match ergo::boxes::calc_box_size(&op) {
+                Some(s) => s,
+                // Current calculation of box size can fail when hitting
+                // undeserializable boxes. Using a default size of 1 here.
+                // While unrealistic, it allows to look such boxes up and
+                // maybe update them once we have a workaround.
+                None => 1,
             };
-            ids.insert(output.ergo_tree.clone(), address_id);
+            // Create box record
+            box_records.push(boxes::BoxRecord {
+                box_id: &op.box_id,
+                height,
+                creation_height: op.creation_height,
+                address_id,
+                value: op.value,
+                size,
+                assets,
+                registers: &op.additional_registers,
+            });
         }
     }
-    tracing::debug!(
-        "compiled {} addresses - new max id: {}",
-        ids.len(),
-        max_address_id
-    );
-    (max_address_id, ids)
+    // Store records
+    boxes::insert_many(&pgtx, &box_records).await;
+
+    // Convert box records to box data and return hashmap
+    let mut map = HashMap::new();
+    for r in box_records {
+        let box_data = BoxData {
+            box_id: r.box_id.clone(),
+            creation_height: r.creation_height,
+            address_id: r.address_id,
+            value: r.value,
+            additional_registers: Registers::new(r.registers.clone()),
+            assets: match r.assets {
+                Some(assets) => assets,
+                None => vec![],
+            },
+            size: r.size,
+            output_timestamp: node_block.header.timestamp,
+        };
+        map.insert(box_data.box_id.clone(), box_data);
+    }
+    map
+}
+
+/// Return an address id for the given `ergo_tree`.
+///
+/// Handles indexing of new trees/addresses.
+///
+/// * `pgtx` - A db transaction.
+/// * `ergo_tree` - The ergo tree for which to return an address id.
+/// * `spot_height` - Height of current block (used when indexing new addresses).
+async fn map_address_id(
+    pgtx: &tokio_postgres::Transaction<'_>,
+    ergo_tree: &String,
+    spot_height: Height,
+    cache: &mut AddressCache,
+) -> AddressID {
+    // Try the cache first.
+    match cache.lru.get(ergo_tree) {
+        // Sweet, fount it in the cache
+        Some(id) => *id,
+        // Not in the cache
+        None => {
+            // See if we can find it in the store.
+            let address = ergo::ergo_tree::base16_to_address(ergo_tree);
+            let uncached_id = match addresses::get_id_opt(&pgtx, &address).await {
+                // Address was in store already
+                Some(id) => id,
+                None => {
+                    // This is a new address - assign new id and index
+                    cache.last_address_id += 1;
+                    addresses::index_new(
+                        &pgtx,
+                        &addresses::AddressRecord::new(cache.last_address_id, spot_height, address),
+                    )
+                    .await;
+                    cache.last_address_id
+                }
+            };
+            // Cache and return
+            cache.lru.put(ergo_tree.clone(), uncached_id);
+            uncached_id
+        }
+    }
+}
+
+/// Converts token id's (Digest32) to gid's (i64).
+///
+/// Handles indexing of new tokens.
+///
+/// * `pgtx` - A db transaction.
+/// * `node_assets` - Original assets as returned by the node api.
+/// * `spot_height` - Height of current block (used when indexing new tokens).
+async fn map_asset_ids(
+    pgtx: &tokio_postgres::Transaction<'_>,
+    node_assets: &Vec<node::models::Asset>,
+    spot_height: Height,
+    cache: &mut AssetCache,
+) -> Option<Vec<Asset>> {
+    if node_assets.is_empty() {
+        return None;
+    }
+    let mut assets: Vec<Asset> = Vec::with_capacity(node_assets.len());
+    for node_asset in node_assets {
+        // Try the cache first.
+        let asset_id = match cache.lru.get(&node_asset.token_id) {
+            // Sweet, fount it in the cache
+            Some(id) => *id,
+            // Not in the cache
+            None => {
+                // See if we can find it in the store.
+                let token_id = node_asset.token_id.clone();
+                let uncached_id = match tokens::get_id_opt(&pgtx, &token_id).await {
+                    // Token was in store already
+                    Some(id) => id,
+                    None => {
+                        // This is a new token - assign new id and index
+                        cache.last_id += 1;
+                        tokens::index_new(
+                            &pgtx,
+                            &tokens::TokenRecord::new(cache.last_id, spot_height, token_id.clone()),
+                        )
+                        .await;
+                        cache.last_id
+                    }
+                };
+                // Cache and return
+                cache.lru.put(token_id, uncached_id);
+                uncached_id
+            }
+        };
+        assets.push(Asset {
+            asset_id,
+            amount: node_asset.amount,
+        });
+    }
+    Some(assets)
 }

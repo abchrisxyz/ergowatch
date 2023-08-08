@@ -7,8 +7,8 @@ use super::constants::CONTRACT_CREATION_HEIGHT;
 use super::constants::NETWORK_FEE_ADDRESS_ID;
 use super::constants::ORACLE_EPOCH_PREP_ADDRESS_ID;
 use super::constants::ORACLE_NFT;
-use super::constants::RC_TOKEN_ID;
-use super::constants::SC_TOKEN_ID;
+use super::constants::RC_ASSET_ID;
+use super::constants::SC_ASSET_ID;
 use super::types::BankTransaction;
 use super::types::Batch;
 use super::types::DailyOHLC;
@@ -21,11 +21,11 @@ use super::types::ServiceStats;
 use super::types::WeeklyOHLC;
 use crate::core::types::AddressID;
 use crate::core::types::Block;
+use crate::core::types::BoxData;
 use crate::core::types::CoreData;
 use crate::core::types::Digest32;
 use crate::core::types::Height;
 use crate::core::types::NanoERG;
-use crate::core::types::Output;
 use crate::core::types::Timestamp;
 use crate::core::types::Transaction;
 use crate::workers::sigmausd::types::OHLCGroup;
@@ -137,25 +137,25 @@ fn extract_event(tx: &Transaction, height: Height, bank_tx_count: &mut i32) -> O
 
 fn tx_has_bank_box(tx: &Transaction) -> bool {
     tx.outputs.iter().any(|o| {
-        o.address_id == CONTRACT_ADDRESS_ID && o.assets.iter().any(|a| a.token_id == BANK_NFT)
+        o.address_id == CONTRACT_ADDRESS_ID && o.assets.iter().any(|a| a.asset_id == BANK_NFT)
     })
 }
 
 fn tx_has_oracle_prep_box(tx: &Transaction) -> bool {
     tx.outputs.iter().any(|o| {
         o.address_id == ORACLE_EPOCH_PREP_ADDRESS_ID
-            && o.assets.iter().any(|a| a.token_id == ORACLE_NFT)
+            && o.assets.iter().any(|a| a.asset_id == ORACLE_NFT)
     })
 }
 
 /// Build a bank transaction from a tx known to contain a bank box
 fn extract_bank_tx(tx: &Transaction, height: Height, bank_tx_count: &mut i32) -> BankTransaction {
     // New bank box id
-    let bank_outputs: Vec<&Output> = tx
+    let bank_outputs: Vec<&BoxData> = tx
         .outputs
         .iter()
         .filter(|o| {
-            o.address_id == CONTRACT_ADDRESS_ID && o.assets.iter().any(|a| a.token_id == BANK_NFT)
+            o.address_id == CONTRACT_ADDRESS_ID && o.assets.iter().any(|a| a.asset_id == BANK_NFT)
         })
         .collect();
     assert_eq!(bank_outputs.len(), 1);
@@ -175,13 +175,13 @@ fn extract_bank_tx(tx: &Transaction, height: Height, bank_tx_count: &mut i32) ->
         let sc_amount: i64 = output
             .assets
             .iter()
-            .filter(|a| a.token_id == SC_TOKEN_ID)
+            .filter(|a| a.asset_id == SC_ASSET_ID)
             .map(|a| a.amount)
             .sum();
         let rc_amount: i64 = output
             .assets
             .iter()
-            .filter(|a| a.token_id == RC_TOKEN_ID)
+            .filter(|a| a.asset_id == RC_ASSET_ID)
             .map(|a| a.amount)
             .sum();
         if sc_amount != 0 {
@@ -207,13 +207,13 @@ fn extract_bank_tx(tx: &Transaction, height: Height, bank_tx_count: &mut i32) ->
         let sc_amount: i64 = input
             .assets
             .iter()
-            .filter(|a| a.token_id == SC_TOKEN_ID)
+            .filter(|a| a.asset_id == SC_ASSET_ID)
             .map(|a| a.amount)
             .sum();
         let rc_amount: i64 = input
             .assets
             .iter()
-            .filter(|a| a.token_id == RC_TOKEN_ID)
+            .filter(|a| a.asset_id == RC_ASSET_ID)
             .map(|a| a.amount)
             .sum();
         if sc_amount != 0 {
@@ -388,14 +388,14 @@ fn extract_service_from_redeeming_tx_diffs(
 /// Build an oracle posting from a tx known to contain an oracle prep box
 fn extract_oracle_posting(tx: &Transaction, height: Height) -> OraclePosting {
     // Find the new prep box
-    let prep_boxes: Vec<&Output> = tx
+    let prep_boxes: Vec<&BoxData> = tx
         .outputs
         .iter()
         .filter(|o| o.address_id == ORACLE_EPOCH_PREP_ADDRESS_ID)
-        .filter(|o| o.assets.iter().any(|a| a.token_id == ORACLE_NFT))
+        .filter(|o| o.assets.iter().any(|a| a.asset_id == ORACLE_NFT))
         .collect();
     assert_eq!(prep_boxes.len(), 1);
-    let prep_box: &Output = prep_boxes[0];
+    let prep_box: &BoxData = prep_boxes[0];
 
     // Read datapoint
     let datapoint: i64 = match prep_box.additional_registers.r4() {
@@ -502,17 +502,15 @@ mod tests {
     use super::super::types::MonthlyOHLC;
     use super::super::types::WeeklyOHLC;
     use super::*;
-    use crate::core::types::Input;
-    use crate::core::types::Output;
     use crate::core::types::Transaction;
     use rust_decimal::Decimal;
     use time::macros::date;
 
     #[test]
     fn test_extract_event_nothing() {
-        let input = Input::dummy().address_id(12).value(1000);
-        let output0 = Output::dummy().address_id(13).value(900);
-        let output1 = Output::dummy().address_id(5).value(100);
+        let input = BoxData::dummy().address_id(12).value(1000);
+        let output0 = BoxData::dummy().address_id(13).value(900);
+        let output1 = BoxData::dummy().address_id(5).value(100);
 
         let tx = Transaction::dummy()
             .add_input(input)
@@ -528,9 +526,9 @@ mod tests {
 
     #[test]
     fn test_extract_event_contract_but_not_bank() {
-        let input = Input::dummy().address_id(12).value(1000);
-        let output0 = Output::dummy().address_id(CONTRACT_ADDRESS_ID).value(900);
-        let output1 = Output::dummy().address_id(5).value(100);
+        let input = BoxData::dummy().address_id(12).value(1000);
+        let output0 = BoxData::dummy().address_id(CONTRACT_ADDRESS_ID).value(900);
+        let output1 = BoxData::dummy().address_id(5).value(100);
 
         let tx = Transaction::dummy()
             .add_input(input)
@@ -548,21 +546,21 @@ mod tests {
     fn test_extract_event_sc_mint_direct() {
         // User mints 200 SigUSD for 100 nanoERG
         let user: AddressID = 12345;
-        let bank_input = Input::dummy()
+        let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1000)
             .add_asset(BANK_NFT, 1)
-            .add_asset(SC_TOKEN_ID, 500);
-        let bank_output = Output::dummy()
+            .add_asset(SC_ASSET_ID, 500);
+        let bank_output = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1100)
             .add_asset(BANK_NFT, 1)
-            .add_asset(SC_TOKEN_ID, 300);
-        let user_input = Input::dummy().address_id(user).value(5000);
-        let user_output = Output::dummy()
+            .add_asset(SC_ASSET_ID, 300);
+        let user_input = BoxData::dummy().address_id(user).value(5000);
+        let user_output = BoxData::dummy()
             .address_id(user)
             .value(4900)
-            .add_asset(SC_TOKEN_ID, 200);
+            .add_asset(SC_ASSET_ID, 200);
 
         let tx = Transaction::dummy()
             .add_input(bank_input)
@@ -595,23 +593,23 @@ mod tests {
         // User mints 200 SigRSV for 100 nanoERG
         let user: AddressID = 12345;
         let service: AddressID = 6789;
-        let bank_input = Input::dummy()
+        let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1000)
             .add_asset(BANK_NFT, 1)
-            .add_asset(RC_TOKEN_ID, 500);
-        let bank_output = Output::dummy()
+            .add_asset(RC_ASSET_ID, 500);
+        let bank_output = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1100)
             .add_asset(BANK_NFT, 1)
-            .add_asset(RC_TOKEN_ID, 300);
-        let user_input = Input::dummy().address_id(user).value(5103);
-        let user_output = Output::dummy()
+            .add_asset(RC_ASSET_ID, 300);
+        let user_input = BoxData::dummy().address_id(user).value(5103);
+        let user_output = BoxData::dummy()
             .address_id(user)
             .value(5000)
-            .add_asset(RC_TOKEN_ID, 200);
-        let service_output = Output::dummy().address_id(service).value(2);
-        let fee_output = Output::dummy().address_id(NETWORK_FEE_ADDRESS_ID).value(1);
+            .add_asset(RC_ASSET_ID, 200);
+        let service_output = BoxData::dummy().address_id(service).value(2);
+        let fee_output = BoxData::dummy().address_id(NETWORK_FEE_ADDRESS_ID).value(1);
 
         let tx = Transaction::dummy()
             .add_input(bank_input)
@@ -648,23 +646,23 @@ mod tests {
         let user_send: AddressID = 123451;
         let user_recv: AddressID = 123452;
         let service: AddressID = 6789;
-        let bank_input = Input::dummy()
+        let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1000)
             .add_asset(BANK_NFT, 1)
-            .add_asset(RC_TOKEN_ID, 500);
-        let bank_output = Output::dummy()
+            .add_asset(RC_ASSET_ID, 500);
+        let bank_output = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1100)
             .add_asset(BANK_NFT, 1)
-            .add_asset(RC_TOKEN_ID, 300);
-        let user_input = Input::dummy().address_id(user_send).value(5103);
-        let user_output = Output::dummy()
+            .add_asset(RC_ASSET_ID, 300);
+        let user_input = BoxData::dummy().address_id(user_send).value(5103);
+        let user_output = BoxData::dummy()
             .address_id(user_recv)
             .value(5000)
-            .add_asset(RC_TOKEN_ID, 200);
-        let service_output = Output::dummy().address_id(service).value(2);
-        let fee_output = Output::dummy().address_id(NETWORK_FEE_ADDRESS_ID).value(1);
+            .add_asset(RC_ASSET_ID, 200);
+        let service_output = BoxData::dummy().address_id(service).value(2);
+        let fee_output = BoxData::dummy().address_id(NETWORK_FEE_ADDRESS_ID).value(1);
 
         let tx = Transaction::dummy()
             .add_input(bank_input)
@@ -698,23 +696,23 @@ mod tests {
     fn test_extract_event_sc_redeem_with_multiple_service_candidates() {
         // User redeems 200 SigUSD for 100 nanoERG
         let user: AddressID = 12345;
-        let bank_input = Input::dummy()
+        let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1100)
             .add_asset(BANK_NFT, 1)
-            .add_asset(SC_TOKEN_ID, 500);
-        let bank_output = Output::dummy()
+            .add_asset(SC_ASSET_ID, 500);
+        let bank_output = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1000)
             .add_asset(BANK_NFT, 1)
-            .add_asset(SC_TOKEN_ID, 700);
-        let user_input = Input::dummy()
+            .add_asset(SC_ASSET_ID, 700);
+        let user_input = BoxData::dummy()
             .address_id(user)
             .value(5005)
-            .add_asset(SC_TOKEN_ID, 200);
-        let user_output = Output::dummy().address_id(user).value(5100);
-        let other1_output = Output::dummy().address_id(30000).value(2);
-        let other2_output = Output::dummy().address_id(40000).value(3);
+            .add_asset(SC_ASSET_ID, 200);
+        let user_output = BoxData::dummy().address_id(user).value(5100);
+        let other1_output = BoxData::dummy().address_id(30000).value(2);
+        let other2_output = BoxData::dummy().address_id(40000).value(3);
 
         let tx = Transaction::dummy()
             .add_input(bank_input)
@@ -748,21 +746,21 @@ mod tests {
     fn test_extract_event_rc_redeem_to_same_address_direct() {
         // User redeems 200 SigRSV for 100 nanoERG
         let user: AddressID = 12345;
-        let bank_input = Input::dummy()
+        let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1100)
             .add_asset(BANK_NFT, 1)
-            .add_asset(RC_TOKEN_ID, 500);
-        let bank_output = Output::dummy()
+            .add_asset(RC_ASSET_ID, 500);
+        let bank_output = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1000)
             .add_asset(BANK_NFT, 1)
-            .add_asset(RC_TOKEN_ID, 700);
-        let user_input = Input::dummy()
+            .add_asset(RC_ASSET_ID, 700);
+        let user_input = BoxData::dummy()
             .address_id(user)
             .value(5000)
-            .add_asset(RC_TOKEN_ID, 200);
-        let user_output = Output::dummy().address_id(user).value(5100);
+            .add_asset(RC_ASSET_ID, 200);
+        let user_output = BoxData::dummy().address_id(user).value(5100);
 
         let tx = Transaction::dummy()
             .add_input(bank_input)
@@ -795,21 +793,21 @@ mod tests {
         // User redeems 200 SigRSV for 100 nanoERG
         let user_send: AddressID = 123451;
         let user_recv: AddressID = 123452;
-        let bank_input = Input::dummy()
+        let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1100)
             .add_asset(BANK_NFT, 1)
-            .add_asset(RC_TOKEN_ID, 500);
-        let bank_output = Output::dummy()
+            .add_asset(RC_ASSET_ID, 500);
+        let bank_output = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1000)
             .add_asset(BANK_NFT, 1)
-            .add_asset(RC_TOKEN_ID, 700);
-        let user_input = Input::dummy()
+            .add_asset(RC_ASSET_ID, 700);
+        let user_input = BoxData::dummy()
             .address_id(user_send)
             .value(5000)
-            .add_asset(RC_TOKEN_ID, 200);
-        let user_output = Output::dummy().address_id(user_recv).value(5100);
+            .add_asset(RC_ASSET_ID, 200);
+        let user_output = BoxData::dummy().address_id(user_recv).value(5100);
 
         let tx = Transaction::dummy()
             .add_input(bank_input)
@@ -843,23 +841,23 @@ mod tests {
         let user_send: AddressID = 123451;
         let user_recv: AddressID = 123452;
         let service: AddressID = 6789;
-        let bank_input = Input::dummy()
+        let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1100)
             .add_asset(BANK_NFT, 1)
-            .add_asset(RC_TOKEN_ID, 500);
-        let bank_output = Output::dummy()
+            .add_asset(RC_ASSET_ID, 500);
+        let bank_output = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1000)
             .add_asset(BANK_NFT, 1)
-            .add_asset(RC_TOKEN_ID, 700);
-        let user_input = Input::dummy()
+            .add_asset(RC_ASSET_ID, 700);
+        let user_input = BoxData::dummy()
             .address_id(user_send)
             .value(5000)
-            .add_asset(RC_TOKEN_ID, 200);
-        let user_output = Output::dummy().address_id(user_recv).value(5097);
-        let service_output = Output::dummy().address_id(service).value(2);
-        let fee_output = Output::dummy().address_id(NETWORK_FEE_ADDRESS_ID).value(1);
+            .add_asset(RC_ASSET_ID, 200);
+        let user_output = BoxData::dummy().address_id(user_recv).value(5097);
+        let service_output = BoxData::dummy().address_id(service).value(2);
+        let fee_output = BoxData::dummy().address_id(NETWORK_FEE_ADDRESS_ID).value(1);
 
         let tx = Transaction::dummy()
             .add_input(bank_input)
@@ -893,22 +891,22 @@ mod tests {
     fn test_extract_event_rc_redeem_less_than_fee_to_same_address_direct() {
         // User redeems 1 SigRSV for 1 nanoERG with 9 nanoERG tx fee
         let user: AddressID = 12345;
-        let bank_input = Input::dummy()
+        let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1001)
             .add_asset(BANK_NFT, 1)
-            .add_asset(RC_TOKEN_ID, 500);
-        let bank_output = Output::dummy()
+            .add_asset(RC_ASSET_ID, 500);
+        let bank_output = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1000)
             .add_asset(BANK_NFT, 1)
-            .add_asset(RC_TOKEN_ID, 501);
-        let user_input = Input::dummy()
+            .add_asset(RC_ASSET_ID, 501);
+        let user_input = BoxData::dummy()
             .address_id(user)
             .value(5010)
-            .add_asset(RC_TOKEN_ID, 1);
-        let user_output = Output::dummy().address_id(user).value(5000);
-        let fee_output = Output::dummy().address_id(NETWORK_FEE_ADDRESS_ID).value(9);
+            .add_asset(RC_ASSET_ID, 1);
+        let user_output = BoxData::dummy().address_id(user).value(5000);
+        let fee_output = BoxData::dummy().address_id(NETWORK_FEE_ADDRESS_ID).value(9);
 
         let tx = Transaction::dummy()
             .add_input(bank_input)
@@ -941,8 +939,8 @@ mod tests {
     fn test_extract_event_oracle_posting() {
         // Actual prep tx would be spending a live epoch box,
         // but we don't rely on that so can just a dummy.
-        let dummy_input = Input::dummy();
-        let prep_output = Output::dummy()
+        let dummy_input = BoxData::dummy();
+        let prep_output = BoxData::dummy()
             .address_id(ORACLE_EPOCH_PREP_ADDRESS_ID)
             .add_asset(ORACLE_NFT, 1)
             .set_registers(r#"{"R4": "05baafd2a302"}"#);
@@ -1081,8 +1079,8 @@ mod tests {
                 .timestamp(1626396302125) // 2021-07-16
                 .add_tx(
                     Transaction::dummy()
-                        .add_input(Input::dummy().value(1000))
-                        .add_output(Output::dummy().value(1000)),
+                        .add_input(BoxData::dummy().value(1000))
+                        .add_output(BoxData::dummy().value(1000)),
                 )
                 .add_tx(Transaction::dummy()),
         };
@@ -1118,28 +1116,28 @@ mod tests {
                     Transaction::dummy()
                         // bank input
                         .add_input(
-                            Input::dummy()
+                            BoxData::dummy()
                                 .address_id(CONTRACT_ADDRESS_ID)
                                 .value(1000)
                                 .add_asset(BANK_NFT, 1)
-                                .add_asset(SC_TOKEN_ID, 500),
+                                .add_asset(SC_ASSET_ID, 500),
                         )
                         // user input
-                        .add_input(Input::dummy().address_id(user).value(5000))
+                        .add_input(BoxData::dummy().address_id(user).value(5000))
                         // bank output
                         .add_output(
-                            Output::dummy()
+                            BoxData::dummy()
                                 .address_id(CONTRACT_ADDRESS_ID)
                                 .value(1100)
                                 .add_asset(BANK_NFT, 1)
-                                .add_asset(SC_TOKEN_ID, 300),
+                                .add_asset(SC_ASSET_ID, 300),
                         )
                         // user output
                         .add_output(
-                            Output::dummy()
+                            BoxData::dummy()
                                 .address_id(user)
                                 .value(4900)
-                                .add_asset(SC_TOKEN_ID, 200),
+                                .add_asset(SC_ASSET_ID, 200),
                         ),
                 )
                 .add_tx(Transaction::dummy()),

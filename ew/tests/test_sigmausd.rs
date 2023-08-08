@@ -3,9 +3,8 @@ use tokio_postgres::NoTls;
 use ew::config::PostgresConfig;
 use ew::core::types::AddressID;
 use ew::core::types::Block;
+use ew::core::types::BoxData;
 use ew::core::types::CoreData;
-use ew::core::types::Input;
-use ew::core::types::Output;
 use ew::core::types::Timestamp;
 use ew::core::types::Transaction;
 use ew::workers::sigmausd::constants::BANK_NFT;
@@ -13,7 +12,7 @@ use ew::workers::sigmausd::constants::CONTRACT_ADDRESS_ID;
 use ew::workers::sigmausd::constants::CONTRACT_CREATION_HEIGHT;
 use ew::workers::sigmausd::constants::ORACLE_EPOCH_PREP_ADDRESS_ID;
 use ew::workers::sigmausd::constants::ORACLE_NFT;
-use ew::workers::sigmausd::constants::SC_TOKEN_ID;
+use ew::workers::sigmausd::constants::SC_ASSET_ID;
 use ew::workers::sigmausd::SigmaUSD;
 use ew::workers::Workflow;
 
@@ -85,28 +84,28 @@ async fn test_sc_minting() {
             Transaction::dummy()
                 // Bank input
                 .add_input(
-                    Input::dummy()
+                    BoxData::dummy()
                         .address_id(CONTRACT_ADDRESS_ID)
                         .value(1000_000_000_000)
                         .add_asset(BANK_NFT, 1)
-                        .add_asset(SC_TOKEN_ID, 500_00),
+                        .add_asset(SC_ASSET_ID, 500_00),
                 )
                 // User input
-                .add_input(Input::dummy().address_id(user).value(5000_000_000_000))
+                .add_input(BoxData::dummy().address_id(user).value(5000_000_000_000))
                 // Bank output
                 .add_output(
-                    Output::dummy()
+                    BoxData::dummy()
                         .address_id(CONTRACT_ADDRESS_ID)
                         .value(1100_000_000_000)
                         .add_asset(BANK_NFT, 1)
-                        .add_asset(SC_TOKEN_ID, 300_00),
+                        .add_asset(SC_ASSET_ID, 300_00),
                 )
                 // User output
                 .add_output(
-                    Output::dummy()
+                    BoxData::dummy()
                         .address_id(user)
                         .value(4900_000_000_000)
-                        .add_asset(SC_TOKEN_ID, 200_00),
+                        .add_asset(SC_ASSET_ID, 200_00),
                 ),
         );
     let mut workflow = SigmaUSD::new(&pgconf).await;
@@ -131,36 +130,36 @@ async fn test_rollback() {
             Transaction::dummy()
                 // Bank input
                 .add_input(
-                    Input::dummy()
+                    BoxData::dummy()
                         .address_id(CONTRACT_ADDRESS_ID)
                         .value(1000_000_000_000)
                         .add_asset(BANK_NFT, 1)
-                        .add_asset(SC_TOKEN_ID, 500_00),
+                        .add_asset(SC_ASSET_ID, 500_00),
                 )
                 // User input
-                .add_input(Input::dummy().address_id(user).value(5000_000_000_000))
+                .add_input(BoxData::dummy().address_id(user).value(5000_000_000_000))
                 // Bank output
                 .add_output(
-                    Output::dummy()
+                    BoxData::dummy()
                         .address_id(CONTRACT_ADDRESS_ID)
                         .value(1100_000_000_000)
                         .add_asset(BANK_NFT, 1)
-                        .add_asset(SC_TOKEN_ID, 300_00),
+                        .add_asset(SC_ASSET_ID, 300_00),
                 )
                 // User output
                 .add_output(
-                    Output::dummy()
+                    BoxData::dummy()
                         .address_id(user)
                         .value(4899_000_000_000)
-                        .add_asset(SC_TOKEN_ID, 200_00),
+                        .add_asset(SC_ASSET_ID, 200_00),
                 )
                 // Service output
-                .add_output(Output::dummy().address_id(service).value(1_000_000_000)),
+                .add_output(BoxData::dummy().address_id(service).value(1_000_000_000)),
         )
         // Oracle posting
         .add_tx(
-            Transaction::dummy().add_input(Input::dummy()).add_output(
-                Output::dummy()
+            Transaction::dummy().add_input(BoxData::dummy()).add_output(
+                BoxData::dummy()
                     .address_id(ORACLE_EPOCH_PREP_ADDRESS_ID)
                     .add_asset(ORACLE_NFT, 1)
                     .set_registers(r#"{"R4": "05baafd2a302"}"#),

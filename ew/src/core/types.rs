@@ -1,9 +1,13 @@
+use postgres_types::FromSql;
+use postgres_types::ToSql;
+use serde::Serialize;
+
 use super::ergo;
 use super::node;
-pub use super::node::models::Asset;
 
 pub type Address = String;
 pub type AddressID = i64;
+pub type AssetID = i64;
 pub type BoxID = Digest32;
 pub type Digest32 = String;
 pub type ErgoTree = String;
@@ -120,9 +124,9 @@ impl From<node::models::Header> for Header {
 pub struct Transaction {
     pub id: Digest32,
     pub index: i32,
-    pub outputs: Vec<Output>,
-    pub inputs: Vec<Input>,
-    pub data_inputs: Vec<Input>,
+    pub outputs: Vec<BoxData>,
+    pub inputs: Vec<BoxData>,
+    pub data_inputs: Vec<BoxData>,
 }
 
 /// Mutually exclusive address attributes
@@ -134,51 +138,29 @@ pub enum AddressType {
 }
 
 #[derive(Debug, Clone)]
-pub struct Output {
+/// In/Output agnostic box data.
+pub struct BoxData {
     pub box_id: BoxID,
     pub creation_height: Height,
     pub address_id: AddressID,
-    pub index: i32,
     pub value: i64,
     pub additional_registers: Registers,
-    pub assets: Vec<node::models::Asset>,
+    pub assets: Vec<Asset>,
     pub size: i32,
+    /// Timestamp of the block this box was created in. Not necessarily
+    /// corresponding to `creation_height`.
+    pub output_timestamp: Timestamp,
 }
 
-impl Output {
-    pub fn from_node_output(output: node::models::Output, address_id: AddressID) -> Self {
-        let size = match ergo::boxes::calc_box_size(&output) {
-            Some(s) => s,
-            None => 0,
-        };
-        Self {
-            box_id: output.box_id,
-            creation_height: output.creation_height,
-            address_id: address_id,
-            index: output.index,
-            value: output.value,
-            additional_registers: Registers(output.additional_registers),
-            assets: output.assets,
-            size: size,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Input {
-    pub box_id: BoxID,
-    pub address_id: AddressID,
-    pub index: i32,
-    pub value: i64,
-    pub additional_registers: Registers,
-    pub assets: Vec<node::models::Asset>,
-    pub size: i32,
-    pub creation_height: Height,
-    pub creation_timestamp: Timestamp,
+#[derive(Debug, Clone, ToSql, FromSql)]
+#[postgres(name = "asset")]
+pub struct Asset {
+    pub asset_id: AssetID,
+    pub amount: Value,
 }
 
 /// Wraps registers json and provides parsing methods
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Registers(serde_json::Value);
 
 impl Registers {
@@ -229,8 +211,6 @@ fn decode_register(value: &serde_json::Value, id: i16) -> Option<Register> {
 #[cfg(feature = "test-utilities")]
 pub mod testutils {
     pub use super::*;
-    // use crate::core::node::models::ADProofs;
-    use crate::core::node::models::Asset;
     use crate::core::node::models::Extension;
     use crate::core::node::models::POWSolutions;
     use rand::distributions::Alphanumeric;
@@ -241,6 +221,7 @@ pub mod testutils {
     }
 
     impl Block {
+        /// (test-util) Creates a dummy block.
         pub fn dummy() -> Self {
             Block {
                 header: Header::dummy(),
@@ -260,21 +241,21 @@ pub mod testutils {
             }
         }
 
-        /// Returns block with modified header height.
+        /// (test-util) Returns block with modified header height.
         pub fn height(&self, height: Height) -> Self {
             let mut block = self.clone();
             block.header.height = height;
             block
         }
 
-        /// Returns block with modified header timestamp.
+        /// (test-util) Returns block with modified header timestamp.
         pub fn timestamp(&self, t: Timestamp) -> Self {
             let mut block = self.clone();
             block.header.timestamp = t;
             block
         }
 
-        /// Returns block with appended transaction.
+        /// (test-util) Returns block with appended transaction.
         pub fn add_tx(&self, tx: Transaction) -> Self {
             let mut block = self.clone();
             block.transactions.push(tx);
@@ -283,6 +264,7 @@ pub mod testutils {
     }
 
     impl Header {
+        /// (test-util) Dummy header
         pub fn dummy() -> Self {
             Header {
                 extension_id: random_digest32(),
@@ -325,122 +307,62 @@ pub mod testutils {
         }
 
         /// Returns tx with appended input. Sets the input's index.
-        pub fn add_input(&self, input: Input) -> Self {
+        pub fn add_input(&self, input: BoxData) -> Self {
             let mut tx = self.clone();
-            let idx = self.inputs.len() as i32;
-            tx.inputs.push(input.index(idx));
+            tx.inputs.push(input);
             tx
         }
 
         /// Returns tx with appended output. Sets the output's index.
-        pub fn add_output(&self, output: Output) -> Self {
+        pub fn add_output(&self, output: BoxData) -> Self {
             let mut tx = self.clone();
-            let idx = self.outputs.len() as i32;
-            tx.outputs.push(output.index(idx));
+            tx.outputs.push(output);
             tx
         }
     }
 
-    impl Output {
+    impl BoxData {
+        /// (test-util) Creates a BoxData with dummy/random data.
         pub fn dummy() -> Self {
             Self {
                 box_id: Alphanumeric.sample_string(&mut rand::thread_rng(), 64),
                 creation_height: 0,
                 address_id: 0,
-                index: 0,
                 value: 1000000000,
-                additional_registers: Registers::dummy(),
-                assets: vec![],
                 size: 100,
+                assets: vec![],
+                additional_registers: Registers::dummy(),
+                output_timestamp: 1683634223508,
             }
         }
 
-        /// Returns output with modified value
+        /// (test-util) Returns box with modified value
         pub fn value(&self, value: NanoERG) -> Self {
-            let mut output = self.clone();
-            output.value = value;
-            output
+            let mut bx = self.clone();
+            bx.value = value;
+            bx
         }
 
-        /// Returns output with modified address id
-        pub fn address_id(&self, address_id: AddressID) -> Self {
-            let mut output = self.clone();
-            output.address_id = address_id;
-            output
-        }
-
-        /// Returns output with modified index
-        pub fn index(&self, index: i32) -> Self {
-            let mut output = self.clone();
-            output.index = index;
-            output
-        }
-
-        /// Returns output with asset added
-        pub fn add_asset(&self, token_id: &str, amount: i64) -> Self {
-            let mut output = self.clone();
-            let asset = Asset {
-                token_id: token_id.into(),
-                amount,
-            };
-            output.assets.push(asset);
-            output
-        }
-
-        /// Set serialized register value
-        pub fn set_registers(&self, json: &str) -> Self {
-            let mut output = self.clone();
-            // output.additional_registers = Registers::new(json.into());
-            output.additional_registers = Registers::new(serde_json::from_str(json).unwrap());
-            output
-        }
-    }
-
-    impl Input {
-        pub fn dummy() -> Self {
-            Self {
-                box_id: Alphanumeric.sample_string(&mut rand::thread_rng(), 64),
-                creation_height: 0,
-                address_id: 0,
-                index: 0,
-                value: 1000000000,
-                additional_registers: Registers::dummy(),
-                assets: vec![],
-                size: 100,
-                creation_timestamp: 1683634223508,
-            }
-        }
-
-        /// Returns input with modified value
-        pub fn value(&self, value: NanoERG) -> Self {
-            let mut input = self.clone();
-            input.value = value;
-            input
-        }
-
-        /// Returns input with modified address id
+        /// (test-util) Returns box with modified address id
         pub fn address_id(&self, address_id: AddressID) -> Self {
             let mut input = self.clone();
             input.address_id = address_id;
             input
         }
 
-        /// Returns input with modified index
-        pub fn index(&self, index: i32) -> Self {
-            let mut input = self.clone();
-            input.index = index;
-            input
+        /// (test-util) Returns box with asset added
+        pub fn add_asset(&self, asset_id: AssetID, amount: i64) -> Self {
+            let mut bx = self.clone();
+            let asset = Asset { asset_id, amount };
+            bx.assets.push(asset);
+            bx
         }
 
-        /// Returns input with asset added
-        pub fn add_asset(&self, token_id: &str, amount: i64) -> Self {
-            let mut input = self.clone();
-            let asset = Asset {
-                token_id: token_id.into(),
-                amount,
-            };
-            input.assets.push(asset);
-            input
+        /// (test-util)  Set serialized register value
+        pub fn set_registers(&self, json: &str) -> Self {
+            let mut bx = self.clone();
+            bx.additional_registers = Registers::new(serde_json::from_str(json).unwrap());
+            bx
         }
     }
 
@@ -453,22 +375,19 @@ pub mod testutils {
 
 #[cfg(test)]
 mod tests {
-    use super::Input;
-    use super::Output;
+    use super::BoxData;
     use super::Transaction;
 
     #[test]
-    fn test_output_helpers() {
-        let output = Output::dummy()
-            .index(3)
+    fn test_box_data_helpers() {
+        let output = BoxData::dummy()
             .address_id(123)
             .value(12345)
-            .add_asset("some-token", 420)
+            .add_asset(5, 420)
             .set_registers(r#"{"R4": "05baafd2a302"}"#);
-        assert_eq!(output.index, 3);
         assert_eq!(output.address_id, 123);
         assert_eq!(output.value, 12345);
-        assert_eq!(output.assets[0].token_id, String::from("some-token"));
+        assert_eq!(output.assets[0].asset_id, 5);
         assert_eq!(output.assets[0].amount, 420);
         assert_eq!(
             output.additional_registers.r4().expect("R4").rendered_value,
@@ -477,31 +396,18 @@ mod tests {
     }
 
     #[test]
-    fn test_input_helpers() {
-        let input = Input::dummy()
-            .index(3)
-            .address_id(123)
-            .value(12345)
-            .add_asset("some-token", 420);
-        assert_eq!(input.index, 3);
-        assert_eq!(input.address_id, 123);
-        assert_eq!(input.value, 12345);
-        assert_eq!(input.assets[0].token_id, String::from("some-token"));
-        assert_eq!(input.assets[0].amount, 420);
-    }
-
-    #[test]
     fn test_transaction_helpers() {
         let tx = Transaction::dummy();
         // inputs
         assert!(tx.inputs.is_empty());
-        let tx = tx.add_input(Input::dummy().index(5));
-        assert!(tx.inputs.len() == 1);
-        assert!(tx.inputs[0].index == 0);
+
+        let tx = tx.add_input(BoxData::dummy().address_id(123));
+        assert_eq!(tx.inputs.len(), 1);
+        assert_eq!(tx.inputs[0].address_id, 123);
         // outputs
         assert!(tx.outputs.is_empty());
-        let tx = tx.add_output(Output::dummy().index(5));
-        assert!(tx.outputs.len() == 1);
-        assert!(tx.outputs[0].index == 0);
+        let tx = tx.add_output(BoxData::dummy().address_id(456));
+        assert_eq!(tx.outputs.len(), 1);
+        assert_eq!(tx.outputs[0].address_id, 456);
     }
 }

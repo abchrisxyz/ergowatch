@@ -6,10 +6,10 @@ use tokio::sync::mpsc::Sender;
 use crate::config::PostgresConfig;
 use crate::core::tracking::Tracker;
 use crate::core::tracking::TrackingMessage;
+use crate::core::types::BoxData;
 use crate::core::types::CoreData;
 use crate::core::types::Head;
 use crate::core::types::Height;
-use crate::core::types::Output;
 use crate::monitor::MonitorMessage;
 use crate::monitor::WorkerMessage;
 
@@ -22,7 +22,7 @@ pub trait Workflow {
     async fn new(pgconf: &PostgresConfig) -> Self;
 
     /// Handle genesis boxes.
-    async fn include_genesis_boxes(&mut self, boxes: &Vec<Output>);
+    async fn include_genesis_boxes(&mut self, boxes: &Vec<BoxData>);
 
     /// Process new block data.
     async fn include_block(&mut self, data: &CoreData);
@@ -69,7 +69,7 @@ impl<W: Workflow> Worker<W> {
                         break;
                 },
                 msg = self.rx.recv() => {
-                    match msg.expect("message is some") {
+                    match msg.unwrap() {
                         TrackingMessage::Genesis(boxes) => self.workflow.include_genesis_boxes(&boxes).await,
                         TrackingMessage::Include(data) => {
                             let head = self.workflow.head();

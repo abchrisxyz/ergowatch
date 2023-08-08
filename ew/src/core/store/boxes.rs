@@ -1,82 +1,126 @@
 use std::collections::HashMap;
-use std::collections::HashSet;
+use tokio_postgres::Client;
 use tokio_postgres::Transaction;
 
-use crate::core::node;
+use crate::core::types::AddressID;
+use crate::core::types::Asset;
+use crate::core::types::BoxData;
 use crate::core::types::BoxID;
 use crate::core::types::Digest32;
 use crate::core::types::Height;
-use crate::core::types::Timestamp;
+use crate::core::types::NanoERG;
+use crate::core::types::Registers;
 
-pub struct BoxIndex<'a> {
+/// A record from the `core.boxes` table.
+pub struct BoxRecord<'a> {
     pub box_id: &'a Digest32,
     pub height: Height,
-    pub tx_index: i32,
-    pub output_index: i32,
+    pub creation_height: Height,
+    pub address_id: AddressID,
+    pub value: NanoERG,
+    pub size: i32,
+    pub assets: Option<Vec<Asset>>,
+    pub registers: &'a serde_json::Value,
 }
 
-/// Intermediary (data)-input box data.
-pub struct UTxO {
-    pub height: Height,
-    pub timestamp: Timestamp,
-    pub output: node::models::Output,
-}
-
-pub(super) async fn insert_many<'a>(pgtx: &Transaction<'_>, records: Vec<BoxIndex<'a>>) {
+pub(super) async fn insert_many<'a>(pgtx: &Transaction<'_>, records: &Vec<BoxRecord<'a>>) {
     let sql = "insert into core.boxes (
         box_id,
         height,
-        tx_index,
-        output_index
-    ) values ($1, $2, $3, $4);";
+        creation_height,
+        address_id,
+        value,
+        size,
+        assets,
+        registers
+    ) values ($1, $2, $3, $4, $5, $6, $7, $8);";
     let stmt = pgtx.prepare(sql).await.unwrap();
     for r in records {
-        pgtx.execute(&stmt, &[&r.box_id, &r.height, &r.tx_index, &r.output_index])
-            .await
-            .unwrap();
+        pgtx.execute(
+            &stmt,
+            &[
+                &r.box_id,
+                &r.height,
+                &r.creation_height,
+                &r.address_id,
+                &r.value,
+                &r.size,
+                &r.assets,
+                &r.registers,
+            ],
+        )
+        .await
+        .unwrap();
     }
 }
 
-/// Maps `box_ids` to corresponding UTxO's.
+/// Maps `box_ids` to corresponding BoxData.
 pub(super) async fn map_boxes(
     pgtx: &Transaction<'_>,
-    box_ids: HashSet<BoxID>,
-) -> HashMap<BoxID, UTxO> {
-    tracing::debug!("mapping input boxes");
-    let mut map: HashMap<BoxID, UTxO> = HashMap::new();
+    box_ids: Vec<&BoxID>,
+) -> HashMap<BoxID, BoxData> {
+    tracing::debug!("mapping boxes");
+    let mut map: HashMap<BoxID, BoxData> = HashMap::new();
     let qry = "
-        select bx.height
-            , bk.block -> 'header' -> 'timestamp'
-            , bk.block -> 'blockTransactions' -> 'transactions' -> bx.tx_index -> 'outputs' -> bx.output_index as box
-        from core.boxes bx
-        join core.blocks bk on bk.height = bx.height
-        where bx.box_id = any($1);";
-    // Vector variant to use as query input
-    let box_ids_vec: Vec<&BoxID> = box_ids.iter().collect();
-    let rows = pgtx.query(qry, &[&box_ids_vec]).await.unwrap();
+        select b.box_id
+            , b.creation_height
+            , b.address_id
+            , b.value
+            , b.size
+            , b.assets
+            , b.registers
+            , h.timestamp
+        from core.boxes b
+        join core.headers h on h.height = b.height
+        where b.box_id = any($1);";
+
+    let rows = pgtx.query(qry, &[&box_ids]).await.unwrap();
     for row in rows {
-        let utxo = UTxO {
-            height: row.get(0),
-            timestamp: serde_json::from_value(row.get(1)).unwrap(),
-            output: serde_json::from_value(row.get(2)).unwrap(),
+        let box_data = BoxData {
+            box_id: row.get(0),
+            creation_height: row.get(1),
+            address_id: row.get(2),
+            value: row.get(3),
+            size: row.get(4),
+            assets: row.get::<usize, Option<Vec<Asset>>>(5).unwrap_or(vec![]),
+            additional_registers: Registers::new(row.get(6)),
+            output_timestamp: row.get(7),
         };
-        if !map.contains_key(&utxo.output.box_id) {
-            map.insert(utxo.output.box_id.clone(), utxo);
+        if !map.contains_key(&box_data.box_id) {
+            map.insert(box_data.box_id.clone(), box_data);
         }
     }
     tracing::debug!("mapped {} box(es)", map.len());
     map
 }
 
-pub(super) async fn get_genesis_boxes(pgtx: &Transaction<'_>) -> Vec<node::models::Output> {
+/// Retrieves collection of BoxData representing genesis boxes.
+pub(super) async fn get_genesis_boxes(client: &Client) -> Vec<BoxData> {
     tracing::debug!("retrieving genesis boxes");
     let qry = "
-        select jsonb_array_elements(block -> 'blockTransactions' -> 'transactions' -> 0 -> 'outputs') as boxes
-        from core.blocks
-        where height = 0;";
-    let rows = pgtx.query(qry, &[]).await.unwrap();
+        select b.box_id
+            , b.creation_height
+            , b.address_id
+            , b.value
+            , b.size
+            , b.assets
+            , b.registers
+            , h.timestamp
+        from core.boxes b
+        join core.headers h on h.height = b.height
+        where h.height = 0;";
+    let rows = client.query(qry, &[]).await.unwrap();
     rows.iter()
-        .map(|r| serde_json::from_value(r.get(0)).unwrap())
+        .map(|r| BoxData {
+            box_id: r.get(0),
+            creation_height: r.get(1),
+            address_id: r.get(2),
+            value: r.get(3),
+            size: r.get(4),
+            assets: r.get::<usize, Option<Vec<Asset>>>(5).unwrap_or(vec![]),
+            additional_registers: Registers::new(r.get(6)),
+            output_timestamp: r.get(7),
+        })
         .collect()
 }
 
