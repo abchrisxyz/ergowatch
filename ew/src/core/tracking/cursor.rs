@@ -11,6 +11,7 @@ use crate::core::types::Head;
 use crate::core::types::Header;
 use crate::core::types::HeaderID;
 use crate::monitor::CursorMessage;
+use crate::monitor::CursorRollback;
 use crate::monitor::MonitorMessage;
 
 pub(super) struct Cursor {
@@ -213,5 +214,14 @@ impl Cursor {
         // Wind back the cursor
         self.height = prev.height;
         self.header_id = prev.header_id;
+
+        // Notify monitor
+        self.monitor_tx
+            .send(MonitorMessage::Rollback(CursorRollback::new(
+                self.name.clone(),
+                self.height,
+            )))
+            .await
+            .unwrap();
     }
 }

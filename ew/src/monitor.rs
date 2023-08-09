@@ -15,6 +15,7 @@ use crate::core::types::Height;
 pub enum MonitorMessage {
     Worker(WorkerMessage),
     Cursor(CursorMessage),
+    Rollback(CursorRollback),
 }
 
 #[derive(Debug)]
@@ -24,6 +25,18 @@ pub struct CursorMessage {
 }
 
 impl CursorMessage {
+    pub fn new(name: String, height: Height) -> Self {
+        Self { name, height }
+    }
+}
+
+#[derive(Debug)]
+pub struct CursorRollback {
+    name: String,
+    height: Height,
+}
+
+impl CursorRollback {
     pub fn new(name: String, height: Height) -> Self {
         Self { name, height }
     }
@@ -53,6 +66,7 @@ struct MonitorData {
 struct CursorStatus {
     height: Height,
     blocks_since_start: i32,
+    rollbacks_since_start: i32,
     /// Average blocks per second since start
     bps_since_start: f32,
     /// Blocks per second for last 100 blocks
@@ -69,6 +83,7 @@ impl CursorStatus {
         CursorStatus {
             height: 0,
             blocks_since_start: 0,
+            rollbacks_since_start: 0,
             bps_since_start: 0f32,
             bps_last_100: 0f32,
             timer_since_start: std::time::Instant::now(),
@@ -86,6 +101,10 @@ impl CursorStatus {
             self.bps_last_100 = 100f32 / self.timer_last_100.elapsed().as_secs_f32();
             self.timer_last_100 = std::time::Instant::now();
         }
+    }
+
+    pub fn log_rollback(&mut self, _height: Height) {
+        self.rollbacks_since_start += 1;
     }
 }
 
@@ -126,6 +145,13 @@ impl Monitor {
                         .entry(msg.name)
                         .and_modify(|h| *h = msg.height)
                         .or_insert(msg.height);
+                }
+                MonitorMessage::Rollback(msg) => {
+                    let mut data = state.write().unwrap();
+                    data.cursors
+                        .entry(msg.name.clone())
+                        .and_modify(|cs| cs.log_rollback(msg.height))
+                        .or_insert(CursorStatus::new());
                 }
             };
         }
