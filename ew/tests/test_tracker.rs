@@ -2,6 +2,7 @@
 mod common;
 
 use ew::config::PostgresConfig;
+use ew::core::types::Block;
 use ew::core::types::Head;
 use ew::core::types::HeaderID;
 use ew::core::types::Height;
@@ -103,6 +104,15 @@ impl TrackingMessageInspector {
     fn header_id(&self) -> Option<HeaderID> {
         match &self.0 {
             TrackingMessage::Include(d) => Some(d.block.header.id.clone()),
+            TrackingMessage::Rollback(_) => None,
+            TrackingMessage::Genesis(_) => None,
+        }
+    }
+
+    /// Return block of include message payload
+    fn block(&self) -> Option<&Block> {
+        match &self.0 {
+            TrackingMessage::Include(d) => Some(&d.block),
             TrackingMessage::Rollback(_) => None,
             TrackingMessage::Genesis(_) => None,
         }
@@ -317,4 +327,28 @@ async fn test_fork_handling_same_height() {
     messages[5].assert_includes_block(TB::from_id("3"));
     messages[6].assert_includes_block(TB::from_id("4"));
     messages[7].assert_includes_block(TB::from_id("5"));
+
+    // Chech address and asset id's in blocks 3 and 3 bis.
+    // Both have an extra output with different new addresses and assets.
+    // Because of the rollback, they should all end up with the same
+    // address_id and asset_id. This is what we verify here.
+
+    // Retrieving block data from messages
+    let block3b = messages[3].block().unwrap();
+    let block3 = messages[5].block().unwrap();
+
+    // Both blocks have 3 outputs
+    assert_eq!(block3b.transactions[0].outputs.len(), 3);
+    assert_eq!(block3.transactions[0].outputs.len(), 3);
+
+    // Check address id of third output (the extra one)
+    // So far, we had 3 genesis boxes (including emission contract)
+    // and 3 miners (in blocks 1, 2 and 3), so next address id must be 7
+    assert_eq!(block3b.transactions[0].outputs[2].address_id, 7);
+    assert_eq!(block3.transactions[0].outputs[2].address_id, 7);
+
+    // Check asset id in third output (the extra one)
+    // It is the first token ever encountered, so asset id must be 1
+    assert_eq!(block3b.transactions[0].outputs[2].assets[0].asset_id, 1);
+    assert_eq!(block3.transactions[0].outputs[2].assets[0].asset_id, 1);
 }

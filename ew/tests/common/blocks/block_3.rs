@@ -1,3 +1,8 @@
+// Block 3 with an extra output taken from tx:
+// f03ae1b3cd153407cb69be9354d143fb39e8c5fd1ccbf0f41eeebeb2b7bf56b3.
+//
+// Extra outputs have different addresses and tokens to test
+// address/token id handling during a rollback.
 pub const BLOCK_3: &str = r#"
   {
     "header": {
@@ -52,13 +57,32 @@ pub const BLOCK_3: &str = r#"
             },
             {
               "boxId": "11b1524584ce58e0e1c3f3acca72ecde927381826f59d1274bd501cff86b6536",
-              "value": 67500000000,
+              "value": 67000000000,
               "ergoTree": "100204a00b08cd02d3a9410ac758ad45dfc85af8626efdacf398439c73977b13064aa8e6c8f2ac88ea02d192a39a8cc7a70173007301",
               "assets": [],
               "creationHeight": 3,
               "additionalRegisters": {},
               "transactionId": "4f2d69416edcabf31a01a36f72a7b1c9333df3f2e2b5357af0a923e6a3a08c42",
               "index": 1
+            },
+            {
+              "boxId": "60379316cd598cbc4b42f15ab7e634762e4263fce70ffe8b324344ba27e78245",
+              "value": 500000000,
+              "ergoTree": "0008cd0321440ba64346c25a575543cff4bfac1ba89b6c916f47989f5d8a6c2c7ce689ea",
+              "assets": [
+                {
+                  "tokenId": "6a3f36ddaaa792b1937146003c6bbb7af204b351e737f80a93d4aa7854e7b403",
+                  "amount": 1
+                },
+                {
+                  "tokenId": "2514c37d6996b87daa90eb00f0a23692d21a610b63a14603ea6605f2bc3dee2d",
+                  "amount": 1
+                }
+              ],
+              "creationHeight": 34329,
+              "additionalRegisters": {},
+              "transactionId": "4f2d69416edcabf31a01a36f72a7b1c9333df3f2e2b5357af0a923e6a3a08c42",
+              "index": 2
             }
           ],
           "size": 341
@@ -91,7 +115,8 @@ pub const BLOCK_3: &str = r#"
   }
 "#;
 
-//. Same as BLOCK_3 but different header id
+// Variant of BLOCK_3 with a different header id and extra output
+// Extra output coming from this tx: f04dd00b1cb28cb85967eec78c65a3c5f83e3b334c2aac22a61b1a72dbae239a
 pub const BLOCK_3BIS: &str = r#"
   {
     "header": {
@@ -146,13 +171,32 @@ pub const BLOCK_3BIS: &str = r#"
             },
             {
               "boxId": "11b1524584ce58e0e1c3f3acca72ecde927381826f59d1274bd501cff86b6536",
-              "value": 67500000000,
+              "value": 67000000000,
               "ergoTree": "100204a00b08cd02d3a9410ac758ad45dfc85af8626efdacf398439c73977b13064aa8e6c8f2ac88ea02d192a39a8cc7a70173007301",
               "assets": [],
               "creationHeight": 3,
               "additionalRegisters": {},
               "transactionId": "4f2d69416edcabf31a01a36f72a7b1c9333df3f2e2b5357af0a923e6a3a08c42",
               "index": 1
+            },
+            {
+              "boxId": "089105a867391d773a57d500dab9aef255b0292ec66ce1d9c9813d108d7283e7",
+              "value": 500000000,
+              "ergoTree": "0008cd02dada811a888cd0dc7a0a41739a3ad9b0f427741fe6ca19700cf1a51200c96bf7",
+              "assets": [
+                {
+                  "tokenId": "ceb57ebd00fe060b67ca56948c685477d7e64273efbaadd2ad7e7d3bf1e62dd9",
+                  "amount": 1
+                }
+              ],
+              "creationHeight": 8010,
+              "additionalRegisters": {
+                "R4": "0e03545354",
+                "R5": "0e134b75736874692773205465737420746f6b656e",
+                "R6": "0400"
+              },
+              "transactionId": "4f2d69416edcabf31a01a36f72a7b1c9333df3f2e2b5357af0a923e6a3a08c42",
+              "index": 2
             }
           ],
           "size": 341

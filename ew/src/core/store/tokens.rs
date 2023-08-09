@@ -1,4 +1,4 @@
-use tokio_postgres::Client;
+use tokio_postgres::GenericClient;
 use tokio_postgres::Transaction;
 
 use crate::core::types::AssetID;
@@ -32,7 +32,7 @@ pub(super) async fn get_id_opt(pgtx: &Transaction<'_>, token_id: &TokenID) -> Op
 }
 
 /// Retrieve highest asset id.
-pub(super) async fn get_max_id(client: &Client) -> AssetID {
+pub(super) async fn get_max_id(client: &impl GenericClient) -> AssetID {
     let qry = "select max(asset_id) from core.tokens;";
     match client.query_one(qry, &[]).await.unwrap().get(0) {
         Some(id) => id,
@@ -49,12 +49,14 @@ pub(super) async fn index_new(pgtx: &Transaction<'_>, rec: &TokenRecord) {
         .unwrap();
 }
 
-/// Delete tokens spotted at `height`
-pub(super) async fn delete_at(pgtx: &Transaction<'_>, height: Height) {
+/// Delete tokens spotted at `height`.
+///
+/// Returns number of deleted rows.
+pub(super) async fn delete_at(pgtx: &Transaction<'_>, height: Height) -> u64 {
     pgtx.execute(
         "delete from core.tokens where spot_height = $1;",
         &[&height],
     )
     .await
-    .unwrap();
+    .unwrap()
 }

@@ -17,10 +17,10 @@ use super::types::Block;
 use super::types::BoxData;
 use super::types::BoxID;
 use super::types::CoreData;
-use super::types::Digest32;
 use super::types::Head;
 use super::types::Height;
 use super::types::Registers;
+use super::types::TokenID;
 use super::types::Transaction;
 use crate::config::PostgresConfig;
 use crate::utils::Schema;
@@ -37,7 +37,7 @@ pub(super) struct Store {
 /// Cached data to speed up ergo tree to address id conversion.
 struct AddressCache {
     /// Keep track of highest address id
-    pub last_address_id: i64,
+    pub last_id: i64,
     /// Maps ergo trees to an address id (global index)
     pub lru: LruCache<String, AddressID>,
 }
@@ -45,9 +45,15 @@ struct AddressCache {
 impl AddressCache {
     pub fn new(last_address_id: i64) -> Self {
         Self {
-            last_address_id,
-            lru: LruCache::new(std::num::NonZeroUsize::new(1000).unwrap()),
+            last_id: last_address_id,
+            lru: LruCache::new(std::num::NonZeroUsize::new(5000).unwrap()),
         }
+    }
+
+    /// Resets the cache by clearing all entries and setting `last_id` to `last_address_id`.
+    pub fn reset(&mut self, last_address_id: AddressID) {
+        self.lru.clear();
+        self.last_id = last_address_id;
     }
 }
 
@@ -57,15 +63,21 @@ struct AssetCache {
     /// Keep track of highest address id
     pub last_id: i64,
     /// Maps Digest32 token id's corresponfing asset id.
-    pub lru: LruCache<Digest32, AssetID>,
+    pub lru: LruCache<TokenID, AssetID>,
 }
 
 impl AssetCache {
     pub fn new(last_asset_id: AssetID) -> Self {
         Self {
             last_id: last_asset_id,
-            lru: LruCache::new(std::num::NonZeroUsize::new(1000).unwrap()),
+            lru: LruCache::new(std::num::NonZeroUsize::new(5000).unwrap()),
         }
+    }
+
+    /// Resets the cache by clearing all entries and setting `last_id` to `last_asset_id`.
+    pub fn reset(&mut self, last_asset_id: AssetID) {
+        self.lru.clear();
+        self.last_id = last_asset_id;
     }
 }
 
@@ -308,10 +320,21 @@ impl Store {
         boxes::delete_at(&pgtx, head.height).await;
 
         // Delete addresses spotted at height h
-        addresses::delete_at(&pgtx, head.height).await;
+        let n_deleted = addresses::delete_at(&pgtx, head.height).await;
+        // Reset the cache if there where any new ones in rolled back block.
+        // A bit radical, but not taking any risks. This will only affect synced
+        // cursors anyway, so block processing time is less of an issue.
+        if n_deleted > 0 {
+            self.address_cache.reset(addresses::get_max_id(&pgtx).await)
+        }
 
         // Delete tokens spotted at height h
-        tokens::delete_at(&pgtx, head.height).await;
+        let n_deleted = tokens::delete_at(&pgtx, head.height).await;
+        // Reset the cache if there where any new ones in rolled back block.
+        // Same comments as for address cache above.
+        if n_deleted > 0 {
+            self.asset_cache.reset(tokens::get_max_id(&pgtx).await)
+        }
 
         pgtx.commit().await.unwrap();
 
@@ -429,13 +452,13 @@ async fn map_address_id(
                 Some(id) => id,
                 None => {
                     // This is a new address - assign new id and index
-                    cache.last_address_id += 1;
+                    cache.last_id += 1;
                     addresses::index_new(
                         &pgtx,
-                        &addresses::AddressRecord::new(cache.last_address_id, spot_height, address),
+                        &addresses::AddressRecord::new(cache.last_id, spot_height, address),
                     )
                     .await;
-                    cache.last_address_id
+                    cache.last_id
                 }
             };
             // Cache and return
