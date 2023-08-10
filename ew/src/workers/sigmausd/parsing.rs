@@ -482,16 +482,14 @@ fn extract_service_diffs(timestamp: Timestamp, events: &Vec<Event>) -> Vec<Servi
     let mut diffs = vec![];
     for event in events {
         if let Event::BankTx(btx) = event {
-            if let Some(aid) = btx.service_address_id {
-                diffs.push(ServiceStats {
-                    address_id: aid,
-                    tx_count: 1,
-                    first_tx: timestamp,
-                    last_tx: timestamp,
-                    fees: btx.service_fee.into(),
-                    volume: btx.reserves_diff.abs().into(),
-                });
-            }
+            diffs.push(ServiceStats {
+                address_id: btx.service_address_id,
+                tx_count: 1,
+                first_tx: timestamp,
+                last_tx: timestamp,
+                fees: btx.service_fee.into(),
+                volume: btx.reserves_diff.abs().into(),
+            });
         }
     }
     diffs
@@ -1236,20 +1234,20 @@ mod tests {
         let timestamp = 123456789;
         let service_diffs = extract_service_diffs(timestamp, &events);
         assert_eq!(service_diffs.len(), 3);
-        assert_eq!(service_diffs[0].address_id, service_a);
+        assert_eq!(service_diffs[0].address_id, Some(service_a));
 
         assert_eq!(service_diffs[0].fees, Decimal::from(2));
         assert_eq!(service_diffs[0].first_tx, timestamp);
         assert_eq!(service_diffs[0].last_tx, timestamp);
         assert_eq!(service_diffs[0].volume, Decimal::from(1000));
 
-        assert_eq!(service_diffs[1].address_id, service_b);
+        assert_eq!(service_diffs[1].address_id, Some(service_b));
         assert_eq!(service_diffs[1].fees, Decimal::from(4));
         assert_eq!(service_diffs[1].first_tx, timestamp);
         assert_eq!(service_diffs[1].last_tx, timestamp);
         assert_eq!(service_diffs[1].volume, Decimal::from(2000));
 
-        assert_eq!(service_diffs[2].address_id, service_a);
+        assert_eq!(service_diffs[2].address_id, Some(service_a));
         assert_eq!(service_diffs[2].fees, Decimal::from(1));
         assert_eq!(service_diffs[2].first_tx, timestamp);
         assert_eq!(service_diffs[2].last_tx, timestamp);

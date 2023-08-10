@@ -79,7 +79,7 @@ create table sigmausd.history (
 */
 create table sigmausd.services (
     -- address id of service or null for direct interaction
-    address_id bigint primary key,
+    address_id bigint unique,
     -- total transactions to date
     tx_count bigint not null,
     -- first and last tx timestamps

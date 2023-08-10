@@ -343,7 +343,8 @@ pub struct OHLCGroup {
 }
 
 pub struct ServiceStats {
-    pub address_id: AddressID,
+    // None when no service (direct interaction)
+    pub address_id: Option<AddressID>,
     pub tx_count: i64,
     pub first_tx: Timestamp,
     pub last_tx: Timestamp,
