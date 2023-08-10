@@ -101,7 +101,21 @@ impl Cursor {
                 self.roll_back(store).await;
                 break;
             } else {
-                self.include(&new_header.id, store).await;
+                match self.include(&new_header.id, store).await {
+                    Ok(_) => (), // all good, keep going
+                    Err(NodeError::API404Notfound(url)) => {
+                        // Block wasn't found. This can happen when at the tip of
+                        // the chain and the header is in but the corresponding
+                        // block not yet.
+                        // Pause for a short time, then break to try again.
+                        tracing::warn!("404 for {}", { url });
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        break;
+                    }
+                    Err(other_node_error) => {
+                        panic!("{:?}", other_node_error)
+                    }
+                };
             }
         }
     }
@@ -160,7 +174,7 @@ impl Cursor {
     }
 
     /// Submit block for inclusion and update cursor
-    async fn include(&mut self, header_id: &HeaderID, store: &mut Store) {
+    async fn include(&mut self, header_id: &HeaderID, store: &mut Store) -> Result<(), NodeError> {
         info!(
             "[{}] including block {} for height {}",
             self.name,
@@ -168,7 +182,7 @@ impl Cursor {
             self.height + 1
         );
 
-        let block = self.node.api.block(header_id).await.unwrap();
+        let block = self.node.api.block(header_id).await?;
         assert_eq!(block.header.height, self.height + 1);
         let core_data: CoreData = store.process(block).await;
 
@@ -191,6 +205,8 @@ impl Cursor {
             )))
             .await
             .unwrap();
+
+        Ok(())
     }
 
     /// Submit block for roll back and update cursor
