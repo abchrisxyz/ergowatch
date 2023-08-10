@@ -11,7 +11,7 @@ insert into sigmausd._meta (rev_major, rev_minor) values (1, 0);
 -- Selected header fields from included blocks.
 -- Would be available from core.headers too but we try to keep schemas self contained.
 create table sigmausd.headers (
-    height integer primary key not null,
+    height integer primary key,
     timestamp bigint not null,
     id text not null
 );
@@ -45,7 +45,7 @@ create table sigmausd.bank_transactions (
 create index on sigmausd.bank_transactions using brin(height);
 
 create table sigmausd.oracle_postings (
-    height integer primary key not null,
+    height integer primary key,
     datapoint bigint not null,
     box_id text not null
 );
@@ -59,7 +59,7 @@ create table sigmausd.oracle_postings (
     Shows state after last change in block.
 */
 create table sigmausd.history (
-    height integer primary key not null,
+    height integer primary key,
     oracle bigint not null,
     circ_sc bigint not null,
     circ_rc bigint not null,
@@ -98,7 +98,7 @@ create table sigmausd.services (
 
 -- Daily OHLC data
 create table sigmausd.rc_ohlc_daily (
-    t date primary key not null,
+    t date primary key,
     o bigint not null,
     h bigint not null,
     l bigint not null,
@@ -107,7 +107,7 @@ create table sigmausd.rc_ohlc_daily (
 
 -- Weekly OHLC data
 create table sigmausd.rc_ohlc_weekly (
-    t date primary key not null,
+    t date primary key,
     o bigint not null,
     h bigint not null,
     l bigint not null,
@@ -116,7 +116,7 @@ create table sigmausd.rc_ohlc_weekly (
 
 -- Monthly OHLC data
 create table sigmausd.rc_ohlc_monthly (
-    t date primary key not null,
+    t date primary key,
     o bigint not null,
     h bigint not null,
     l bigint not null,
@@ -133,7 +133,7 @@ create table sigmausd.rc_ohlc_monthly (
 
 -- Daily OHLC log
 create table sigmausd._log_rc_ohlc_daily (
-    height int primary key not null,
+    height int primary key,
     t date not null,
     o bigint not null,
     h bigint not null,
@@ -143,7 +143,7 @@ create table sigmausd._log_rc_ohlc_daily (
 
 -- Weekly OHLC log
 create table sigmausd._log_rc_ohlc_weekly (
-    height int primary key not null,
+    height int primary key,
     t date not null,
     o bigint not null,
     h bigint not null,
@@ -153,7 +153,7 @@ create table sigmausd._log_rc_ohlc_weekly (
 
 -- Monthly OHLC log
 create table sigmausd._log_rc_ohlc_monthly (
-    height int primary key not null,
+    height int primary key,
     t date not null,
     o bigint not null,
     h bigint not null,

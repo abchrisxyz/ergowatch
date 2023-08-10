@@ -10,7 +10,7 @@ create table core._meta (
 insert into core._meta (rev_major, rev_minor) values (1, 0);
 
 create table core.headers (
-    height integer primary key not null,
+    height integer primary key,
     timestamp bigint not null,
     id text not null
 );
@@ -22,7 +22,7 @@ create type asset as (
 );
 
 create table core.boxes (
-	box_id varchar(64) collate "C" primary key not null,
+	box_id varchar(64) collate "C" primary key,
 	height integer not null,
 	creation_height integer not null,
 	address_id bigint not null,
@@ -34,7 +34,7 @@ create table core.boxes (
 create index on core.boxes using brin(height);
 
 create table core.addresses (
-	id bigint primary key not null,
+	id bigint primary key,
 	spot_height int not null,
 	address text not null
 );
@@ -54,7 +54,7 @@ create function core.address_id(_address text) returns bigint as '
     returns null on null input;
 
 create table core.tokens (
-	asset_id bigint primary key not null,
+	asset_id bigint primary key,
 	spot_height integer not null,
 	token_id varchar(64) not null
 );
@@ -62,7 +62,7 @@ create index on core.tokens(token_id);
 create index on core.addresses using brin(spot_height);
 
 -- create table core.transactions (
---     id bigint primary key not null,
+--     id bigint primary key,
 --     spot_height integer not null,
 --     base16_id text not null
 -- );
