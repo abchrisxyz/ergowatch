@@ -122,7 +122,7 @@ async fn test_rollback() {
         .height(height)
         // Timestamp far enough after contract launch to ensure all
         // ohlc's have a new window. Otherwise, the rollback will
-        // delere the only weekly/monthy record that exists (the ones
+        // delete the only weekly/monthy record that exists (the ones
         // defined in schema.sql).
         .timestamp(TS_01APR2021)
         // User mints 200 SigUSD for 100 ERG + 1 ERG service fee.
