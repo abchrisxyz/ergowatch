@@ -2,6 +2,7 @@ use tokio_postgres::Client;
 use tokio_postgres::Transaction;
 
 use super::super::types::MiniHeader;
+use crate::core::types::Height;
 
 pub async fn get_last(client: &Client) -> MiniHeader {
     let qry = "
@@ -26,4 +27,13 @@ pub async fn insert(pgtx: &Transaction<'_>, header: &MiniHeader) {
     pgtx.execute(stmt, &[&header.height, &header.timestamp, &header.id])
         .await
         .unwrap();
+}
+
+pub async fn delete_at(pgtx: &Transaction<'_>, height: Height) {
+    pgtx.execute(
+        "delete from sigmausd.headers where height = $1;",
+        &[&height],
+    )
+    .await
+    .unwrap();
 }

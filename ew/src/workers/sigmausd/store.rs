@@ -99,6 +99,9 @@ impl Store {
 
         let pgtx = self.client.transaction().await.unwrap();
 
+        // Delete header at h
+        headers::delete_at(&pgtx, height).await;
+
         // Delete bank txs at h
         bank_transactions::detele_at(&pgtx, height).await;
 
