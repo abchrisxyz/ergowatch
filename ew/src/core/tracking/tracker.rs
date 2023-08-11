@@ -33,6 +33,16 @@ impl Tracker {
         }
     }
 
+    /// Get head of tracker's store.
+    pub fn head(&self) -> Head {
+        self.store.head()
+    }
+
+    /// Get head of tracker's store.
+    pub async fn contains_head(&self, head: &Head) -> bool {
+        self.store.contains_head(head).await
+    }
+
     pub fn add_cursor<'a>(
         &mut self,
         name: String,
@@ -42,8 +52,10 @@ impl Tracker {
         // Create new channel
         let (tx, rx) = mpsc::channel(CHANNEL_CAPACITY);
 
-        // New cursor cannot point past tracker's head,
-        // so we cap it to tracker's head if needed.
+        // Workflows may start at a non-zero height and ignore/skip any blocks
+        // prior. The tracker's store could be empty or not having reached the
+        // workflow's start height yet. Because a cursor cannot point past the
+        // tracker's head, we cap it to the current tracker's head if needed.
         let max_head = self.store.head();
         let capped_head = if head.height > max_head.height {
             info!(
@@ -55,7 +67,7 @@ impl Tracker {
             head
         };
 
-        // Check for existing cursors at same position
+        // If there's an existing cursors at same position we use that one.
         for cur in &mut self.cursors {
             if cur.is_at(capped_head.height, &capped_head.header_id) {
                 cur.txs.push(tx);
@@ -63,6 +75,7 @@ impl Tracker {
             }
         }
 
+        // No existing cursors were found, so we make a new one.
         let cur = Cursor {
             name,
             height: capped_head.height,

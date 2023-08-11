@@ -49,9 +49,27 @@ impl<W: Workflow> Worker<W> {
         tracker: &mut Tracker,
         monitor_tx: Sender<MonitorMessage>,
     ) -> Self {
-        let workflow = W::new(pgconf).await;
-        let head = workflow.head();
-        let rx = tracker.add_cursor(id.to_owned(), head.clone(), &monitor_tx);
+        let mut workflow = W::new(pgconf).await;
+
+        // Ensure the workflow head is on the main chain.
+        // A worker could crash on a rollback while the tracker gets passed it.
+        // In such a case, the workflow's head wouldn't be on the main chain anymore.
+        // Here, we check for such cases and roll back the workflow until bacn
+        // on the main chain again.
+        // Skip this is if the workflow is ahead of the tracker.
+        if workflow.head().height <= tracker.head().height {
+            // Rolling back any blocks past the split.
+            while !tracker.contains_head(workflow.head()).await {
+                tracing::info!(
+                    "workflow `{}` is not on main chain - rolling back {:?}",
+                    &id,
+                    workflow.head(),
+                );
+                workflow.roll_back(workflow.head().height).await;
+            }
+        }
+
+        let rx = tracker.add_cursor(id.to_owned(), workflow.head().clone(), &monitor_tx);
 
         Self {
             id: String::from(id),

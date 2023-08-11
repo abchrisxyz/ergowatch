@@ -26,6 +26,7 @@ pub struct SigmaUSD {
 impl super::Workflow for SigmaUSD {
     async fn new(pgconf: &PostgresConfig) -> Self {
         let store = Store::new(pgconf.clone()).await;
+        tracing::debug!("head: {:?}", store.get_head());
         let cache = store.load_parser_cache().await;
         let parser = Parser::new(cache);
         Self { parser, store }

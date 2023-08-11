@@ -38,3 +38,19 @@ pub async fn delete(pgtx: &Transaction<'_>, height: Height) {
         .await
         .unwrap();
 }
+
+/// Returns `true` if core.headers has a record for given `head`.
+pub async fn exists(client: &Client, head: &Head) -> bool {
+    let sql = "
+    select exists (
+        select height
+            , id
+        from core.headers
+        where height = $1 and id = $2
+    );";
+    client
+        .query_one(sql, &[&head.height, &head.header_id])
+        .await
+        .unwrap()
+        .get(0)
+}

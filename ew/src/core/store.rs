@@ -114,6 +114,10 @@ impl Store {
         self.head.clone()
     }
 
+    pub(super) async fn contains_head(&self, head: &Head) -> bool {
+        headers::exists(&self.client, head).await
+    }
+
     pub(super) async fn include_genesis_boxes(&mut self, boxes: String) {
         tracing::info!("including genesis boxes");
         assert!(self.head.is_initial());
