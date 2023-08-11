@@ -238,7 +238,7 @@ async fn test_straight_chain_three_cursors() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore] // Untestable as head will be capped to current store's head.
 async fn test_fork_handling_not_a_child() {
     let guard = set_tracing_subscriber(false);
     let block_ids = ["1", "2", "3", "3bis*", "4", "5"];
