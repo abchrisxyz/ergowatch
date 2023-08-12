@@ -130,11 +130,46 @@ pub struct Transaction {
 }
 
 /// Mutually exclusive address attributes
-#[derive(Debug)]
+///
+/// P2PK: pay to private key addresses
+/// MINER: mining contracts
+/// OTHER: other pay to script / script-hash addresses
+#[derive(Debug, Clone, ToSql, FromSql)]
+#[postgres(name = "address_type")]
 pub enum AddressType {
+    /// Pay to private key
     P2PK,
-    MINER,
-    OTHER,
+    /// Mining contract
+    Miner,
+    /// Other (non-mining) P2S(H) contracts
+    Other,
+}
+
+/// Return the AddressType for a given `address`.
+impl AddressType {
+    /// Derive the AddressType for a given `address`.
+    pub fn derive(address: &Address) -> Self {
+        if address.starts_with('9') && address.len() == 51 {
+            return Self::P2PK;
+        } else if address.starts_with("88dhgzEuTX") {
+            // Ideally we'd use the ergo tree template hash here.
+            // So far, this explorer query:
+            //      select count(*)
+            //      from node_outputs
+            //      where ergo_tree_template_hash = '961e872f7ab750cb77ad75ea8a32d0ea3472bd0c230de09329b802801b3d1817'
+            // 	    and address not ilike '88dhgzEuTX%'
+            // has no matches, so '88dhgzEuTX' should be safe enough to use to id miner contracts.
+            return Self::Miner;
+        }
+        Self::Other
+    }
+}
+
+#[derive(Debug, Clone)]
+/// Convenience type bringing id and type together.
+pub struct AddressInfo {
+    pub id: AddressID,
+    pub typ: AddressType,
 }
 
 #[derive(Debug, Clone)]
@@ -143,6 +178,7 @@ pub struct BoxData {
     pub box_id: BoxID,
     pub creation_height: Height,
     pub address_id: AddressID,
+    pub address_type: AddressType,
     pub value: i64,
     pub additional_registers: Registers,
     pub assets: Vec<Asset>,
@@ -328,6 +364,7 @@ pub mod testutils {
                 box_id: Alphanumeric.sample_string(&mut rand::thread_rng(), 64),
                 creation_height: 0,
                 address_id: 0,
+                address_type: AddressType::P2PK,
                 value: 1000000000,
                 size: 100,
                 assets: vec![],

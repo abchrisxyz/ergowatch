@@ -3,6 +3,7 @@ use tokio_postgres::Client;
 use tokio_postgres::Transaction;
 
 use crate::core::types::AddressID;
+use crate::core::types::AddressType;
 use crate::core::types::Asset;
 use crate::core::types::BoxData;
 use crate::core::types::BoxID;
@@ -17,6 +18,7 @@ pub struct BoxRecord<'a> {
     pub height: Height,
     pub creation_height: Height,
     pub address_id: AddressID,
+    pub address_type: AddressType,
     pub value: NanoERG,
     pub size: i32,
     pub assets: Option<Vec<Asset>>,
@@ -29,11 +31,12 @@ pub(super) async fn insert_many<'a>(pgtx: &Transaction<'_>, records: &Vec<BoxRec
         height,
         creation_height,
         address_id,
+        address_type,
         value,
         size,
         assets,
         registers
-    ) values ($1, $2, $3, $4, $5, $6, $7, $8);";
+    ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9);";
     let stmt = pgtx.prepare(sql).await.unwrap();
     for r in records {
         pgtx.execute(
@@ -43,6 +46,7 @@ pub(super) async fn insert_many<'a>(pgtx: &Transaction<'_>, records: &Vec<BoxRec
                 &r.height,
                 &r.creation_height,
                 &r.address_id,
+                &r.address_type,
                 &r.value,
                 &r.size,
                 &r.assets,
@@ -65,6 +69,7 @@ pub(super) async fn map_boxes(
         select b.box_id
             , b.creation_height
             , b.address_id
+            , b.address_type
             , b.value
             , b.size
             , b.assets
@@ -80,11 +85,12 @@ pub(super) async fn map_boxes(
             box_id: row.get(0),
             creation_height: row.get(1),
             address_id: row.get(2),
-            value: row.get(3),
-            size: row.get(4),
-            assets: row.get::<usize, Option<Vec<Asset>>>(5).unwrap_or(vec![]),
-            additional_registers: Registers::new(row.get(6)),
-            output_timestamp: row.get(7),
+            address_type: row.get(3),
+            value: row.get(4),
+            size: row.get(5),
+            assets: row.get::<usize, Option<Vec<Asset>>>(6).unwrap_or(vec![]),
+            additional_registers: Registers::new(row.get(7)),
+            output_timestamp: row.get(8),
         };
         if !map.contains_key(&box_data.box_id) {
             map.insert(box_data.box_id.clone(), box_data);
@@ -101,6 +107,7 @@ pub(super) async fn get_genesis_boxes(client: &Client) -> Vec<BoxData> {
         select b.box_id
             , b.creation_height
             , b.address_id
+            , b.address_type
             , b.value
             , b.size
             , b.assets
@@ -115,11 +122,12 @@ pub(super) async fn get_genesis_boxes(client: &Client) -> Vec<BoxData> {
             box_id: r.get(0),
             creation_height: r.get(1),
             address_id: r.get(2),
-            value: r.get(3),
-            size: r.get(4),
-            assets: r.get::<usize, Option<Vec<Asset>>>(5).unwrap_or(vec![]),
-            additional_registers: Registers::new(r.get(6)),
-            output_timestamp: r.get(7),
+            address_type: r.get(3),
+            value: r.get(4),
+            size: r.get(5),
+            assets: r.get::<usize, Option<Vec<Asset>>>(6).unwrap_or(vec![]),
+            additional_registers: Registers::new(r.get(7)),
+            output_timestamp: r.get(8),
         })
         .collect()
 }

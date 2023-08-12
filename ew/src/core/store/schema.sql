@@ -21,11 +21,18 @@ create type asset as (
 	amount bigint
 );
 
+create type address_type as enum (
+	'P2PK',
+	'Miner',
+	'Other'
+);
+
 create table core.boxes (
 	box_id varchar(64) collate "C" primary key,
 	height integer not null,
 	creation_height integer not null,
 	address_id bigint not null,
+	address_type address_type not null,
 	value bigint not null,
 	size integer not null,
 	assets asset[], -- null when no assets
