@@ -1,4 +1,3 @@
-pub mod data;
 mod ergo;
 mod node;
 mod store;
