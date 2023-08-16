@@ -25,6 +25,7 @@ use super::types::Registers;
 use super::types::TokenID;
 use super::types::Transaction;
 use crate::config::PostgresConfig;
+use crate::constants::GENESIS_TIMESTAMP;
 use crate::utils::Schema;
 
 #[derive(Debug)]
@@ -127,8 +128,7 @@ impl Store {
         let pgtx = self.client.transaction().await.unwrap();
 
         // Genesis timestamp
-        // TODO: factor this out into a constant
-        let timestamp = 1561978800000;
+        let timestamp = GENESIS_TIMESTAMP;
         let height = self.head.height;
 
         // Index dummy header for genesis
