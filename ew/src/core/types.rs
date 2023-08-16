@@ -1,6 +1,7 @@
 use postgres_types::FromSql;
 use postgres_types::ToSql;
 use serde::Serialize;
+use std::collections::HashSet;
 
 use super::ergo;
 use super::node;
@@ -38,6 +39,25 @@ pub struct Block {
     pub extension: node::models::Extension,
     // pub ad_proofs: node::models::ADProofs,
     pub size: i32,
+}
+
+impl Block {
+    /// Get a collection of all address id's involved as input or output
+    /// in a block's transactions.
+    ///
+    /// Ignores data-inputs.
+    pub fn transacting_addresses(&self) -> Vec<AddressID> {
+        let mut address_ids: HashSet<AddressID> = HashSet::new();
+        for tx in &self.transactions {
+            for input in &tx.inputs {
+                address_ids.insert(input.address_id);
+            }
+            for output in &tx.outputs {
+                address_ids.insert(output.address_id);
+            }
+        }
+        address_ids.into_iter().collect()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -342,14 +362,21 @@ pub mod testutils {
             }
         }
 
-        /// Returns tx with appended input. Sets the input's index.
+        /// Returns tx with appended input.
         pub fn add_input(&self, input: BoxData) -> Self {
             let mut tx = self.clone();
             tx.inputs.push(input);
             tx
         }
 
-        /// Returns tx with appended output. Sets the output's index.
+        /// Returns tx with appended data-input.
+        pub fn add_data_input(&self, input: BoxData) -> Self {
+            let mut tx = self.clone();
+            tx.data_inputs.push(input);
+            tx
+        }
+
+        /// Returns tx with appended output.
         pub fn add_output(&self, output: BoxData) -> Self {
             let mut tx = self.clone();
             tx.outputs.push(output);
@@ -412,8 +439,9 @@ pub mod testutils {
 
 #[cfg(test)]
 mod tests {
-    use super::BoxData;
-    use super::Transaction;
+    use ergotree_ir::chain::address;
+
+    use super::*;
 
     #[test]
     fn test_box_data_helpers() {
@@ -437,14 +465,44 @@ mod tests {
         let tx = Transaction::dummy();
         // inputs
         assert!(tx.inputs.is_empty());
-
         let tx = tx.add_input(BoxData::dummy().address_id(123));
         assert_eq!(tx.inputs.len(), 1);
         assert_eq!(tx.inputs[0].address_id, 123);
+
+        // data-inputs
+        assert!(tx.data_inputs.is_empty());
+        let tx = tx.add_data_input(BoxData::dummy().address_id(234));
+        assert_eq!(tx.data_inputs.len(), 1);
+        assert_eq!(tx.data_inputs[0].address_id, 234);
+
         // outputs
         assert!(tx.outputs.is_empty());
         let tx = tx.add_output(BoxData::dummy().address_id(456));
         assert_eq!(tx.outputs.len(), 1);
         assert_eq!(tx.outputs[0].address_id, 456);
+    }
+
+    #[test]
+    fn test_block_addresses() {
+        let block = Block::dummy()
+            .add_tx(
+                Transaction::dummy()
+                    .add_input(BoxData::dummy().address_id(123))
+                    // Data inputs should be ignored
+                    .add_data_input(BoxData::dummy().address_id(100))
+                    // but only if they're not present as input/output
+                    .add_data_input(BoxData::dummy().address_id(123))
+                    .add_output(BoxData::dummy().address_id(456)),
+            )
+            .add_tx(
+                Transaction::dummy()
+                    .add_input(BoxData::dummy().address_id(456))
+                    .add_output(BoxData::dummy().address_id(789)),
+            );
+        let address_ids = block.transacting_addresses();
+        assert_eq!(address_ids.len(), 3);
+        assert!(address_ids.contains(&123));
+        assert!(address_ids.contains(&456));
+        assert!(address_ids.contains(&789));
     }
 }
