@@ -13,6 +13,7 @@ use crate::core::types::Height;
 use crate::monitor::MonitorMessage;
 use crate::monitor::WorkerMessage;
 
+pub mod erg;
 pub mod sigmausd;
 
 /// Workflows extract and store domain specfic data.
