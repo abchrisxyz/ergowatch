@@ -203,6 +203,27 @@ mod tests {
     }
 
     #[test]
+    fn test_credit_then_spend() {
+        // Ensure an address created and spent in same block appears nowhere
+        let balances: HashMap<AddressID, BalanceRecord> =
+            HashMap::from([(ADDR_A, BalanceRecord::new(ADDR_A, 2000, TS_10K))]);
+        let diff_records = vec![
+            // Send A to B
+            DiffRecord::new(ADDR_A, 30000, 0, -2000),
+            DiffRecord::new(ADDR_B, 30000, 0, 2000),
+            // Then spend B back to A
+            DiffRecord::new(ADDR_B, 30000, 1, -2000),
+            DiffRecord::new(ADDR_A, 30000, 1, 2000),
+        ];
+        let changes = extract_balance_changes(&balances, &diff_records, TS_30K);
+        let records = changes.balance_records;
+        // No spent addresses
+        assert_eq!(changes.spent_addresses.len(), 0);
+        // No changed addresses
+        assert_eq!(records.len(), 0);
+    }
+
+    #[test]
     fn test_big_numbers() {
         // Makes sure age calculation doesn't hit integer overflows
         let million: NanoERG = 1_000_000_000_000_000;
