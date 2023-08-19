@@ -154,7 +154,7 @@ pub struct Transaction {
 /// P2PK: pay to private key addresses
 /// MINER: mining contracts
 /// OTHER: other pay to script / script-hash addresses
-#[derive(Debug, Clone, ToSql, FromSql)]
+#[derive(Debug, Clone, PartialEq, ToSql, FromSql)]
 #[postgres(name = "address_type")]
 pub enum AddressType {
     /// Pay to private key
@@ -439,8 +439,6 @@ pub mod testutils {
 
 #[cfg(test)]
 mod tests {
-    use ergotree_ir::chain::address;
-
     use super::*;
 
     #[test]

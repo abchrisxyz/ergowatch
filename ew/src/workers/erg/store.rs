@@ -5,7 +5,6 @@ use crate::config::PostgresConfig;
 use crate::core::types::AddressID;
 use crate::core::types::Head;
 use crate::core::types::Height;
-use crate::core::types::NanoERG;
 use crate::utils::Schema;
 
 use super::parsing::ParserCache;
@@ -13,6 +12,7 @@ use super::types::BalanceRecord;
 use super::Batch;
 
 mod balances;
+mod counts;
 mod diffs;
 mod headers;
 
@@ -48,7 +48,9 @@ impl Store {
     }
 
     pub(super) async fn load_parser_cache(&self) -> ParserCache {
-        todo!()
+        ParserCache {
+            last_address_counts: counts::get_last(&self.client).await,
+        }
     }
 
     pub(super) async fn persist(&mut self, batch: Batch) {
