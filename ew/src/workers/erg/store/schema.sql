@@ -44,50 +44,50 @@ create index on erg.balance_diffs using brin(height);
 -- Address counts
 -------------------------------------------------------------------------------
 create table erg.address_counts_by_balance_p2pk (
-	height int,
-	total bigint,
-	ge_0p001 bigint,
-	ge_0p01 bigint,
-	ge_0p1 bigint,
-	ge_1 bigint,
-	ge_10 bigint,
-	ge_100 bigint,
-	ge_1k bigint,
-	ge_10k bigint,
-	ge_100k bigint,
-	ge_1m bigint
+	height integer primary key,
+	total bigint not null,
+	ge_0p001 bigint not null,
+	ge_0p01 bigint not null,
+	ge_0p1 bigint not null,
+	ge_1 bigint not null,
+	ge_10 bigint not null,
+	ge_100 bigint not null,
+	ge_1k bigint not null,
+	ge_10k bigint not null,
+	ge_100k bigint not null,
+	ge_1m bigint not null
 );
 create table erg.address_counts_by_balance_contracts (
-	height int,
-	total bigint,
-	ge_0p001 bigint,
-	ge_0p01 bigint,
-	ge_0p1 bigint,
-	ge_1 bigint,
-	ge_10 bigint,
-	ge_100 bigint,
-	ge_1k bigint,
-	ge_10k bigint,
-	ge_100k bigint,
-	ge_1m bigint
+	height integer primary key,
+	total bigint not null,
+	ge_0p001 bigint not null,
+	ge_0p01 bigint not null,
+	ge_0p1 bigint not null,
+	ge_1 bigint not null,
+	ge_10 bigint not null,
+	ge_100 bigint not null,
+	ge_1k bigint not null,
+	ge_10k bigint not null,
+	ge_100k bigint not null,
+	ge_1m bigint not null
 );
 create table erg.address_counts_by_balance_miners (
-	height int,
-	total bigint,
-	ge_0p001 bigint,
-	ge_0p01 bigint,
-	ge_0p1 bigint,
-	ge_1 bigint,
-	ge_10 bigint,
-	ge_100 bigint,
-	ge_1k bigint,
-	ge_10k bigint,
-	ge_100k bigint,
-	ge_1m bigint
+	height integer primary key,
+	total bigint not null,
+	ge_0p001 bigint not null,
+	ge_0p01 bigint not null,
+	ge_0p1 bigint not null,
+	ge_1 bigint not null,
+	ge_10 bigint not null,
+	ge_100 bigint not null,
+	ge_1k bigint not null,
+	ge_10k bigint not null,
+	ge_100k bigint not null,
+	ge_1m bigint not null
 );
 
 create table erg.address_counts_by_balance_p2pk_summary (
-	label text not null primary key,
+	label text primary key,
 	current bigint not null,
 	diff_1d bigint not null,
 	diff_1w bigint not null,
@@ -96,7 +96,7 @@ create table erg.address_counts_by_balance_p2pk_summary (
 	diff_1y bigint not null
 );
 create table erg.address_counts_by_balance_contracts_summary (
-	label text not null primary key,
+	label text primary key,
 	current bigint not null,
 	diff_1d bigint not null,
 	diff_1w bigint not null,
@@ -105,7 +105,7 @@ create table erg.address_counts_by_balance_contracts_summary (
 	diff_1y bigint not null
 );
 create table erg.address_counts_by_balance_miners_summary (
-	label text not null primary key,
+	label text primary key,
 	current bigint not null,
 	diff_1d bigint not null,
 	diff_1w bigint not null,

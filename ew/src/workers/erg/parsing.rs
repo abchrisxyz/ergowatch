@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use postgres_types::Type;
+
 use super::types::AddressCounts;
 use super::types::BalanceRecord;
 use super::types::Batch;
@@ -67,20 +69,6 @@ impl Balance {
     }
 }
 
-/// Convenience type to group balance changes together
-struct BalanceChanges {
-    /// New balance records with new or modified non-zero balances
-    pub balance_records: Vec<BalanceRecord>,
-    /// Addresses entirely spent in current block
-    pub spent_addresses: Vec<AddressID>,
-}
-
-impl Categorized<BalanceChanges> {
-    pub fn flatten(&self) -> BalanceChanges {
-        todo!()
-    }
-}
-
 impl Parser {
     pub fn new(cache: ParserCache) -> Self {
         Self { cache }
@@ -89,6 +77,17 @@ impl Parser {
     /// Create a batch from genesis boxes.
     pub fn extract_genesis_batch(&mut self, boxes: &Vec<BoxData>) -> Batch {
         let head = Head::genesis();
+
+        let balance_changes: Vec<BalanceChange> = boxes
+            .iter()
+            .map(|bx| BalanceChange {
+                address_id: bx.address_id,
+                address_type: bx.address_type.clone(),
+                old: None,
+                new: Some(Balance::new(bx.value, GENESIS_TIMESTAMP)),
+            })
+            .collect();
+
         Batch {
             header: MiniHeader {
                 height: head.height,
@@ -109,7 +108,10 @@ impl Parser {
                 .map(|b| BalanceRecord::new(b.address_id, b.value, GENESIS_TIMESTAMP))
                 .collect(),
             spent_addresses: vec![],
-            address_counts: todo!(),
+            address_counts: counts::derive_new_counts(
+                &self.cache.last_address_counts,
+                &balance_changes,
+            ),
         }
     }
 
@@ -135,7 +137,6 @@ impl Parser {
             header,
             address_counts: counts::derive_new_counts(
                 &self.cache.last_address_counts,
-                &balances,
                 &balance_changes,
             ),
             // Extract spent addresses from balance changes
