@@ -1,17 +1,14 @@
 use std::collections::HashMap;
 
-use postgres_types::Type;
-
 use super::types::AddressCounts;
 use super::types::BalanceRecord;
 use super::types::Batch;
-use super::types::Categorized;
+use super::types::CompositionRecord;
 use super::types::DiffRecord;
 use super::types::MiniHeader;
 use crate::constants::GENESIS_TIMESTAMP;
 use crate::core::types::AddressID;
 use crate::core::types::AddressType;
-use crate::core::types::Block;
 use crate::core::types::BoxData;
 use crate::core::types::CoreData;
 use crate::core::types::Head;
@@ -19,6 +16,7 @@ use crate::core::types::NanoERG;
 use crate::core::types::Timestamp;
 
 mod balances;
+mod composition;
 mod counts;
 mod diffs;
 
@@ -28,6 +26,7 @@ pub struct Parser {
 
 pub struct ParserCache {
     pub last_address_counts: AddressCounts,
+    pub last_supply_composition: CompositionRecord,
 }
 
 /// Holds a diff record with corresponfing address type.
@@ -88,6 +87,8 @@ impl Parser {
             })
             .collect();
 
+        self.cache.last_supply_composition = composition::from_genesis_boxes(&boxes);
+
         Batch {
             header: MiniHeader {
                 height: head.height,
@@ -112,6 +113,7 @@ impl Parser {
                 &self.cache.last_address_counts,
                 &balance_changes,
             ),
+            supply_composition: self.cache.last_supply_composition.clone(),
         }
     }
 
@@ -138,6 +140,10 @@ impl Parser {
             address_counts: counts::derive_new_counts(
                 &self.cache.last_address_counts,
                 &balance_changes,
+            ),
+            supply_composition: composition::derive_record(
+                &self.cache.last_supply_composition,
+                &typed_diffs,
             ),
             // Extract spent addresses from balance changes
             spent_addresses: balance_changes

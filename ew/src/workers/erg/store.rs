@@ -12,6 +12,7 @@ use super::types::BalanceRecord;
 use super::Batch;
 
 mod balances;
+mod composition;
 mod counts;
 mod diffs;
 mod headers;
@@ -50,6 +51,7 @@ impl Store {
     pub(super) async fn load_parser_cache(&self) -> ParserCache {
         ParserCache {
             last_address_counts: counts::get_last(&self.client).await,
+            last_supply_composition: composition::get_last(&self.client).await,
         }
     }
 

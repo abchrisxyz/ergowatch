@@ -13,6 +13,8 @@ pub struct Batch {
     pub spent_addresses: Vec<AddressID>,
     /// Address counts
     pub address_counts: AddressCounts,
+    /// Supply composition (supply on different address types)
+    pub supply_composition: CompositionRecord,
 }
 
 pub struct MiniHeader {
@@ -97,4 +99,15 @@ pub struct AddressCountsRecord {
     pub ge_10k: i64,
     pub ge_100k: i64,
     pub ge_1m: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompositionRecord {
+    pub height: Height,
+    // Supply on *all* P2PK addresses
+    pub p2pks: NanoERG,
+    // Supply on non-mining contracts, excluding (re-emission)
+    pub contracts: NanoERG,
+    // Supply on mining contracts
+    pub miners: NanoERG,
 }

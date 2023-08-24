@@ -113,3 +113,17 @@ create table erg.address_counts_by_balance_miners_summary (
 	diff_6m bigint not null,
 	diff_1y bigint not null
 );
+
+
+-------------------------------------------------------------------------------
+-- Supply composition
+-------------------------------------------------------------------------------
+create table erg.supply_composition (
+	height integer primary key,
+	-- All p2pk's, including cex's
+	p2pks: bigint not null,
+	-- Non-mining contracts, excluding (re)-emission
+	contracts: bigint not null,
+	-- Mining contracts
+	miners: bigint not null
+);
