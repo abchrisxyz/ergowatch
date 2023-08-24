@@ -1,9 +1,12 @@
+use postgres_from_row::FromRow;
+
 use crate::core::types::AddressID;
 use crate::core::types::Head;
 use crate::core::types::HeaderID;
 use crate::core::types::Height;
 use crate::core::types::NanoERG;
 use crate::core::types::Timestamp;
+
 
 pub struct Batch {
     pub header: MiniHeader,
@@ -85,7 +88,7 @@ pub struct AddressCounts {
     pub miners: AddressCountsRecord,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, FromRow)]
 pub struct AddressCountsRecord {
     pub height: Height,
     pub total: i64,
@@ -99,6 +102,25 @@ pub struct AddressCountsRecord {
     pub ge_10k: i64,
     pub ge_100k: i64,
     pub ge_1m: i64,
+}
+
+impl AddressCountsRecord {
+    pub fn blank() -> Self {
+        Self {
+            height: -1,
+            total: 0,
+            ge_0p001: 0,
+            ge_0p01: 0,
+            ge_0p1: 0,
+            ge_1: 0,
+            ge_10: 0,
+            ge_100: 0,
+            ge_1k: 0,
+            ge_10k: 0,
+            ge_100k: 0,
+            ge_1m: 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
