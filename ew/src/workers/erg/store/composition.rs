@@ -1,6 +1,8 @@
 use tokio_postgres::Client;
+use tokio_postgres::Transaction;
 
 use super::super::types::CompositionRecord;
+use crate::core::types::Height;
 
 pub(super) async fn get_last(client: &Client) -> CompositionRecord {
     let sql = "
@@ -26,4 +28,28 @@ pub(super) async fn get_last(client: &Client) -> CompositionRecord {
             miners: 0,
         },
     }
+}
+
+pub(super) async fn insert(pgtx: &Transaction<'_>, record: &CompositionRecord) {
+    let sql = "
+        insert into erg.supply_composition (height, p2pks, contracts, miners)
+        values ($1, $2, $3, $4)
+    ";
+    pgtx.execute(
+        sql,
+        &[
+            &record.height,
+            &record.p2pks,
+            &record.contracts,
+            &record.miners,
+        ],
+    )
+    .await
+    .unwrap();
+}
+
+/// Delete record for given `height`.
+pub(super) async fn delete_at(pgtx: &Transaction<'_>, height: Height) {
+    let sql = "delete from erg.supply_composition where height = $1;";
+    pgtx.execute(sql, &[&height]).await.unwrap();
 }

@@ -59,7 +59,12 @@ impl Store {
         // tracing::debug!("persisting data for block {}", batch.header.height);
         let pgtx = self.client.transaction().await.unwrap();
 
-        todo!();
+        headers::insert(&pgtx, &batch.header).await;
+        diffs::insert_many(&pgtx, &batch.diff_records).await;
+        balances::upert_many(&pgtx, &batch.balance_records).await;
+        balances::delete_many(&pgtx, &batch.spent_addresses).await;
+        counts::insert(&pgtx, &batch.address_counts).await;
+        composition::insert(&pgtx, &batch.supply_composition).await;
 
         pgtx.commit().await.unwrap();
 
@@ -74,7 +79,13 @@ impl Store {
 
         let pgtx = self.client.transaction().await.unwrap();
 
-        todo!();
+        headers::delete_at(&pgtx, height).await;
+
+        // Read diffs at height to know how to modify balances, then delete diffs
+        diffs::delete_at(&pgtx, height).await;
+
+        counts::delete_at(&pgtx, height).await;
+        composition::delete_at(&pgtx, height).await;
 
         pgtx.commit().await.unwrap();
 

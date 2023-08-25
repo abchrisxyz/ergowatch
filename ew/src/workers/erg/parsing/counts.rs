@@ -1,14 +1,10 @@
-use std::collections::HashMap;
-
 use super::super::types::AddressCountsRecord;
 use super::AddressCounts;
 use super::BalanceChange;
-use crate::core::types::AddressID;
 
 use crate::core::types::AddressType;
 use crate::core::types::Height;
 use crate::core::types::NanoERG;
-use crate::workers::erg::types::BalanceRecord;
 
 pub(super) fn derive_new_counts(
     cache: &AddressCounts,

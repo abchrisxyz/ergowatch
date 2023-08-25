@@ -7,7 +7,6 @@ use crate::core::types::Height;
 use crate::core::types::NanoERG;
 use crate::core::types::Timestamp;
 
-
 pub struct Batch {
     pub header: MiniHeader,
     pub diff_records: Vec<DiffRecord>,
@@ -54,6 +53,7 @@ pub struct DiffRecord {
     pub nano: NanoERG,
 }
 
+#[cfg(test)]
 impl DiffRecord {
     pub fn new(address_id: AddressID, height: Height, tx_idx: i16, nano: NanoERG) -> Self {
         Self {

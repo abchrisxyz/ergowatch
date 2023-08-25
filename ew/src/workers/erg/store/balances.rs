@@ -43,7 +43,7 @@ pub async fn upert_many(pgtx: &Transaction<'_>, records: &Vec<BalanceRecord>) {
 }
 
 /// Delete balances for given address id's.
-pub async fn delete_many(pgtx: &Transaction<'_>, address_ids: Vec<AddressID>) {
+pub async fn delete_many(pgtx: &Transaction<'_>, address_ids: &Vec<AddressID>) {
     pgtx.execute(
         "delete from erg.balance_diffs where height = any $1;",
         &[&address_ids],

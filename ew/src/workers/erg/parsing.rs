@@ -35,6 +35,7 @@ struct TypedDiff {
     pub address_type: AddressType,
 }
 
+#[cfg(test)]
 impl TypedDiff {
     pub fn new(record: DiffRecord, address_type: AddressType) -> Self {
         Self {

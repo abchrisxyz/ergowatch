@@ -20,6 +20,7 @@ pub async fn insert_many(pgtx: &Transaction<'_>, records: &Vec<DiffRecord>) {
     }
 }
 
+/// Delete diff records at given `height`.
 pub async fn delete_at(pgtx: &Transaction<'_>, height: Height) {
     pgtx.execute(
         "delete from erg.balance_diffs where height = $1;",
