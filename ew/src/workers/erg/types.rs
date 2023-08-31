@@ -19,6 +19,18 @@ pub struct Batch {
     pub supply_composition: CompositionRecord,
 }
 
+// /// Data to be restored and/or modified after a roll back.
+// pub struct RollbackBatch {
+//     /// Height of the rolled back block.
+//     pub height: Height,
+//     /// Balances as they were prior to block inclusion.
+//     pub modified_balances: Vec<BalanceRecord>,
+//     /// Balances created by rolled back block - to be deleted.
+//     pub created_balances: Vec<BalanceRecord>,
+//     /// Balances spent by rolled back block - to be restored.
+//     pub spent_balances: Vec<BalanceRecord>,
+// }
+
 pub struct MiniHeader {
     pub height: Height,
     pub timestamp: Timestamp,

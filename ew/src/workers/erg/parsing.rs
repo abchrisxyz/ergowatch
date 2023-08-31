@@ -1,3 +1,6 @@
+use rust_decimal::prelude::FromPrimitive;
+use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
 use std::collections::HashMap;
 
 use super::types::AddressCounts;
@@ -53,9 +56,45 @@ struct BalanceChange {
     pub new: Option<Balance>,
 }
 
+pub(super) enum Bal {
+    Spent,
+    Unspent(Balance),
+}
+
+impl Bal {
+    pub fn update(&self, amount: NanoERG, timestamp: Timestamp) -> Self {
+        match self {
+            // No existing balance so diff becomes new balance
+            Bal::Spent => Bal::Unspent(Balance::new(amount, timestamp)),
+            // Update existing balance
+            Bal::Unspent(balance) => {
+                let new_nano = balance.nano + amount;
+                if new_nano == 0 {
+                    // Balance got spent entirely
+                    return Bal::Spent;
+                }
+                let new_mat = if amount > 0 {
+                    // Credit refreshes balance age
+                    ((Decimal::from_i64(balance.mean_age_timestamp).unwrap()
+                        * Decimal::from_i64(balance.nano).unwrap()
+                        + Decimal::from_i64(timestamp).unwrap()
+                            * Decimal::from_i64(amount).unwrap())
+                        / Decimal::from_i64(new_nano).unwrap())
+                    .to_i64()
+                    .unwrap()
+                } else {
+                    // Partial spend does not change balance age
+                    balance.mean_age_timestamp
+                };
+                Bal::Unspent(Balance::new(new_nano, new_mat))
+            }
+        }
+    }
+}
+
 /// Balance value and timestamp.
 #[derive(Debug, PartialEq)]
-struct Balance {
+pub(super) struct Balance {
     nano: NanoERG,
     mean_age_timestamp: Timestamp,
 }
@@ -65,6 +104,42 @@ impl Balance {
         Self {
             nano,
             mean_age_timestamp,
+        }
+    }
+
+    pub fn zero() -> Self {
+        Self {
+            nano: 0,
+            mean_age_timestamp: 0,
+        }
+    }
+
+    pub fn update(&self, amount: NanoERG, timestamp: Timestamp) -> Self {
+        match self.nano == 0 {
+            // No existing balance so diff becomes new balance
+            True => Balance::new(amount, timestamp),
+            // Update existing balance
+            False => {
+                let new_nano = self.nano + amount;
+                if new_nano == 0 {
+                    // Balance got spent entirely
+                    return Balance::zero();
+                }
+                let new_mat = if amount > 0 {
+                    // Credit refreshes balance age
+                    ((Decimal::from_i64(self.mean_age_timestamp).unwrap()
+                        * Decimal::from_i64(self.nano).unwrap()
+                        + Decimal::from_i64(timestamp).unwrap()
+                            * Decimal::from_i64(amount).unwrap())
+                        / Decimal::from_i64(new_nano).unwrap())
+                    .to_i64()
+                    .unwrap()
+                } else {
+                    // Partial spend does not change balance age
+                    self.mean_age_timestamp
+                };
+                Balance::new(new_nano, new_mat)
+            }
         }
     }
 }

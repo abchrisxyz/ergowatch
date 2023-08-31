@@ -1,12 +1,16 @@
 use tokio_postgres::types::Type;
 use tokio_postgres::Client;
+use tokio_postgres::GenericClient;
 use tokio_postgres::Transaction;
 
 use super::super::types::BalanceRecord;
 use crate::core::types::AddressID;
 
 /// Get collection of balance records for given `address_ids`.
-pub async fn get_many(client: &Client, address_ids: &Vec<AddressID>) -> Vec<BalanceRecord> {
+pub async fn get_many(
+    client: &impl GenericClient,
+    address_ids: &Vec<AddressID>,
+) -> Vec<BalanceRecord> {
     let sql = "
         select address_id
             , nano

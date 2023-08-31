@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use std::collections::HashMap;
 use tokio_postgres::NoTls;
 
@@ -7,6 +8,7 @@ use crate::core::types::Head;
 use crate::core::types::Height;
 use crate::utils::Schema;
 
+use super::parsing::Balance;
 use super::parsing::ParserCache;
 use super::types::BalanceRecord;
 use super::Batch;
@@ -79,11 +81,29 @@ impl Store {
 
         let pgtx = self.client.transaction().await.unwrap();
 
+        // Retrieve current diffs and balances to determine how to restore balances.
+        // Retrieve diff records at current height.
+        let diff_records = diffs::select_at(&pgtx, height).await;
+        // Retrieve current balances for diffed addresses
+        let address_ids: Vec<AddressID> =
+            diff_records.iter().map(|r| r.address_id).unique().collect();
+        let balance_records = balances::get_many(&pgtx, &address_ids).await;
+
+        let spent_address_ids = vec![];
+        for address_id in spent_address_ids {
+            let timestamped_diffs = diffs::get_address_diffs(&pgtx, address_id).await;
+            let balance: Option<Balance> = timestamped_diffs
+                .into_iter()
+                .fold(None, |acc, (nano, timestamp)| {
+                    Some(Balance::new(nano, timestamp))
+                });
+        }
+
+        // Restore balances
+
+        let balances_to_restore = diffs::delete_at(&pgtx, height).await;
+
         headers::delete_at(&pgtx, height).await;
-
-        // Read diffs at height to know how to modify balances, then delete diffs
-        diffs::delete_at(&pgtx, height).await;
-
         counts::delete_at(&pgtx, height).await;
         composition::delete_at(&pgtx, height).await;
 
