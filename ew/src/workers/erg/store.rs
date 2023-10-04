@@ -63,7 +63,7 @@ impl Store {
 
         headers::insert(&pgtx, &batch.header).await;
         diffs::insert_many(&pgtx, &batch.diff_records).await;
-        balances::upert_many(&pgtx, &batch.balance_records).await;
+        balances::upsert_many(&pgtx, &batch.balance_records).await;
         balances::delete_many(&pgtx, &batch.spent_addresses).await;
         counts::insert(&pgtx, &batch.address_counts).await;
         composition::insert(&pgtx, &batch.supply_composition).await;

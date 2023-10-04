@@ -27,7 +27,7 @@ pub async fn get_many(
 }
 
 /// Upsert collection of balance records.
-pub async fn upert_many(pgtx: &Transaction<'_>, records: &Vec<BalanceRecord>) {
+pub async fn upsert_many(pgtx: &Transaction<'_>, records: &Vec<BalanceRecord>) {
     let sql = "
         insert into erg.balances (address_id, nano, mean_age_timestamp)
         values ($1, $2, $3)
