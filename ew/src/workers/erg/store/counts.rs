@@ -73,7 +73,7 @@ async fn insert_record(pgtx: &Transaction<'_>, record: &AddressCountsRecord, lab
             ge_10k,
             ge_100k,
             ge_1m 
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, &12);
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
     "
     );
     pgtx.execute(

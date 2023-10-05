@@ -15,7 +15,7 @@ pub async fn get_many(
             , nano
             , mean_age_timestamp
         from erg.balances
-        where address_id = any $1;";
+        where address_id = any($1);";
     client
         .query(sql, &[&address_ids])
         .await
@@ -48,7 +48,7 @@ pub async fn upsert_many(pgtx: &Transaction<'_>, records: &Vec<BalanceRecord>) {
 /// Delete balances for given address id's.
 pub async fn delete_many(pgtx: &Transaction<'_>, address_ids: &Vec<AddressID>) {
     pgtx.execute(
-        "delete from erg.balance_diffs where height = any $1;",
+        "delete from erg.balances where address_id = any($1);",
         &[&address_ids],
     )
     .await

@@ -41,7 +41,9 @@ impl Store {
         let schema = Schema::new("erg", include_str!("store/schema.sql"));
         schema.init(&mut client).await;
 
-        let head = headers::get_last(&client).await.head();
+        let head = headers::get_last(&client)
+            .await
+            .map_or(Head::initial(), |h| h.head());
         tracing::debug!("head: {:?}", &head);
 
         Self { client, head }
@@ -96,11 +98,9 @@ impl Store {
         pgtx.commit().await.unwrap();
 
         // Reload head
-        let header = headers::get_last(&self.client).await;
-        self.head = Head {
-            height: header.height,
-            header_id: header.id,
-        }
+        self.head = headers::get_last(&self.client)
+            .await
+            .map_or(Head::initial(), |h| h.head());
     }
 
     /// Retrieve and map balance records for given address id's.
@@ -141,7 +141,7 @@ async fn prepare_balance_rollback(
     height: Height,
 ) -> BalanceRollbackChanges {
     // Get last header to retrieve rolled back block timestamp
-    let header = headers::get_last(client).await;
+    let header = headers::get_last(client).await.unwrap();
     assert_eq!(header.height, height);
     let timestamp = header.timestamp;
 

@@ -4,14 +4,24 @@ comment on schema erg is 'ERG balances, age and supply metrics';
 -------------------------------------------------------------------------------
 -- Revision
 -------------------------------------------------------------------------------
-create table erg._rev (
+create table erg._meta (
 	singleton int primary key default 1,
 	rev_major integer not null,
 	rev_minor integer not null,
 	check(singleton = 1)
 );
-insert into erg._rev (rev_major, rev_minor) values (1, 0);
-comment on table erg._rev is 'Current schema revision'
+insert into erg._meta (rev_major, rev_minor) values (1, 0);
+comment on table erg._meta is 'Current schema revision';
+
+
+-------------------------------------------------------------------------------
+-- Headers
+-------------------------------------------------------------------------------
+create table erg.headers (
+    height integer primary key,
+    timestamp bigint not null,
+    id text not null
+);
 
 -------------------------------------------------------------------------------
 -- Balances
@@ -23,7 +33,7 @@ create table erg.balances (
     -- Tracks the mean time of origin of supply in address
     mean_age_timestamp bigint not null,
     -- Balance cannot be negative and we don't keep spent addresses
-    check (value > 0)
+    check (nano > 0)
 );
 
 -------------------------------------------------------------------------------
@@ -121,9 +131,9 @@ create table erg.address_counts_by_balance_miners_summary (
 create table erg.supply_composition (
 	height integer primary key,
 	-- All p2pk's, including cex's
-	p2pks: bigint not null,
+	p2pks bigint not null,
 	-- Non-mining contracts, excluding (re)-emission
-	contracts: bigint not null,
+	contracts bigint not null,
 	-- Mining contracts
-	miners: bigint not null
+	miners bigint not null
 );
