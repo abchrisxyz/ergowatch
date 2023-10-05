@@ -39,12 +39,10 @@ fn count(
         counter.apply(change);
     }
 
-    counter.to_record()
+    counter.to_record(prev.height + 1)
 }
 
 struct Counter {
-    /// No effect - only used to recreate an `AddressCountsRecord`
-    height: Height,
     /// Counts, from total to ge_1m
     counts: [i64; 11],
 }
@@ -53,8 +51,6 @@ impl Counter {
     /// Build a `Counter` from an `AddressCountsRecord`
     pub fn new(rec: &AddressCountsRecord) -> Self {
         Self {
-            // Remember height to be used by `to_record`
-            height: rec.height,
             counts: [
                 rec.total,
                 rec.ge_0p001,
@@ -71,9 +67,9 @@ impl Counter {
         }
     }
 
-    pub fn to_record(&self) -> AddressCountsRecord {
+    pub fn to_record(&self, height: Height) -> AddressCountsRecord {
         AddressCountsRecord {
-            height: self.height,
+            height: height,
             total: self.counts[0],
             ge_0p001: self.counts[1],
             ge_0p01: self.counts[2],
