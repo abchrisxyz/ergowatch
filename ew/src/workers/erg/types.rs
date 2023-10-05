@@ -87,6 +87,7 @@ impl BalanceRecord {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct AddressCounts {
     pub p2pk: AddressCountsRecord,
     pub contracts: AddressCountsRecord,

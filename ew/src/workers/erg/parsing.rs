@@ -190,8 +190,12 @@ impl Parser {
             })
             .collect();
 
+        self.cache.last_address_counts = counts::derive_new_counts(
+            &self.cache.last_address_counts,
+            &balance_changes,
+        );
         self.cache.last_supply_composition = composition::from_genesis_boxes(&boxes);
-
+        
         Batch {
             header: MiniHeader {
                 height: head.height,
@@ -212,10 +216,7 @@ impl Parser {
                 .map(|b| BalanceRecord::new(b.address_id, b.value, GENESIS_TIMESTAMP))
                 .collect(),
             spent_addresses: vec![],
-            address_counts: counts::derive_new_counts(
-                &self.cache.last_address_counts,
-                &balance_changes,
-            ),
+            address_counts: self.cache.last_address_counts.clone(),
             supply_composition: self.cache.last_supply_composition.clone(),
         }
     }
@@ -238,35 +239,40 @@ impl Parser {
         let balance_changes =
             balances::extract_balance_changes(&balances, &typed_diffs, block.header.timestamp);
 
+        
+        
+        self.cache.last_address_counts = counts::derive_new_counts(
+            &self.cache.last_address_counts,
+            &balance_changes,
+        );
+        self.cache.last_supply_composition = composition::derive_record(
+            &self.cache.last_supply_composition,
+            &typed_diffs,
+        );
+
         Batch {
             header,
-            address_counts: counts::derive_new_counts(
-                &self.cache.last_address_counts,
-                &balance_changes,
-            ),
-            supply_composition: composition::derive_record(
-                &self.cache.last_supply_composition,
-                &typed_diffs,
-            ),
             // Extract spent addresses from balance changes
             spent_addresses: balance_changes
-                .iter()
-                .filter(|bc| matches!(bc.new, Bal::Spent))
-                .map(|bc| bc.address_id)
-                .collect(),
+            .iter()
+            .filter(|bc| matches!(bc.new, Bal::Spent))
+            .map(|bc| bc.address_id)
+            .collect(),
             // Extract balance records from balance changes
             balance_records: balance_changes
-                .into_iter()
-                .filter_map(|bc| match bc.new {
-                    Bal::Spent => None,
-                    Bal::Unspent(bal) => Some(BalanceRecord::new(
-                        bc.address_id,
-                        bal.nano,
-                        bal.mean_age_timestamp,
-                    )),
-                })
-                .collect(),
+            .into_iter()
+            .filter_map(|bc| match bc.new {
+                Bal::Spent => None,
+                Bal::Unspent(bal) => Some(BalanceRecord::new(
+                    bc.address_id,
+                    bal.nano,
+                    bal.mean_age_timestamp,
+                )),
+            })
+            .collect(),
             diff_records: typed_diffs.into_iter().map(|td| td.record).collect(),
+            address_counts: self.cache.last_address_counts.clone(),
+            supply_composition: self.cache.last_supply_composition.clone(),
         }
     }
 }
