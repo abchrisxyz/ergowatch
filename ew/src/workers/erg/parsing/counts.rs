@@ -14,8 +14,8 @@ pub(super) fn derive_new_counts(
 ) -> AddressCounts {
     AddressCounts {
         p2pk: count(&cache.p2pk, &balance_changes, AddressType::P2PK),
-        contracts: count(&cache.p2pk, &balance_changes, AddressType::Other),
-        miners: count(&cache.p2pk, &balance_changes, AddressType::Miner),
+        contracts: count(&cache.contracts, &balance_changes, AddressType::Other),
+        miners: count(&cache.miners, &balance_changes, AddressType::Miner),
     }
 }
 
