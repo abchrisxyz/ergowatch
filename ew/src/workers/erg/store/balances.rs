@@ -32,10 +32,10 @@ pub async fn upsert_many(pgtx: &Transaction<'_>, records: &Vec<BalanceRecord>) {
         values ($1, $2, $3)
         on conflict (address_id) do update
         set nano = EXCLUDED.nano
-            , mean_age_timestamp = EXCLUDED.mean_age_timestamp;
+            , mean_age_timestamp = EXCLUDED.mean_age_timestamp
         ;";
     let stmt = pgtx
-        .prepare_typed(sql, &[Type::INT8, Type::INT4, Type::INT2, Type::INT8])
+        .prepare_typed(sql, &[Type::INT8, Type::INT8, Type::INT8])
         .await
         .unwrap();
     for r in records {
