@@ -1,11 +1,9 @@
-use rust_decimal::prelude::FromPrimitive;
-use rust_decimal::prelude::ToPrimitive;
-use rust_decimal::Decimal;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use super::super::types::BalanceRecord;
-use super::Balance;
+use super::Bal;
+
 use super::BalanceChange;
 use super::TypedDiff;
 use crate::core::types::AddressID;
@@ -23,6 +21,8 @@ pub(super) fn extract_balance_changes(
     typed_diffs: &Vec<TypedDiff>,
     timestamp: Timestamp,
 ) -> Vec<BalanceChange> {
+    // Rewrite this using Parsing::Bal
+
     let mut balance_changes: HashMap<AddressID, BalanceChange> = HashMap::new();
     // Apply diffs to balances
     for diff in typed_diffs {
@@ -31,70 +31,44 @@ pub(super) fn extract_balance_changes(
             // No existing balance change
             Entry::Vacant(entry) => {
                 // Check for existing balance record and convert to balance
-                let old_bal: Option<Balance> = balances
-                    .get(&address_id)
-                    .map(|rec| Balance::new(rec.nano, rec.mean_age_timestamp));
+                let old_bal = Bal::from(balances.get(&address_id));
                 // Insert new BalanceChange
                 entry.insert(BalanceChange {
                     address_id: address_id,
                     address_type: diff.address_type.clone(),
-                    new: update(&old_bal, diff.record.nano, timestamp),
+                    new: old_bal.accrue(diff.record.nano, timestamp),
                     old: old_bal,
                 });
             }
-            // We've seen this address before
+            // We've seen this address before, apply diff
             Entry::Occupied(mut entry) => {
                 let mut bc = entry.get_mut();
-                bc.new = update(&bc.new, diff.record.nano, timestamp)
+                bc.new = bc.new.accrue(diff.record.nano, timestamp)
             }
         }
     }
     balance_changes
         .into_values()
         // Drop addresses created and spent in same block
-        .filter(|bc| bc.old.is_some() || bc.new.is_some())
+        .filter(|bc| bc.old.is_unspent() || bc.new.is_unspent())
         .collect()
-}
-
-fn update(bal: &Option<Balance>, amount: NanoERG, timestamp: Timestamp) -> Option<Balance> {
-    match bal {
-        // No existing balance so diff becomes new balance
-        None => Some(Balance::new(amount, timestamp)),
-        // Update existing balance
-        Some(balance) => {
-            let new_nano = balance.nano + amount;
-            if new_nano == 0 {
-                // Balance got spent entirely
-                return None;
-            }
-            let new_mat = if amount > 0 {
-                // Credit refreshes balance age
-                ((Decimal::from_i64(balance.mean_age_timestamp).unwrap()
-                    * Decimal::from_i64(balance.nano).unwrap()
-                    + Decimal::from_i64(timestamp).unwrap() * Decimal::from_i64(amount).unwrap())
-                    / Decimal::from_i64(new_nano).unwrap())
-                .to_i64()
-                .unwrap()
-            } else {
-                // Partial spend does not change balance age
-                balance.mean_age_timestamp
-            };
-            Some(Balance::new(new_nano, new_mat))
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::AddressType::P2PK;
+    use super::super::Balance;
     use super::super::DiffRecord;
     use super::*;
+    use rust_decimal::prelude::FromPrimitive;
+    use rust_decimal::prelude::ToPrimitive;
+    use rust_decimal::Decimal;
 
     const ADDR_A: AddressID = 123;
     const ADDR_B: AddressID = 456;
     const ADDR_C: AddressID = 789;
-    const TS_10K: Timestamp = 1563159993440; // timestamp of block 30000
-    const TS_20K: Timestamp = 1564413706977; // timestamp of block 30000
+    const TS_10K: Timestamp = 1563159993440; // timestamp of block 10000
+    const TS_20K: Timestamp = 1564413706977; // timestamp of block 20000
     const TS_30K: Timestamp = 1565532307779; // timestamp of block 30000
 
     #[test]
@@ -111,15 +85,15 @@ mod tests {
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_A,
             address_type: P2PK,
-            old: Some(Balance::new(2000, TS_10K)),
-            new: None
+            old: Bal::Unspent(Balance::new(2000, TS_10K)),
+            new: Bal::Spent
         }));
         // B got a fresh new balance with timestamp of current block
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_B,
             address_type: P2PK,
-            old: None,
-            new: Some(Balance::new(2000, TS_30K)),
+            old: Bal::Spent,
+            new: Bal::Unspent(Balance::new(2000, TS_30K)),
         }));
     }
 
@@ -139,15 +113,15 @@ mod tests {
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_A,
             address_type: P2PK,
-            old: Some(Balance::new(2000, TS_10K)),
-            new: Some(Balance::new(1500, TS_10K)),
+            old: Bal::Unspent(Balance::new(2000, TS_10K)),
+            new: Bal::Unspent(Balance::new(1500, TS_10K)),
         }));
         // B got a fresh new balance with timestamp of current block
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_B,
             address_type: P2PK,
-            old: None,
-            new: Some(Balance::new(500, TS_30K)),
+            old: Bal::Spent,
+            new: Bal::Unspent(Balance::new(500, TS_30K)),
         }));
     }
 
@@ -167,8 +141,8 @@ mod tests {
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_A,
             address_type: P2PK,
-            old: Some(Balance::new(2000, TS_10K)),
-            new: Some(Balance::new(1500, TS_10K)),
+            old: Bal::Unspent(Balance::new(2000, TS_10K)),
+            new: Bal::Unspent(Balance::new(1500, TS_10K)),
         }));
         // B got a higher balance with more recent timestamp
         let ts_b = Decimal::from_f32(0.75).unwrap() * Decimal::from_i64(TS_20K).unwrap()
@@ -176,8 +150,8 @@ mod tests {
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_B,
             address_type: P2PK,
-            old: Some(Balance::new(1500, TS_20K)),
-            new: Some(Balance::new(2000, ts_b.to_i64().unwrap())),
+            old: Bal::Unspent(Balance::new(1500, TS_20K)),
+            new: Bal::Unspent(Balance::new(2000, ts_b.to_i64().unwrap())),
         }));
     }
 
@@ -198,8 +172,8 @@ mod tests {
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_A,
             address_type: P2PK,
-            old: Some(Balance::new(2000, TS_10K)),
-            new: None,
+            old: Bal::Unspent(Balance::new(2000, TS_10K)),
+            new: Bal::Spent,
         }));
         // B got a higher balance with more recent timestamp
         let ts_b = (Decimal::from_i64(1).unwrap() * Decimal::from_i64(TS_20K).unwrap()
@@ -208,8 +182,8 @@ mod tests {
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_B,
             address_type: P2PK,
-            old: Some(Balance::new(1000, TS_20K)),
-            new: Some(Balance::new(3000, ts_b.to_i64().unwrap())),
+            old: Bal::Unspent(Balance::new(1000, TS_20K)),
+            new: Bal::Unspent(Balance::new(3000, ts_b.to_i64().unwrap())),
         }));
     }
 
@@ -234,22 +208,22 @@ mod tests {
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_A,
             address_type: P2PK,
-            old: Some(Balance::new(2000, TS_10K)),
-            new: Some(Balance::new(3000, TS_30K)),
+            old: Bal::Unspent(Balance::new(2000, TS_10K)),
+            new: Bal::Unspent(Balance::new(3000, TS_30K)),
         }));
         // B got a new balance
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_B,
             address_type: P2PK,
-            old: None,
-            new: Some(Balance::new(2000, TS_30K)),
+            old: Bal::Spent,
+            new: Bal::Unspent(Balance::new(2000, TS_30K)),
         }));
         // C got spent entirely
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_C,
             address_type: P2PK,
-            old: Some(Balance::new(3000, TS_20K)),
-            new: None,
+            old: Bal::Unspent(Balance::new(3000, TS_20K)),
+            new: Bal::Spent,
         }));
     }
 
@@ -290,8 +264,8 @@ mod tests {
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_A,
             address_type: P2PK,
-            old: Some(Balance::new(20 * million, TS_10K)),
-            new: Some(Balance::new(19 * million, TS_10K)),
+            old: Bal::Unspent(Balance::new(20 * million, TS_10K)),
+            new: Bal::Unspent(Balance::new(19 * million, TS_10K)),
         }));
         // B got a higher balance with more recent timestamp
         let ts_b = Decimal::from_f32(0.75).unwrap() * Decimal::from_i64(TS_20K).unwrap()
@@ -299,8 +273,8 @@ mod tests {
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_B,
             address_type: P2PK,
-            old: Some(Balance::new(3 * million, TS_20K)),
-            new: Some(Balance::new(4 * million, ts_b.to_i64().unwrap())),
+            old: Bal::Unspent(Balance::new(3 * million, TS_20K)),
+            new: Bal::Unspent(Balance::new(4 * million, ts_b.to_i64().unwrap())),
         }));
     }
 }

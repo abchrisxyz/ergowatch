@@ -1,5 +1,4 @@
 use tokio_postgres::types::Type;
-use tokio_postgres::Client;
 use tokio_postgres::GenericClient;
 use tokio_postgres::Transaction;
 

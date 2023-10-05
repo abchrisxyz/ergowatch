@@ -32,7 +32,7 @@ pub struct ParserCache {
     pub last_supply_composition: CompositionRecord,
 }
 
-/// Holds a diff record with corresponfing address type.
+/// Holds a diff record with corresponding address type.
 struct TypedDiff {
     pub record: DiffRecord,
     pub address_type: AddressType,
@@ -52,17 +52,44 @@ impl TypedDiff {
 struct BalanceChange {
     pub address_id: AddressID,
     pub address_type: AddressType,
-    pub old: Option<Balance>,
-    pub new: Option<Balance>,
+    pub old: Bal,
+    pub new: Bal,
 }
 
+#[derive(Debug, PartialEq)]
 pub(super) enum Bal {
     Spent,
     Unspent(Balance),
 }
 
+impl From<&BalanceRecord> for Bal {
+    fn from(br: &BalanceRecord) -> Self {
+        Bal::Unspent(Balance::new(br.nano, br.mean_age_timestamp))
+    }
+}
+
+impl From<Option<&BalanceRecord>> for Bal {
+    fn from(value: Option<&BalanceRecord>) -> Self {
+        match value {
+            None => Self::Spent,
+            Some(br) => Bal::Unspent(Balance::new(br.nano, br.mean_age_timestamp)),
+        }
+    }
+}
+
 impl Bal {
-    pub fn update(&self, amount: NanoERG, timestamp: Timestamp) -> Self {
+    // /// Returns true if balance is spent entirely
+    // pub fn is_spent(&self) -> bool {
+    //     matches!(self, Self::Spent)
+    // }
+
+    /// Returns true if balance is non zero
+    pub fn is_unspent(&self) -> bool {
+        matches!(self, Self::Unspent(_))
+    }
+
+    /// Return new `Bal` with accrued value and timestamp.
+    pub fn accrue(&self, amount: NanoERG, timestamp: Timestamp) -> Self {
         match self {
             // No existing balance so diff becomes new balance
             Bal::Spent => Bal::Unspent(Balance::new(amount, timestamp)),
@@ -90,13 +117,49 @@ impl Bal {
             }
         }
     }
+
+    /// Reverse accrual of given diff `amount` applied at `timestamp`.
+    /// 
+    /// * `amount`: the diff amount previously accrued and to be reversed.
+    /// * `timestamp`: timestamp of the block the diff was accrued.
+    pub fn reverse(&self, amount: NanoERG, timestamp: Timestamp) -> Self {
+        match self {
+            Bal::Spent => panic!("Can't reverse value of a spent balance. Instead, restore it from earlier balance diff records, if any."),
+            Bal::Unspent(bal) => {
+                if amount == 0 {
+                    return Self::Unspent(Balance::new(amount, timestamp));
+                }
+                if amount == bal.nano {
+                    return Self::Spent;
+                }
+                let reversed_nano = bal.nano - amount;
+                
+                let reversed_mat = if amount <= 0 {
+                    // Balance was decreased, so timestamp unaffected.
+                    // Restore by adding nano's back.
+                    bal.mean_age_timestamp
+                } else {
+                // Balance was added to, so timestamp increased.
+                    assert!(reversed_nano > 0);
+                    ((Decimal::from_i64(bal.mean_age_timestamp).unwrap()
+                        * Decimal::from_i64(bal.nano).unwrap()
+                        - Decimal::from_i64(timestamp).unwrap()
+                            * Decimal::from_i64(amount).unwrap())
+                        / Decimal::from_i64(reversed_nano).unwrap())
+                    .to_i64()
+                    .unwrap()
+                };
+                Self::Unspent(Balance::new(reversed_nano, reversed_mat))
+            }
+        }
+    }
 }
 
 /// Balance value and timestamp.
 #[derive(Debug, PartialEq)]
 pub(super) struct Balance {
-    nano: NanoERG,
-    mean_age_timestamp: Timestamp,
+    pub nano: NanoERG,
+    pub mean_age_timestamp: Timestamp,
 }
 
 impl Balance {
@@ -104,42 +167,6 @@ impl Balance {
         Self {
             nano,
             mean_age_timestamp,
-        }
-    }
-
-    pub fn zero() -> Self {
-        Self {
-            nano: 0,
-            mean_age_timestamp: 0,
-        }
-    }
-
-    pub fn update(&self, amount: NanoERG, timestamp: Timestamp) -> Self {
-        match self.nano == 0 {
-            // No existing balance so diff becomes new balance
-            True => Balance::new(amount, timestamp),
-            // Update existing balance
-            False => {
-                let new_nano = self.nano + amount;
-                if new_nano == 0 {
-                    // Balance got spent entirely
-                    return Balance::zero();
-                }
-                let new_mat = if amount > 0 {
-                    // Credit refreshes balance age
-                    ((Decimal::from_i64(self.mean_age_timestamp).unwrap()
-                        * Decimal::from_i64(self.nano).unwrap()
-                        + Decimal::from_i64(timestamp).unwrap()
-                            * Decimal::from_i64(amount).unwrap())
-                        / Decimal::from_i64(new_nano).unwrap())
-                    .to_i64()
-                    .unwrap()
-                } else {
-                    // Partial spend does not change balance age
-                    self.mean_age_timestamp
-                };
-                Balance::new(new_nano, new_mat)
-            }
         }
     }
 }
@@ -158,8 +185,8 @@ impl Parser {
             .map(|bx| BalanceChange {
                 address_id: bx.address_id,
                 address_type: bx.address_type.clone(),
-                old: None,
-                new: Some(Balance::new(bx.value, GENESIS_TIMESTAMP)),
+                old: Bal::Spent,
+                new: Bal::Unspent(Balance::new(bx.value, GENESIS_TIMESTAMP)),
             })
             .collect();
 
@@ -224,19 +251,56 @@ impl Parser {
             // Extract spent addresses from balance changes
             spent_addresses: balance_changes
                 .iter()
-                .filter(|bc| bc.new.is_none())
+                .filter(|bc| matches!(bc.new, Bal::Spent))
                 .map(|bc| bc.address_id)
                 .collect(),
             // Extract balance records from balance changes
             balance_records: balance_changes
                 .into_iter()
-                .filter(|bc| bc.new.is_some())
-                .map(|bc| {
-                    let bal = bc.new.unwrap();
-                    BalanceRecord::new(bc.address_id, bal.nano, bal.mean_age_timestamp)
+                .filter_map(|bc| match bc.new {
+                    Bal::Spent => None,
+                    Bal::Unspent(bal) => Some(BalanceRecord::new(
+                        bc.address_id,
+                        bal.nano,
+                        bal.mean_age_timestamp,
+                    )),
                 })
                 .collect(),
             diff_records: typed_diffs.into_iter().map(|td| td.record).collect(),
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use core::panic;
+
+    use super::*;
+
+    const TS_10K: Timestamp = 1563159993440; // timestamp of block 10000
+
+    #[test]
+    fn test_bal_roundtrip_positive_diff() {
+        let bal = Bal::Unspent(Balance::new(1000, TS_10K));
+        let diff_amount = 300;
+        let diff_ts = TS_10K + 120_000;
+        let roundtripped_bal = bal.accrue(diff_amount, diff_ts).reverse(diff_amount, diff_ts);
+        match roundtripped_bal {
+            Bal::Spent => panic!(),
+            Bal::Unspent(b) => {
+                assert_eq!(1000, b.nano);
+                // Allow 1ms rounding error
+                assert_eq!((TS_10K - b.mean_age_timestamp).abs(), 1);
+            }
+        }
+    }
+
+    #[test]
+    fn test_bal_roundtrip_negative_diff() {
+        let bal = Bal::Unspent(Balance::new(1000, TS_10K));
+        let diff_amount = -500;
+        let diff_ts = TS_10K + 120_000;
+        assert_eq!(bal, bal.accrue(diff_amount, diff_ts).reverse(diff_amount, diff_ts));
     }
 }

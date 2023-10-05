@@ -1,4 +1,5 @@
 use tokio_postgres::types::Type;
+use tokio_postgres::GenericClient;
 use tokio_postgres::Transaction;
 
 use super::super::types::DiffRecord;
@@ -34,8 +35,8 @@ pub async fn delete_at(pgtx: &Transaction<'_>, height: Height) {
 }
 
 /// Get diff records for given `height`.
-pub async fn select_at(pgtx: &Transaction<'_>, height: Height) -> Vec<DiffRecord> {
-    let rows = pgtx
+pub async fn select_at(client: &impl GenericClient, height: Height) -> Vec<DiffRecord> {
+    let rows = client
         .query(
             "select address_id
             , height
@@ -50,8 +51,9 @@ pub async fn select_at(pgtx: &Transaction<'_>, height: Height) -> Vec<DiffRecord
     todo!()
 }
 
+/// Retrieve all balance diffs for given address.
 pub(super) async fn get_address_diffs(
-    pgtx: &Transaction<'_>,
+    client: &impl GenericClient,
     address_id: AddressID,
 ) -> Vec<(NanoERG, Timestamp)> {
     let sql = "
@@ -61,7 +63,8 @@ pub(super) async fn get_address_diffs(
         where d.address_id = $1
         order by d.height, d.tx_idx;
     ";
-    pgtx.query(sql, &[&address_id])
+    client
+        .query(sql, &[&address_id])
         .await
         .unwrap()
         .into_iter()

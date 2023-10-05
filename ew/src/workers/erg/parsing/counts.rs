@@ -1,5 +1,7 @@
+//! Address counts by balance and type
 use super::super::types::AddressCountsRecord;
 use super::AddressCounts;
+use super::Bal;
 use super::BalanceChange;
 
 use crate::core::types::AddressType;
@@ -88,8 +90,14 @@ impl Counter {
 
     /// Register balance change across impacted counts.
     pub fn apply(&mut self, change: &BalanceChange) {
-        let iold = change.old.as_ref().map_or(0, |bal| index(bal.nano) + 1);
-        let inew = change.new.as_ref().map_or(0, |bal| index(bal.nano) + 1);
+        let iold = match &change.old {
+            Bal::Spent => 0,
+            Bal::Unspent(bal) => index(bal.nano) + 1,
+        };
+        let inew = match &change.new {
+            Bal::Spent => 0,
+            Bal::Unspent(bal) => index(bal.nano) + 1,
+        };
         if iold < inew {
             self.counts[iold..inew].iter_mut().for_each(|e| *e += 1);
         } else if iold > inew {
@@ -209,8 +217,8 @@ mod tests {
         let balance_changes = vec![BalanceChange {
             address_id: 123,
             address_type: AddressType::P2PK,
-            old: None,
-            new: Some(Balance::new(1000 * ERG, 0)),
+            old: Bal::Spent,
+            new: Bal::Unspent(Balance::new(1000 * ERG, 0)),
         }];
         let res = count(&initial, &balance_changes, AddressType::P2PK);
         let expected = AddressCountsRecord {
@@ -250,8 +258,8 @@ mod tests {
         let balance_changes = vec![BalanceChange {
             address_id: 123,
             address_type: AddressType::P2PK,
-            old: Some(Balance::new(1000 * ERG, 0)),
-            new: None,
+            old: Bal::Unspent(Balance::new(1000 * ERG, 0)),
+            new: Bal::Spent,
         }];
         let res = count(&initial, &balance_changes, AddressType::P2PK);
         let expected = AddressCountsRecord {
@@ -291,8 +299,8 @@ mod tests {
         let balance_changes = vec![BalanceChange {
             address_id: 123,
             address_type: AddressType::P2PK,
-            old: Some(Balance::new(9 * ERG, 0)),
-            new: Some(Balance::new(99_999 * ERG, 0)),
+            old: Bal::Unspent(Balance::new(9 * ERG, 0)),
+            new: Bal::Unspent(Balance::new(99_999 * ERG, 0)),
         }];
         let res = count(&initial, &balance_changes, AddressType::P2PK);
         let expected = AddressCountsRecord {
@@ -332,8 +340,8 @@ mod tests {
         let balance_changes = vec![BalanceChange {
             address_id: 123,
             address_type: AddressType::P2PK,
-            old: Some(Balance::new(99_999 * ERG, 0)),
-            new: Some(Balance::new(999_999, 0)), // 0.00099999 ERG (less than 0.001 ERG)
+            old: Bal::Unspent(Balance::new(99_999 * ERG, 0)),
+            new: Bal::Unspent(Balance::new(999_999, 0)), // 0.00099999 ERG (less than 0.001 ERG)
         }];
         let res = count(&initial, &balance_changes, AddressType::P2PK);
         let expected = AddressCountsRecord {
