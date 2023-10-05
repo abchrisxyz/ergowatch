@@ -7,7 +7,6 @@ use super::Bal;
 use super::BalanceChange;
 use super::TypedDiff;
 use crate::core::types::AddressID;
-use crate::core::types::NanoERG;
 use crate::core::types::Timestamp;
 
 /// Returns balance changes, ignoring addresses created and spent in same block.
@@ -60,6 +59,7 @@ mod tests {
     use super::super::Balance;
     use super::super::DiffRecord;
     use super::*;
+    use crate::core::types::NanoERG;
     use rust_decimal::prelude::FromPrimitive;
     use rust_decimal::prelude::ToPrimitive;
     use rust_decimal::Decimal;

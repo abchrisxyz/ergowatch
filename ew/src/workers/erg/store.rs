@@ -10,11 +10,9 @@ use crate::core::types::NanoERG;
 use crate::utils::Schema;
 
 use super::parsing::Bal;
-use super::parsing::Balance;
 use super::parsing::ParserCache;
 use super::types::BalanceRecord;
 use super::Batch;
-use crate::core::types::Timestamp;
 
 mod balances;
 mod composition;

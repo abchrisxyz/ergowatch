@@ -51,13 +51,6 @@ impl MiniHeader {
     }
 }
 
-/// Holds data for each address type
-pub struct Categorized<T> {
-    pub p2pk: T,
-    pub contracts: T,
-    pub miners: T,
-}
-
 pub struct DiffRecord {
     pub address_id: AddressID,
     pub height: Height,

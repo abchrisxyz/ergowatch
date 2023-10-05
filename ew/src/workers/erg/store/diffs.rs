@@ -48,7 +48,14 @@ pub async fn select_at(client: &impl GenericClient, height: Height) -> Vec<DiffR
         )
         .await
         .unwrap();
-    todo!()
+    rows.iter()
+        .map(|r| DiffRecord {
+            address_id: r.get(0),
+            height: r.get(1),
+            tx_idx: r.get(2),
+            nano: r.get(3),
+        })
+        .collect()
 }
 
 /// Retrieve all balance diffs for given address.
