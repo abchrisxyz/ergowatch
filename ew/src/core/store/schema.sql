@@ -4,7 +4,6 @@ create table core._meta (
 	singleton int primary key default 1,
 	rev_major integer not null,
 	rev_minor integer not null,
-    height integer not null default -1,
 	check(singleton = 1)
 );
 insert into core._meta (rev_major, rev_minor) values (1, 0);
