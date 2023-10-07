@@ -30,7 +30,7 @@ impl Schema {
 
     async fn schema_revision(&self, client: &Client) -> Revision {
         tracing::debug!("reading current revision");
-        let qry = format!("select rev_major, rev_minor from {}._meta;", self.name);
+        let qry = format!("select rev_major, rev_minor from {}._rev;", self.name);
         match client.query_one(&qry, &[]).await {
             Ok(row) => Revision {
                 major: row.get(0),

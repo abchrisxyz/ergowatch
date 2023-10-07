@@ -1,12 +1,12 @@
 create schema sigmausd;
 
-create table sigmausd._meta (
+create table sigmausd._rev (
 	singleton int primary key default 1,
 	rev_major integer not null,
 	rev_minor integer not null,
 	check(singleton = 1)
 );
-insert into sigmausd._meta (rev_major, rev_minor) values (1, 0);
+insert into sigmausd._rev (rev_major, rev_minor) values (1, 0);
 
 -- Selected header fields from included blocks.
 -- Would be available from core.headers too but we try to keep schemas self contained.

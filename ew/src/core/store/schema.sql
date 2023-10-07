@@ -1,12 +1,11 @@
 create schema core;
-
-create table core._meta (
+create table core._rev (
 	singleton int primary key default 1,
 	rev_major integer not null,
 	rev_minor integer not null,
 	check(singleton = 1)
 );
-insert into core._meta (rev_major, rev_minor) values (1, 0);
+insert into core._rev (rev_major, rev_minor) values (1, 0);
 
 create table core.headers (
     height integer primary key,

@@ -4,14 +4,14 @@ comment on schema erg is 'ERG balances, age and supply metrics';
 -------------------------------------------------------------------------------
 -- Revision
 -------------------------------------------------------------------------------
-create table erg._meta (
+create table erg._rev (
 	singleton int primary key default 1,
 	rev_major integer not null,
 	rev_minor integer not null,
 	check(singleton = 1)
 );
-insert into erg._meta (rev_major, rev_minor) values (1, 0);
-comment on table erg._meta is 'Current schema revision';
+insert into erg._rev (rev_major, rev_minor) values (1, 0);
+comment on table erg._rev is 'Current schema revision';
 
 
 -------------------------------------------------------------------------------
