@@ -18,7 +18,7 @@ COPY . .
 RUN cargo build --release --no-default-features --bin ew
 
 # We do not need the Rust toolchain to run the binary!
-FROM debian:11-slim AS runtime
+FROM debian:12-slim AS runtime
 RUN apt-get update && apt install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/target/release/ew /app/ew
