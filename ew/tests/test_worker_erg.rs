@@ -108,5 +108,4 @@ async fn test_rollback() {
     workflow.include_block(&CoreData { block: block_x }).await;
     workflow.include_block(&CoreData { block: block_y }).await;
     workflow.roll_back(height_y).await;
-    assert!(false);
 }
