@@ -1,3 +1,4 @@
+use tokio_postgres::Client;
 use tokio_postgres::NoTls;
 
 use ew::config::PostgresConfig;
@@ -71,10 +72,21 @@ async fn test_rollback() {
     let addr_c: AddressID = 1003;
     let pgconf = prep_db("erg_rollback").await;
 
+    // Prepare a db client we'll use to inspect the db
+    let (client, connection) = tokio_postgres::connect(&pgconf.connection_uri, NoTls)
+        .await
+        .unwrap();
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("connection error: {}", e);
+        }
+    });
+
     // Block X
+    let ts_x = TS_10K;
     let block_x = Block::dummy()
         .height(10000)
-        .timestamp(TS_10K)
+        .timestamp(ts_x)
         .add_tx(
             // Create A out of thin air (otherwise A ends up with a negative balance)
             Transaction::dummy()
@@ -88,9 +100,10 @@ async fn test_rollback() {
                 .add_output(BoxData::dummy().address_id(addr_b).value(5_000_000_000)),
         );
     // Block Y
+    let ts_y = ts_x + 120_000;
     let block_y = Block::dummy()
         .height(10001)
-        .timestamp(TS_10K + 120_000)
+        .timestamp(ts_y)
         .add_tx(
             // B sends 5 to C, creating C and spending B
             Transaction::dummy()
@@ -107,5 +120,42 @@ async fn test_rollback() {
     let height_y = block_y.header.height;
     workflow.include_block(&CoreData { block: block_x }).await;
     workflow.include_block(&CoreData { block: block_y }).await;
+
+    // Check db state before rollback
+    let balances = get_balances(&client).await;
+    assert_eq!(balances.len(), 2);
+    assert_eq!(balances[0], (addr_a, 101_000_000_000, 1563159994628));
+    assert_eq!(balances[1], (addr_c, 4_000_000_000, TS_10K + 120_000));
+
+    // Do the rollback
     workflow.roll_back(height_y).await;
+
+    // Check db state after rollback
+    let balances = get_balances(&client).await;
+    assert_eq!(balances.len(), 2);
+    assert_eq!(balances[0], (addr_a, 100_000_000_000, TS_10K - 1));
+    assert_eq!(balances[1], (addr_b, 5_000_000_000, TS_10K));
+}
+
+async fn get_balances(client: &Client) -> Vec<(i64, i64, i64)> {
+    client
+        .query(
+            "select address_id
+                , nano
+                , mean_age_timestamp
+            from erg.balances
+            order by address_id;",
+            &[],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|r| {
+            (
+                r.get::<usize, i64>(0),
+                r.get::<usize, i64>(1),
+                r.get::<usize, i64>(2),
+            )
+        })
+        .collect()
 }
