@@ -21,6 +21,7 @@ pub(super) fn derive_new_counts(
 
 /// Return new address counts resulting from applying balance changes
 /// of given `address_type` to existing address counts.
+/// Height of new address counts is incremented by 1.
 ///
 /// * `prev`: latest address counts
 /// * `balance_changes`: collection of balance changes to be applied
@@ -190,7 +191,21 @@ mod tests {
         };
         let balance_changes = vec![];
         let res = count(&initial, &balance_changes, AddressType::P2PK);
-        assert_eq!(res, initial);
+        let expected = AddressCountsRecord {
+            height: initial.height + 1,
+            total: initial.total,
+            ge_0p001: initial.ge_0p001,
+            ge_0p01: initial.ge_0p01,
+            ge_0p1: initial.ge_0p1,
+            ge_1: initial.ge_1,
+            ge_10: initial.ge_10,
+            ge_100: initial.ge_100,
+            ge_1k: initial.ge_1k,
+            ge_10k: initial.ge_10k,
+            ge_100k: initial.ge_100k,
+            ge_1m: initial.ge_1m,
+        };
+        assert_eq!(res, expected);
     }
 
     #[test]
@@ -218,7 +233,7 @@ mod tests {
         }];
         let res = count(&initial, &balance_changes, AddressType::P2PK);
         let expected = AddressCountsRecord {
-            height: 100_000,
+            height: initial.height + 1,
             total: 10_001,
             ge_0p001: 9001,
             ge_0p01: 8001,
@@ -259,7 +274,7 @@ mod tests {
         }];
         let res = count(&initial, &balance_changes, AddressType::P2PK);
         let expected = AddressCountsRecord {
-            height: 100_000,
+            height: initial.height + 1,
             total: 10_000,
             ge_0p001: 9000,
             ge_0p01: 8000,
@@ -300,7 +315,7 @@ mod tests {
         }];
         let res = count(&initial, &balance_changes, AddressType::P2PK);
         let expected = AddressCountsRecord {
-            height: 100_000,
+            height: initial.height + 1,
             total: 10_001,
             ge_0p001: 9001,
             ge_0p01: 8001,
@@ -341,7 +356,7 @@ mod tests {
         }];
         let res = count(&initial, &balance_changes, AddressType::P2PK);
         let expected = AddressCountsRecord {
-            height: 100_000,
+            height: initial.height + 1,
             total: 10_001,
             ge_0p001: 9000,
             ge_0p01: 8000,
