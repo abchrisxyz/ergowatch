@@ -9,6 +9,10 @@ compose:
 release:
   cargo build --release --no-default-features
 
+# Run compiled release target using local `.env`
+run:
+  set a; source .env; ./target/release/ew
+
 # Run all integration tests, single threaded
 test:
   cargo test --test '*' -- --test-threads=1
