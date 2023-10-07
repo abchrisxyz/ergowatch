@@ -38,9 +38,11 @@ impl Tracker {
         self.store.head()
     }
 
-    /// Get head of tracker's store.
+    /// Returns true if `head` is part of tracker's processed main cahin.
     pub async fn contains_head(&self, head: &Head) -> bool {
-        self.store.contains_head(head).await
+        // Initial head is always contained but will not be stored,
+        // so hande explicitly.
+        head.is_initial() || self.store.contains_head(head).await
     }
 
     pub fn add_cursor<'a>(
