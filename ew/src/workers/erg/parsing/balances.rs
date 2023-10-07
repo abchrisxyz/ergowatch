@@ -41,8 +41,8 @@ pub(super) fn extract_balance_changes(
             }
             // We've seen this address before, apply diff
             Entry::Occupied(mut entry) => {
-                let mut bc = entry.get_mut();
-                bc.new = bc.new.accrue(diff.record.nano, timestamp)
+                let bc = entry.get_mut();
+                bc.new = bc.new.accrue(diff.record.nano, timestamp);
             }
         }
     }
