@@ -371,7 +371,7 @@ impl Store {
     }
 }
 
-/// Saved boxes created in given `node_block` to db and adds entries to the block_cache.
+/// Saves boxes created in given `node_block` to db and adds entries to the block_cache.
 ///
 /// Takes care of
 /// - calculating box size
