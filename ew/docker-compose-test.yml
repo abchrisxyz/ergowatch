@@ -3,7 +3,7 @@ version: "3.8"
 services:
   # Test Postgres database
   db:
-    image: postgres:15
+    image: postgres:16
     environment:
       POSTGRES_DB: test_db
       POSTGRES_USER: test
