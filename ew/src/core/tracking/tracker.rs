@@ -123,21 +123,21 @@ impl Tracker {
         let mut merged: Vec<Cursor> = vec![self.cursors.remove(0)];
 
         // Assume first cursor is highest
-        let mut head = &mut merged[0];
+        let mut tip = &mut merged[0];
 
         // Iterate over remaining cursor in existing collections
         while let Some(cur) = self.cursors.pop() {
-            // If next cursor is higher, add to new collection and use that as head
-            if cur.height > head.height {
+            // If next cursor is higher, add to new collection and use that as tip
+            if cur.height > tip.height {
                 merged.push(cur);
-                head = merged.last_mut().unwrap();
-                // But, if encountering an identical cursor, merge it with head.
-                // We only ever merge with head, so we could miss the opportunity
-                // to merge identical cursors behind head. However, the chances of
+                tip = merged.last_mut().unwrap();
+                // But, if encountering an identical cursor, merge it with tip.
+                // We only ever merge with tip, so we could miss the opportunity
+                // to merge identical cursors behind tip. However, the chances of
                 // this occuring are very slim.
-            } else if cur.is_on(head) {
-                info!("Merging cursors [{}] and [{}]", head.name, cur.name);
-                head.merge(cur);
+            } else if cur.is_on(tip) {
+                info!("Merging cursors [{}] and [{}]", tip.name, cur.name);
+                tip.merge(cur);
             }
         }
 
