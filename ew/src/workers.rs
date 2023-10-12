@@ -83,9 +83,9 @@ impl<W: Workflow> Worker<W> {
     pub async fn start(&mut self) {
         loop {
             tokio::select! {
-                    _ = tokio::signal::ctrl_c() => {
-                        tracing::info!("[{}] got a ctrl-c message", self.id);
-                        break;
+                _ = tokio::signal::ctrl_c() => {
+                    tracing::info!("[{}] got a ctrl-c message", self.id);
+                    break;
                 },
                 msg = self.rx.recv() => {
                     match msg.unwrap() {
