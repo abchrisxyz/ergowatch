@@ -1,5 +1,5 @@
 <p align="center" style="margin-bottom: 0px !important;">
-  <img width="128" src="https://github.com/abchrisxyz/ergowatch-ui/raw/master/ewi/public/ew-logo.svg" alt="logo" align="center">
+  <img width="128" src="https://github.com/abchrisxyz/ergowatch_ui/raw/master/ewi/public/ew-logo.svg" alt="logo" align="center">
 </p>
 
 # ErgoWatch
@@ -9,7 +9,7 @@ ErgoWatch consists of a chain indexer (the "watcher") and an API exposing indexe
 
 API docs available at https://api.ergo.watch/docs.
 
-If looking for the frontend of https://ergo.watch see https://github.com/abchrisxyz/ergowatch-ui.
+If looking for the frontend of https://ergo.watch see https://github.com/abchrisxyz/ergowatch_ui.
 
 Note that https://ergo.watch is currenlty running on an older backend (https://github.com/abchrisxyz/ergowatch/tree/explorer-based), soon to be replaced.
 
