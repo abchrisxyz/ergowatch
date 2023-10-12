@@ -144,7 +144,7 @@ impl Cursor {
     //TODO: Can probably avoid deserializing whole headers by using dedicated type with relevant fields only.
     async fn fetch_new_headers(&self) -> Result<Option<Vec<Header>>, NodeError> {
         let fr = self.height;
-        let to = fr + 10;
+        let to = fr + 100;
         let headers: Vec<Header> = self
             .node
             .api
