@@ -79,7 +79,7 @@ create table sigmausd.history (
 */
 create table sigmausd.services (
     -- address id of service or null for direct interaction
-    address_id bigint unique,
+    address_id bigint,
     -- total transactions to date
     tx_count bigint not null,
     -- first and last tx timestamps
@@ -95,6 +95,10 @@ create table sigmausd.services (
     check(fees >= 0),
     check(volume >= 0)
 );
+-- A simple unique constraint would still allow for multiple null id's.
+-- Instead, map null id to 0 to allow just a single null.
+create unique index sigmausd_services_unique_coalesce_address_id
+    on sigmausd.services (coalesce(address_id, 0));
 
 -- Daily OHLC data
 create table sigmausd.rc_ohlc_daily (

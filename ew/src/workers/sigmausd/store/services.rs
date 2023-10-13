@@ -12,7 +12,7 @@ pub(super) async fn upsert(pgtx: &Transaction<'_>, diff: &ServiceStats) {
             fees,
             volume
         ) values ($1, $2, $3, $4, $5, $6)
-        on conflict (address_id) do update
+        on conflict (coalesce(address_id, 0)) do update
         set tx_count = t.tx_count + EXCLUDED.tx_count
             , last_tx = EXCLUDED.last_tx
             , fees = t.fees + EXCLUDED.fees
