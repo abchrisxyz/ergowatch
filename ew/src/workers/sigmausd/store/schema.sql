@@ -185,7 +185,7 @@ insert into sigmausd.history (
     0, -- oracle, circ_sc is zero anyways
     0, -- circ_sc
     0, -- circ_rc
-    10000000, -- reserves: 0.001 ERG
+    1000000, -- reserves: 0.001 ERG
     0, -- sc_nano_net
     0 -- rc_nano_net
 );
