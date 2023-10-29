@@ -15,6 +15,7 @@ use crate::monitor::WorkerMessage;
 
 pub mod erg;
 pub mod sigmausd;
+pub mod timestamps;
 
 /// Workflows extract and store domain specfic data.
 #[async_trait]
