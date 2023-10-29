@@ -400,6 +400,20 @@ pub mod testutils {
             }
         }
 
+        /// (test-util) Returns box with modified creation height
+        pub fn creation_height(&self, height: Height) -> Self {
+            let mut bx = self.clone();
+            bx.creation_height = height;
+            bx
+        }
+
+        /// (test-util) Returns box with modified timestamp
+        pub fn timestamp(&self, timestamp: Timestamp) -> Self {
+            let mut bx = self.clone();
+            bx.output_timestamp = timestamp;
+            bx
+        }
+
         /// (test-util) Returns box with modified value
         pub fn value(&self, value: NanoERG) -> Self {
             let mut bx = self.clone();
@@ -445,10 +459,14 @@ mod tests {
     fn test_box_data_helpers() {
         let output = BoxData::dummy()
             .address_id(123)
+            .creation_height(601)
+            .timestamp(1683634123456)
             .value(12345)
             .add_asset(5, 420)
             .set_registers(r#"{"R4": "05baafd2a302"}"#);
         assert_eq!(output.address_id, 123);
+        assert_eq!(output.creation_height, 601);
+        assert_eq!(output.output_timestamp, 1683634123456);
         assert_eq!(output.value, 12345);
         assert_eq!(output.assets[0].asset_id, 5);
         assert_eq!(output.assets[0].amount, 420);
