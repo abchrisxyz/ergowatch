@@ -248,5 +248,5 @@ async fn chain_slice(
 }
 
 async fn genesis_boxes() -> Json<Value> {
-    Json(serde_json::from_str(super::blocks::GENESIS_BLOCKS).unwrap())
+    Json(serde_json::from_str(super::blocks::GENESIS_BOXES).unwrap())
 }

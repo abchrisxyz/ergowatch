@@ -1,4 +1,4 @@
-pub const GENESIS_BLOCKS: &str = r#"
+pub const GENESIS_BOXES: &str = r#"
 [
   {
     "boxId": "b69575e11c5c43400bfead5976ee0d6245a1168396b2e2a4f384691f275d501c",

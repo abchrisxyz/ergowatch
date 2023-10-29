@@ -13,7 +13,7 @@ pub use block_3::BLOCK_3;
 pub use block_3::BLOCK_3BIS;
 pub use block_4::BLOCK_4;
 pub use block_5::BLOCK_5;
-pub use genesis::GENESIS_BLOCKS;
+pub use genesis::GENESIS_BOXES;
 
 // pub type TestBlock = &'static str;
 pub struct TestBlock {
