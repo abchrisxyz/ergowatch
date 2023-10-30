@@ -239,8 +239,6 @@ impl Parser {
         let balance_changes =
             balances::extract_balance_changes(&balances, &typed_diffs, block.header.timestamp);
 
-        
-        
         self.cache.last_address_counts = counts::derive_new_counts(
             &self.cache.last_address_counts,
             &balance_changes,
@@ -254,22 +252,22 @@ impl Parser {
             header,
             // Extract spent addresses from balance changes
             spent_addresses: balance_changes
-            .iter()
-            .filter(|bc| matches!(bc.new, Bal::Spent))
-            .map(|bc| bc.address_id)
-            .collect(),
+                .iter()
+                .filter(|bc| matches!(bc.new, Bal::Spent))
+                .map(|bc| bc.address_id)
+                .collect(),
             // Extract balance records from balance changes
             balance_records: balance_changes
-            .into_iter()
-            .filter_map(|bc| match bc.new {
-                Bal::Spent => None,
-                Bal::Unspent(bal) => Some(BalanceRecord::new(
-                    bc.address_id,
-                    bal.nano,
-                    bal.mean_age_timestamp,
-                )),
-            })
-            .collect(),
+                .into_iter()
+                .filter_map(|bc| match bc.new {
+                    Bal::Spent => None,
+                    Bal::Unspent(bal) => Some(BalanceRecord::new(
+                        bc.address_id,
+                        bal.nano,
+                        bal.mean_age_timestamp,
+                    )),
+                })
+                .collect(),
             diff_records: typed_diffs.into_iter().map(|td| td.record).collect(),
             address_counts: self.cache.last_address_counts.clone(),
             supply_composition: self.cache.last_supply_composition.clone(),
