@@ -67,14 +67,4 @@ impl TimestampRecord {
             timestamp: 0,
         }
     }
-
-    /// Round timestamp up to next whole unit
-    pub fn ceil(&self, round_ms: i64) -> Self {
-        let rem = self.timestamp % round_ms;
-        let timestamp = match rem {
-            0 => self.timestamp,
-            _ => self.timestamp - rem + round_ms,
-        };
-        Self::new(self.height, timestamp)
-    }
 }

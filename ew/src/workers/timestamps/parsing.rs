@@ -1,6 +1,7 @@
 use crate::core::types::BoxData;
 use crate::core::types::CoreData;
 use crate::core::types::Head;
+use crate::core::types::Timestamp;
 
 use super::types::Action;
 use super::types::Batch;
@@ -53,9 +54,9 @@ impl Parser {
             data.block.header.id.clone(),
         );
 
-        let hourly_actions = extract_actions(&header, &mut self.cache.last_hourly, HOUR_MS);
-        let daily_actions = extract_actions(&header, &mut self.cache.last_hourly, DAY_MS);
-        let weekly_actions = extract_actions(&header, &mut self.cache.last_hourly, WEEK_MS);
+        let hourly_actions = extract_actions(&header, &mut self.cache.last_hourly, Hourly {});
+        let daily_actions = extract_actions(&header, &mut self.cache.last_daily, Daily {});
+        let weekly_actions = extract_actions(&header, &mut self.cache.last_weekly, Weekly {});
 
         // Update cache
         self.cache.last_hourly = hourly_actions.last().unwrap().get_inserted().unwrap();
@@ -72,39 +73,130 @@ impl Parser {
     }
 }
 
+trait Window {
+    /// Convert a timestamp to equivalent window rank since genesis
+    fn rank(&self, timestamp: Timestamp) -> i64;
+
+    /// Round timestamp up to next whole unit
+    fn ceil(&self, record: &TimestampRecord) -> TimestampRecord;
+
+    /// True if `timestamp` is spot on window boundary
+    fn is_final(&self, timestamp: Timestamp) -> bool;
+
+    fn size_ms(&self) -> i64;
+}
+
+struct Hourly {}
+struct Daily {}
+struct Weekly {}
+
+impl Window for Hourly {
+    fn rank(&self, timestamp: Timestamp) -> i64 {
+        timestamp / HOUR_MS
+    }
+
+    /// Round timestamp up to next hour
+    fn ceil(&self, record: &TimestampRecord) -> TimestampRecord {
+        let rem = record.timestamp % HOUR_MS;
+        let timestamp = match rem {
+            0 => record.timestamp,
+            _ => record.timestamp - rem + HOUR_MS,
+        };
+        TimestampRecord::new(record.height, timestamp)
+    }
+
+    fn is_final(&self, timestamp: Timestamp) -> bool {
+        timestamp % HOUR_MS == 0
+    }
+
+    fn size_ms(&self) -> i64 {
+        HOUR_MS
+    }
+}
+
+impl Window for Daily {
+    fn rank(&self, timestamp: Timestamp) -> i64 {
+        timestamp / DAY_MS
+    }
+
+    /// Round timestamp up to next day
+    fn ceil(&self, record: &TimestampRecord) -> TimestampRecord {
+        let rem = record.timestamp % DAY_MS;
+        let timestamp = match rem {
+            0 => record.timestamp,
+            _ => record.timestamp - rem + DAY_MS,
+        };
+        TimestampRecord::new(record.height, timestamp)
+    }
+
+    fn is_final(&self, timestamp: Timestamp) -> bool {
+        timestamp % DAY_MS == 0
+    }
+
+    fn size_ms(&self) -> i64 {
+        DAY_MS
+    }
+}
+
+impl Window for Weekly {
+    fn rank(&self, timestamp: Timestamp) -> i64 {
+        (timestamp + DAY_MS * 3) / WEEK_MS
+    }
+
+    /// Round timestamp up to next week
+    fn ceil(&self, record: &TimestampRecord) -> TimestampRecord {
+        let rem = (record.timestamp + DAY_MS * 3) % WEEK_MS;
+        let timestamp = match rem {
+            0 => record.timestamp,
+            _ => record.timestamp - rem + WEEK_MS,
+        };
+        TimestampRecord::new(record.height, timestamp)
+    }
+
+    fn is_final(&self, timestamp: Timestamp) -> bool {
+        timestamp % WEEK_MS == 0
+    }
+
+    fn size_ms(&self) -> i64 {
+        WEEK_MS
+    }
+}
+
 fn extract_actions(
     header: &MiniHeader,
     last_record: &TimestampRecord,
-    round_ms: i64,
+    window: impl Window,
 ) -> Vec<Action> {
     let mut actions = vec![];
 
     // Determine rank of new and previous timestamps
-    let nb_hours = header.timestamp / round_ms;
-    let prev_nb_hours = last_record.timestamp / round_ms;
-    let rank_diff = nb_hours - prev_nb_hours;
+    let nb_windows = window.rank(header.timestamp);
+    let prev_nb_windows = window.rank(last_record.timestamp);
+    let rank_diff = nb_windows - prev_nb_windows;
 
-    // Is last record's timestamp precisely on rounded hour?
-    let prev_is_final = last_record.timestamp % round_ms == 0;
+    // Is last record's timestamp precisely on rounded window?
+    let prev_is_final = window.is_final(last_record.timestamp);
 
-    if rank_diff == 0 && !prev_is_final {
-        actions.push(Action::DELETE(last_record.height));
-    } else if rank_diff == 1 && !prev_is_final {
-        actions.push(Action::UPDATE(last_record.ceil(round_ms)));
-    } else {
-        assert!(header.timestamp > last_record.timestamp);
-        let next_t = match prev_is_final {
-            false => {
-                let ceiled = last_record.ceil(round_ms);
-                let t = ceiled.timestamp + round_ms;
-                actions.push(Action::UPDATE(ceiled));
-                t
+    if last_record.height > 0 {
+        if rank_diff == 0 && !prev_is_final {
+            actions.push(Action::DELETE(last_record.height));
+        } else if rank_diff == 1 && !prev_is_final {
+            actions.push(Action::UPDATE(window.ceil(last_record)));
+        } else {
+            assert!(header.timestamp > last_record.timestamp);
+            let next_t = match prev_is_final {
+                false => {
+                    let ceiled = window.ceil(last_record);
+                    let t = ceiled.timestamp + window.size_ms();
+                    actions.push(Action::UPDATE(ceiled));
+                    t
+                }
+                true => last_record.timestamp + window.size_ms(),
+            };
+            let height = last_record.height;
+            for timestamp in (next_t..header.timestamp).step_by(window.size_ms() as usize) {
+                actions.push(Action::INSERT(TimestampRecord::new(height, timestamp)))
             }
-            true => last_record.timestamp + round_ms,
-        };
-        let height = last_record.height;
-        for timestamp in (next_t..header.timestamp).step_by(round_ms as usize) {
-            actions.push(Action::INSERT(TimestampRecord::new(height, timestamp)))
         }
     }
     // Finally, add header timestamp
@@ -118,11 +210,60 @@ fn extract_actions(
 
 #[cfg(test)]
 mod tests {
+    use crate::workers::timestamps::parsing::DAY_MS;
+    use crate::workers::timestamps::parsing::HOUR_MS;
+    use crate::workers::timestamps::parsing::WEEK_MS;
+
     use super::extract_actions;
     use super::Action;
+    use super::Daily;
+    use super::Hourly;
     use super::MiniHeader;
     use super::TimestampRecord;
-    use super::DAY_MS;
+    use super::Weekly;
+    use super::Window;
+
+    #[test]
+    fn window_hourly() {
+        let w = Hourly {};
+        assert_eq!(w.size_ms(), HOUR_MS);
+        assert_eq!(
+            w.ceil(&TimestampRecord::new(123, 3_601_000)),
+            TimestampRecord::new(123, 7_200_000)
+        );
+        assert_eq!(w.rank(3_599_999), 0);
+        assert_eq!(w.rank(3_600_000), 1);
+        assert_eq!(w.rank(3_601_000), 1);
+    }
+
+    #[test]
+    fn window_daily() {
+        let w = Daily {};
+        assert_eq!(w.size_ms(), DAY_MS);
+        assert_eq!(
+            w.ceil(&TimestampRecord::new(123, 86_401_000)),
+            TimestampRecord::new(123, 86_400_000 * 2)
+        );
+        assert_eq!(w.rank(86_399_999), 0);
+        assert_eq!(w.rank(86_400_000), 1);
+        assert_eq!(w.rank(86_401_000), 1);
+    }
+
+    #[test]
+    fn window_weekly() {
+        let w = Weekly {};
+        assert_eq!(w.size_ms(), WEEK_MS);
+        assert_eq!(
+            w.ceil(&TimestampRecord::new(123, 345_599_999)),
+            TimestampRecord::new(123, 345_600_000)
+        );
+        // Sunday 4 JAN 1970 23:59:59.999
+        assert_eq!(w.rank(345_599_999), 0);
+        // Monday 1970 00:00:00
+        assert_eq!(w.rank(345_600_000), 1);
+        // Monday 1970 00:00:01
+        assert_eq!(w.rank(345_600_001), 1);
+    }
 
     #[test]
     fn same_period_live_live() -> () {
@@ -135,7 +276,7 @@ mod tests {
             timestamp: 86_400_000 * 5 + 6000,
             id: "dummy".to_owned(),
         };
-        let actions = extract_actions(&header, &last_record, DAY_MS);
+        let actions = extract_actions(&header, &last_record, Daily {});
         assert_eq!(actions.len(), 2);
         assert_eq!(actions[0], Action::DELETE(last_record.height));
         assert_eq!(
@@ -156,7 +297,7 @@ mod tests {
             id: "dummy".to_owned(),
         };
 
-        let actions = extract_actions(&header, &last_record, DAY_MS);
+        let actions = extract_actions(&header, &last_record, Daily {});
         assert_eq!(actions.len(), 1);
         assert_eq!(
             actions[0],
@@ -179,7 +320,7 @@ mod tests {
             height: 5,
             timestamp: 86_400_000 * 6,
         };
-        let actions = extract_actions(&header, &last_record, DAY_MS);
+        let actions = extract_actions(&header, &last_record, Daily {});
         assert_eq!(actions.len(), 2);
         assert_eq!(actions[0], Action::UPDATE(expected_update));
         assert_eq!(
@@ -203,7 +344,7 @@ mod tests {
             height: 5,
             timestamp: 86_400_000 * 6,
         };
-        let actions = extract_actions(&header, &last_record, DAY_MS);
+        let actions = extract_actions(&header, &last_record, Daily {});
         assert_eq!(actions.len(), 2);
         assert_eq!(actions[0], Action::UPDATE(expected_update));
         assert_eq!(
@@ -223,7 +364,7 @@ mod tests {
             timestamp: 86_400_000 * 6,
             id: "dummy".to_owned(),
         };
-        let actions = extract_actions(&header, &last_record, DAY_MS);
+        let actions = extract_actions(&header, &last_record, Daily {});
         assert_eq!(actions.len(), 1);
         assert_eq!(
             actions[0],
@@ -254,7 +395,7 @@ mod tests {
             height: 5,
             timestamp: 86_400_000 * 8,
         };
-        let actions = extract_actions(&header, &last_record, DAY_MS);
+        let actions = extract_actions(&header, &last_record, Daily {});
         assert_eq!(actions.len(), 4);
         assert_eq!(actions[0], Action::UPDATE(update));
         assert_eq!(actions[1], Action::INSERT(intermediate1));
@@ -288,7 +429,7 @@ mod tests {
             height: 5,
             timestamp: 86_400_000 * 8,
         };
-        let actions = extract_actions(&header, &last_record, DAY_MS);
+        let actions = extract_actions(&header, &last_record, Daily {});
         assert_eq!(actions.len(), 4);
         assert_eq!(actions[0], Action::INSERT(intermediate0));
         assert_eq!(actions[1], Action::INSERT(intermediate1));
@@ -318,7 +459,7 @@ mod tests {
             height: 5,
             timestamp: 86_400_000 * 7,
         };
-        let actions = extract_actions(&header, &last_record, DAY_MS);
+        let actions = extract_actions(&header, &last_record, Daily {});
         assert_eq!(actions.len(), 3);
         assert_eq!(actions[0], Action::UPDATE(update));
         assert_eq!(actions[1], Action::INSERT(intermediate));
@@ -347,12 +488,31 @@ mod tests {
             height: 5,
             timestamp: 86_400_000 * 7,
         };
-        let actions = extract_actions(&header, &last_record, DAY_MS);
+        let actions = extract_actions(&header, &last_record, Daily {});
         assert_eq!(actions.len(), 3);
         assert_eq!(actions[0], Action::INSERT(intermediate1));
         assert_eq!(actions[1], Action::INSERT(intermediate2));
         assert_eq!(
             actions[2],
+            Action::INSERT(TimestampRecord::new(header.height, header.timestamp))
+        );
+    }
+
+    #[test]
+    fn genesis_does_not_get_overwritten() -> () {
+        let last_record = TimestampRecord {
+            height: 0,
+            timestamp: 86_400_000,
+        };
+        let header = MiniHeader {
+            height: 1,
+            timestamp: 86_400_000 + 120_000,
+            id: "dummy".to_owned(),
+        };
+        let actions = extract_actions(&header, &last_record, Weekly {});
+        assert_eq!(actions.len(), 1);
+        assert_eq!(
+            actions[0],
             Action::INSERT(TimestampRecord::new(header.height, header.timestamp))
         );
     }
