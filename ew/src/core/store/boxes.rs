@@ -63,7 +63,7 @@ pub(super) async fn map_boxes(
     pgtx: &Transaction<'_>,
     box_ids: Vec<&BoxID>,
 ) -> HashMap<BoxID, BoxData> {
-    tracing::debug!("mapping boxes");
+    // tracing::debug!("mapping boxes");
     let mut map: HashMap<BoxID, BoxData> = HashMap::new();
     let qry = "
         select b.box_id
@@ -96,7 +96,7 @@ pub(super) async fn map_boxes(
             map.insert(box_data.box_id.clone(), box_data);
         }
     }
-    tracing::debug!("mapped {} box(es)", map.len());
+    // tracing::debug!("mapped {} box(es)", map.len());
     map
 }
 
