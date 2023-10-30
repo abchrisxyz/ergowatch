@@ -52,11 +52,11 @@ async fn main() -> Result<(), &'static str> {
 
     // Workers
     let mut erg = workers::erg::Worker::new("erg", &pgconf, &mut tracker, monitor.sender()).await;
+    let mut sigmausd =
+        workers::sigmausd::Worker::new("sigmausd", &pgconf, &mut tracker, monitor.sender()).await;
     let mut timestamps =
         workers::timestamps::Worker::new("timestamps", &pgconf, &mut tracker, monitor.sender())
             .await;
-    let mut sigmausd =
-        workers::sigmausd::Worker::new("sigmausd", &pgconf, &mut tracker, monitor.sender()).await;
 
     // Start monitor
     tokio::spawn(async move {
