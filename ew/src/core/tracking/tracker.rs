@@ -110,7 +110,7 @@ impl Tracker {
             for cur in &mut self.cursors {
                 cur.step(&mut self.store).await;
             }
-            self.merge_cursors();
+            self.merge_cursors().await;
             if self.cursors.len() == 1 {
                 break;
             }
@@ -118,7 +118,7 @@ impl Tracker {
     }
 
     /// Attempts to merge cursors when at the same height
-    fn merge_cursors(&mut self) {
+    async fn merge_cursors(&mut self) {
         // The new collection of cursors with just the first cursor, for now
         let mut merged: Vec<Cursor> = vec![self.cursors.remove(0)];
 
@@ -130,7 +130,7 @@ impl Tracker {
                 // to merge identical cursors behind tip. However, the chances of
                 // this occuring are very slim.
                 info!("Merging cursors [{}] and [{}]", &merged[0].name, cur.name);
-                merged[0].merge(cur);
+                merged[0].merge(cur).await;
             } else if cur.height > merged[0].height {
                 // If next cursor is higher, add to start of new collection
                 merged.insert(0, cur);

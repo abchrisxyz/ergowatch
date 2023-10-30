@@ -15,6 +15,8 @@ use crate::core::types::Height;
 pub enum MonitorMessage {
     Worker(WorkerMessage),
     Cursor(CursorMessage),
+    /// Holds name of dropped cursor
+    CursorDrop(String),
     Rollback(CursorRollback),
 }
 
@@ -138,6 +140,10 @@ impl Monitor {
                         .entry(msg.name.clone())
                         .and_modify(|cs| cs.update(msg.height))
                         .or_insert(CursorStatus::new());
+                }
+                MonitorMessage::CursorDrop(cursor_name) => {
+                    let mut data = state.write().unwrap();
+                    data.cursors.remove(&cursor_name).unwrap();
                 }
                 MonitorMessage::Worker(msg) => {
                     let mut data = state.write().unwrap();

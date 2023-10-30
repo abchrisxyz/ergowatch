@@ -39,7 +39,14 @@ impl Cursor {
     /// Merge other cursor into self.
     ///
     /// Other's channels are taken over by self.
-    pub fn merge(&mut self, mut other: Self) {
+    pub async fn merge(&mut self, mut other: Self) {
+        // Signal to monitor that the other cursor will get dropped.
+        other
+            .monitor_tx
+            .send(MonitorMessage::CursorDrop(other.name))
+            .await
+            .unwrap();
+        // Take over channels of other cursor.
         self.txs.append(&mut other.txs);
     }
 
