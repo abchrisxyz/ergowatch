@@ -69,7 +69,7 @@ impl Tracker {
             head
         };
 
-        // If there's an existing cursors at same position we use that one.
+        // If there's an existing cursor at same position, we use that one.
         for cur in &mut self.cursors {
             if cur.is_at(capped_head.height, &capped_head.header_id) {
                 cur.txs.push(tx);
