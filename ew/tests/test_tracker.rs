@@ -3,9 +3,12 @@ mod common;
 
 use ew::config::PostgresConfig;
 use ew::core::types::Block;
+use ew::core::types::CoreData;
 use ew::core::types::Head;
 use ew::core::types::HeaderID;
 use ew::core::types::Height;
+use ew::framework::Event;
+use ew::framework::Source;
 use pretty_assertions::assert_eq;
 use tokio;
 use tokio_postgres::NoTls;
@@ -13,7 +16,6 @@ use tokio_postgres::NoTls;
 use common::blocks::TestBlock as TB;
 use common::node_mockup::TestNode;
 use ew::core::tracking::Tracker;
-use ew::core::tracking::TrackingMessage;
 use ew::core::Node;
 use ew::monitor::Monitor;
 use tokio::sync::mpsc::error::TryRecvError;
@@ -25,6 +27,7 @@ fn set_tracing_subscriber(set: bool) -> Option<tracing::dispatcher::DefaultGuard
     let subscriber = tracing_subscriber::fmt()
         .compact()
         .with_max_level(tracing::Level::INFO)
+        .with_env_filter("ew=debug")
         .finish();
     Some(tracing::subscriber::set_default(subscriber))
 }
@@ -59,10 +62,10 @@ async fn prep_db(db_name: &str) -> PostgresConfig {
     PostgresConfig::new(&uri)
 }
 
-/// TrackingMessage wrapper to provide testing helper.
-struct TrackingMessageInspector(TrackingMessage);
+/// Event wrapper to provide testing helper.
+struct EventInspector(Event<CoreData>);
 
-impl TrackingMessageInspector {
+impl EventInspector {
     /// Checks that message is an Include action for given block.
     pub fn assert_includes_block(&self, expected_block: TB) {
         assert_eq!(self.action(), "Include");
@@ -79,42 +82,51 @@ impl TrackingMessageInspector {
 
     /// Checks that message is genesis.
     pub fn assert_is_genesis(&self) {
-        assert_eq!(self.action(), "Genesis");
+        assert_eq!(self.action(), "Include");
+        assert_eq!(self.height(), 0);
+        assert_eq!(
+            self.header_id().expect("genesis header"),
+            "0000000000000000000000000000000000000000000000000000000000000000".to_owned()
+        );
     }
 
     /// Return action of tracking message
     fn action(&self) -> &'static str {
         match self.0 {
-            TrackingMessage::Include(_) => "Include",
-            TrackingMessage::Rollback(_) => "Rollback",
-            TrackingMessage::Genesis(_) => "Genesis",
+            Event::Include(_) => "Include",
+            Event::Rollback(_) => "Rollback",
         }
     }
 
     /// Return height of payload
     fn height(&self) -> Height {
         match &self.0 {
-            TrackingMessage::Include(d) => d.block.header.height,
-            TrackingMessage::Rollback(h) => *h,
-            TrackingMessage::Genesis(blocks) => blocks[0].creation_height,
+            Event::Include(stamped_data) => {
+                let block_height = stamped_data.data.block.header.height;
+                assert_eq!(block_height, stamped_data.height);
+                block_height
+            }
+            Event::Rollback(h) => *h,
         }
     }
 
     /// Return header_id of include message payload
     fn header_id(&self) -> Option<HeaderID> {
         match &self.0 {
-            TrackingMessage::Include(d) => Some(d.block.header.id.clone()),
-            TrackingMessage::Rollback(_) => None,
-            TrackingMessage::Genesis(_) => None,
+            Event::Include(stamped_data) => {
+                let header_id = stamped_data.data.block.header.id.clone();
+                assert_eq!(header_id, stamped_data.header_id);
+                Some(header_id)
+            }
+            Event::Rollback(_) => None,
         }
     }
 
     /// Return block of include message payload
     fn block(&self) -> Option<&Block> {
         match &self.0 {
-            TrackingMessage::Include(d) => Some(&d.block),
-            TrackingMessage::Rollback(_) => None,
-            TrackingMessage::Genesis(_) => None,
+            Event::Include(stamped_data) => Some(&stamped_data.data.block),
+            Event::Rollback(_) => None,
         }
     }
 }
@@ -129,9 +141,9 @@ async fn test_straight_chain_single_cursor() {
 
     // Configure tracker
     let node = Node::new("test-node", mock_node.url());
-    let mut tracker = Tracker::new(node, prep_db("test_tracker_1").await).await;
     let monitor = Monitor::new();
-    let mut rx = tracker.add_cursor("C1".to_string(), Head::initial(), &monitor.sender());
+    let mut tracker = Tracker::new(node, prep_db("test_tracker_1").await, monitor.sender()).await;
+    let mut rx = tracker.subscribe(Head::initial(), "C1").await;
 
     // Start tracker
     tokio::spawn(async move {
@@ -140,10 +152,10 @@ async fn test_straight_chain_single_cursor() {
     });
 
     // Collect messages
-    let mut messages: Vec<TrackingMessageInspector> = vec![];
+    let mut messages: Vec<EventInspector> = vec![];
     for _ in 0..6 {
-        let msg = rx.recv().await.unwrap();
-        messages.push(TrackingMessageInspector(msg))
+        let event = rx.recv().await.unwrap();
+        messages.push(EventInspector(event))
     }
 
     assert_eq!(messages.len(), 6);
@@ -169,13 +181,13 @@ async fn test_straight_chain_three_cursors() {
     // Monitor
     let monitor = Monitor::new();
 
+    // First, run a single cursor tracker to prepare the store.
     {
-        // First, run a single cursor tracker to prepare the store.
         // Configure tracker
         let node = Node::new("test-node", mock_node.url());
-        let mut tracker = Tracker::new(node, pgconf.clone()).await;
+        let mut tracker = Tracker::new(node, pgconf.clone(), monitor.sender()).await;
         // Cursor is at genesis
-        let mut rx = tracker.add_cursor("dummy".to_string(), Head::initial(), &monitor.sender());
+        let mut rx = tracker.subscribe(Head::initial(), "dummy").await;
 
         // Start tracker
         tokio::spawn(async move {
@@ -190,21 +202,17 @@ async fn test_straight_chain_three_cursors() {
 
     // Now configure a new tracker with 3 cursors, using the same db.
     let node = Node::new("test-node", mock_node.url());
-    let mut tracker = Tracker::new(node, pgconf).await;
+    let mut tracker = Tracker::new(node, pgconf, monitor.sender()).await;
     // First cursor is on last block
-    let mut rx_a = tracker.add_cursor(
-        "A".to_string(),
-        Head::new(5, TB::from_id("5").header_id().to_string()),
-        &monitor.sender(),
-    );
-    // Second cursor is at genesis
-    let mut rx_b = tracker.add_cursor("B".to_string(), Head::initial(), &monitor.sender());
+    let mut rx_a = tracker
+        .subscribe(Head::new(5, TB::from_id("5").header_id().to_string()), "A")
+        .await;
+    // Second cursor starts from scratch
+    let mut rx_b = tracker.subscribe(Head::initial(), "B").await;
     // Third cursor is at block 2
-    let mut rx_c = tracker.add_cursor(
-        "C".to_string(),
-        Head::new(2, TB::from_id("2").header_id().to_string()),
-        &monitor.sender(),
-    );
+    let mut rx_c = tracker
+        .subscribe(Head::new(2, TB::from_id("2").header_id().to_string()), "C")
+        .await;
 
     // Start tracker
     tokio::spawn(async move {
@@ -213,13 +221,13 @@ async fn test_straight_chain_three_cursors() {
     });
 
     // Collect messages
-    let mut messages_b: Vec<TrackingMessageInspector> = vec![];
+    let mut messages_b: Vec<EventInspector> = vec![];
     for _ in 0..6 {
-        messages_b.push(TrackingMessageInspector(rx_b.recv().await.unwrap()))
+        messages_b.push(EventInspector(rx_b.recv().await.unwrap()))
     }
-    let mut messages_c: Vec<TrackingMessageInspector> = vec![];
+    let mut messages_c: Vec<EventInspector> = vec![];
     for _ in 3..6 {
-        messages_c.push(TrackingMessageInspector(rx_c.recv().await.unwrap()))
+        messages_c.push(EventInspector(rx_c.recv().await.unwrap()))
     }
     assert_eq!(rx_a.try_recv().err(), Some(TryRecvError::Empty));
 
@@ -238,7 +246,7 @@ async fn test_straight_chain_three_cursors() {
 }
 
 #[tokio::test]
-#[ignore] // Untestable as head will be capped to current store's head.
+#[ignore = "legacy"] // Untestable as head will be capped to current store's head.
 async fn test_fork_handling_not_a_child() {
     let guard = set_tracing_subscriber(false);
     let block_ids = ["1", "2", "3", "3bis*", "4", "5"];
@@ -248,15 +256,16 @@ async fn test_fork_handling_not_a_child() {
 
     // Configure tracker
     let node = Node::new("test-node", mock_node.url());
-    let mut tracker = Tracker::new(node, prep_db("test_tracker_3").await).await;
     let monitor = Monitor::new();
+    let mut tracker = Tracker::new(node, prep_db("test_tracker_3").await, monitor.sender()).await;
     // Assuming we've included 1, 2 and 3bis so far
     // Next block will be 4, which isn't a child of 3bis
-    let mut rx = tracker.add_cursor(
-        "C1".to_string(),
-        Head::new(3, TB::from_id("3bis").header_id().to_owned()),
-        &monitor.sender(),
-    );
+    let mut rx = tracker
+        .subscribe(
+            Head::new(3, TB::from_id("3bis").header_id().to_owned()),
+            "C1",
+        )
+        .await;
 
     // Start tracker
     tokio::spawn(async move {
@@ -265,9 +274,9 @@ async fn test_fork_handling_not_a_child() {
     });
 
     // Collect messages
-    let mut messages: Vec<TrackingMessageInspector> = vec![];
+    let mut messages: Vec<EventInspector> = vec![];
     for _ in 0..4 {
-        messages.push(TrackingMessageInspector(rx.recv().await.unwrap()))
+        messages.push(EventInspector(rx.recv().await.unwrap()))
     }
 
     assert_eq!(messages.len(), 4);
@@ -288,13 +297,14 @@ async fn test_fork_handling_same_height() {
     let mut mock_node = TestNode::run(&block_ids).await;
 
     // Configure tracker
+    let monitor = Monitor::new();
     let mut tracker = Tracker::new(
         Node::new("test-node", &mock_node.url()),
         prep_db("test_tracker_4").await,
+        monitor.sender(),
     )
     .await;
-    let monitor = Monitor::new();
-    let mut rx = tracker.add_cursor("C1".to_string(), Head::initial(), &monitor.sender());
+    let mut rx = tracker.subscribe(Head::initial(), "C1").await;
 
     // Start tracker
     tokio::spawn(async move {
@@ -303,9 +313,9 @@ async fn test_fork_handling_same_height() {
     });
 
     // Collect first batch of messages
-    let mut messages: Vec<TrackingMessageInspector> = vec![];
+    let mut messages: Vec<EventInspector> = vec![];
     for _ in 0..4 {
-        messages.push(TrackingMessageInspector(rx.recv().await.unwrap()))
+        messages.push(EventInspector(rx.recv().await.unwrap()))
     }
     assert_eq!(messages.len(), 4);
 
@@ -315,7 +325,7 @@ async fn test_fork_handling_same_height() {
 
     // Wait for new blocks to be processed
     for _ in 0..4 {
-        messages.push(TrackingMessageInspector(rx.recv().await.unwrap()))
+        messages.push(EventInspector(rx.recv().await.unwrap()))
     }
 
     assert_eq!(messages.len(), 8);

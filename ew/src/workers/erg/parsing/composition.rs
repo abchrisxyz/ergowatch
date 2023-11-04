@@ -2,21 +2,6 @@ use super::super::types::CompositionRecord;
 use super::TypedDiff;
 use crate::constants::address_ids::EMISSION_CONTRACTS;
 use crate::core::types::AddressType;
-use crate::core::types::BoxData;
-
-pub(super) fn from_genesis_boxes(boxes: &Vec<BoxData>) -> CompositionRecord {
-    // All genesis boxes are contracts
-    CompositionRecord {
-        height: 0,
-        p2pks: 0,
-        contracts: boxes
-            .iter()
-            .filter(|bx| !EMISSION_CONTRACTS.contains(&bx.address_id))
-            .map(|bx| bx.value)
-            .sum(),
-        miners: 0,
-    }
-}
 
 pub(super) fn derive_record(
     cache: &CompositionRecord,

@@ -101,7 +101,7 @@ impl Store {
         schema.init(&mut client).await;
 
         let head = headers::last_head(&client).await;
-        tracing::debug!("head: {:?}", &head);
+        tracing::debug!("current head: {:?}", &head);
         let last_address_id = addresses::get_max_id(&mut client).await;
         let last_asset_id = tokens::get_max_id(&mut client).await;
 
@@ -113,8 +113,8 @@ impl Store {
         }
     }
 
-    pub(super) fn head(&self) -> Head {
-        self.head.clone()
+    pub(super) fn head(&self) -> &Head {
+        &self.head
     }
 
     pub(super) async fn contains_head(&self, head: &Head) -> bool {

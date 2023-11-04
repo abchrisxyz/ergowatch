@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use tokio::sync::mpsc;
 use tracing::info;
 
@@ -5,22 +6,31 @@ use crate::config::PostgresConfig;
 use crate::core::node::Node;
 use crate::core::store::Store;
 use crate::core::tracking::cursor::Cursor;
-use crate::core::tracking::messages::TrackingMessage;
+use crate::core::types::CoreData;
 use crate::core::types::Head;
+use crate::framework::Event;
+use crate::framework::Source;
 use crate::monitor::MonitorMessage;
-
-/// The capacity of mpsc channels used to communicate tracking events
-const CHANNEL_CAPACITY: usize = 8;
 
 pub struct Tracker {
     node: Node,
-    cursors: Vec<Cursor>,
     store: Store,
+    cursors: Vec<Cursor<CoreData>>,
+    monitor_tx: mpsc::Sender<MonitorMessage>,
+    // pub polling_interval: tokio::time::Duration,
 }
 
 impl Tracker {
-    pub async fn new(node: Node, pgconf: PostgresConfig) -> Self {
+    pub async fn new(
+        node: Node,
+        pgconf: PostgresConfig,
+        monitor_tx: mpsc::Sender<MonitorMessage>,
+    ) -> Self {
         let mut store = Store::new(pgconf).await;
+
+        // Ensure genesis boxes are included.
+        // We do this now, before the tracker can be used by downstream
+        // workers, which may request genesis data right away.
         if !store.has_genesis_boxes().await {
             let boxes = node.api.utxo_genesis_raw().await.unwrap();
             store.include_genesis_boxes(boxes).await;
@@ -28,71 +38,32 @@ impl Tracker {
 
         Self {
             node,
-            cursors: vec![],
             store,
+            cursors: vec![],
+            monitor_tx,
+            // polling_interval: tokio::time::Duration::from_millis(5000),
         }
     }
 
     /// Get head of tracker's store.
-    pub fn head(&self) -> Head {
+    pub fn head(&self) -> &Head {
         self.store.head()
     }
 
-    /// Returns true if `head` is part of tracker's processed main cahin.
-    pub async fn contains_head(&self, head: &Head) -> bool {
-        // Initial head is always contained but will not be stored,
-        // so hande explicitly.
-        head.is_initial() || self.store.contains_head(head).await
-    }
-
-    pub fn add_cursor<'a>(
-        &mut self,
-        name: String,
-        head: Head,
-        monitor_tx: &mpsc::Sender<MonitorMessage>,
-    ) -> mpsc::Receiver<TrackingMessage> {
-        // Create new channel
-        let (tx, rx) = mpsc::channel(CHANNEL_CAPACITY);
-
-        // Workflows may start at a non-zero height and ignore/skip any blocks
-        // prior. The tracker's store could be empty or not having reached the
-        // workflow's start height yet. Because a cursor cannot point past the
-        // tracker's head, we cap it to the current tracker's head if needed.
-        let max_head = self.store.head();
-        let capped_head = if head.height > max_head.height {
-            info!(
-                "cursor [{}] is ahead of tracker - using tracker's height",
-                name
-            );
-            max_head
-        } else {
-            head
-        };
-
-        // If there's an existing cursor at same position, we use that one.
-        for cur in &mut self.cursors {
-            if cur.is_at(capped_head.height, &capped_head.header_id) {
-                cur.txs.push(tx);
-                return rx;
-            }
-        }
-
-        // No existing cursors were found, so we make a new one.
-        let cur = Cursor {
-            name,
-            height: capped_head.height,
-            header_id: capped_head.header_id,
-            node: self.node.clone(),
-            txs: vec![tx],
-            polling_interval: tokio::time::Duration::from_millis(5000),
-            monitor_tx: monitor_tx.clone(),
-        };
-        self.cursors.push(cur);
-        rx
-    }
+    // /// Returns true if `head` is part of tracker's processed main cahin.
+    // pub async fn contains_head(&self, head: &Head) -> bool {
+    //     // Initial head is always contained but will not be stored,
+    //     // so hande explicitly.
+    //     head.is_initial() || self.store.contains_head(head).await
+    // }
 
     pub async fn start(&mut self) {
         tracing::info!("Starting tracker");
+        // Before starting, reorder cursors by decreasing position.
+        self.cursors.sort_by_key(|c| -c.head.height);
+        // Rename first cursor to `main` as any other will be merged into it.
+        self.cursors[0].id = "main".to_owned();
+
         // Ensure genesis boxes have been dispatched
         for cur in &mut self.cursors {
             cur.ensure_genesis_boxes(&mut self.store).await;
@@ -108,7 +79,7 @@ impl Tracker {
     async fn join_cursors(&mut self) {
         loop {
             for cur in &mut self.cursors {
-                cur.step(&mut self.store).await;
+                cur.step(&self.node, &mut self.store).await;
             }
             self.merge_cursors().await;
             if self.cursors.len() == 1 {
@@ -119,8 +90,15 @@ impl Tracker {
 
     /// Attempts to merge cursors when at the same height
     async fn merge_cursors(&mut self) {
+        // Check if any of the cursors are mergeable.
+        let main_head = &self.cursors[0].head;
+        if !self.cursors.iter().skip(1).any(|c| c.is_at(main_head)) {
+            // Nope, stop here.
+            return;
+        }
+
         // The new collection of cursors with just the first cursor, for now
-        let mut merged: Vec<Cursor> = vec![self.cursors.remove(0)];
+        let mut merged: Vec<Cursor<CoreData>> = vec![self.cursors.remove(0)];
 
         // Iterate over remaining cursor in existing collections
         while let Some(cur) = self.cursors.pop() {
@@ -129,9 +107,8 @@ impl Tracker {
                 // We only ever merge with tip, so we could miss the opportunity
                 // to merge identical cursors behind tip. However, the chances of
                 // this occuring are very slim.
-                info!("Merging cursors [{}] and [{}]", &merged[0].name, cur.name);
                 merged[0].merge(cur).await;
-            } else if cur.height > merged[0].height {
+            } else if cur.head.height > merged[0].head.height {
                 // If next cursor is higher, add to start of new collection
                 merged.insert(0, cur);
             } else {
@@ -148,6 +125,62 @@ impl Tracker {
     async fn single_cursor(&mut self) {
         assert!(self.cursors.len() == 1);
         let cur = &mut self.cursors[0];
-        cur.watch(&mut self.store).await;
+        cur.watch(&self.node, &mut self.store).await;
+    }
+}
+
+/// Dummy impl to satisfy ErgWorker for now
+#[async_trait]
+impl Source for Tracker {
+    type S = CoreData;
+
+    fn head(&self) -> &Head {
+        self.store.head()
+    }
+
+    async fn contains_head(&self, head: &Head) -> bool {
+        // Initial head is always contained but will not be stored,
+        // so hande explicitly.
+        head.is_initial() || self.store.contains_head(head).await
+    }
+
+    async fn subscribe(
+        &mut self,
+        head: Head,
+        // TODO: cursor name should not be set by caller
+        cursor_name: &str,
+    ) -> mpsc::Receiver<Event<CoreData>> {
+        // Create new channel
+        let (tx, rx) = tokio::sync::mpsc::channel(crate::framework::EVENT_CHANNEL_CAPACITY);
+
+        // Workflows may start at a non-zero height and ignore/skip any blocks
+        // prior. The tracker's store could be empty or not having reached the
+        // workflow's start height yet. Because a cursor cannot point past the
+        // tracker's head, we cap it to the current tracker's head if needed.
+        let max_head = self.store.head().clone();
+        let capped_head = if head.height > max_head.height {
+            info!("cursor [{cursor_name}] is ahead of tracker - using tracker's height");
+            max_head
+        } else {
+            head
+        };
+
+        // If there's an existing cursor at same position, we use that one.
+        for cur in &mut self.cursors {
+            if cur.is_at(&capped_head) {
+                cur.txs.push(tx);
+                return rx;
+            }
+        }
+
+        // No existing cursors were found, so we make a new one.
+        let cur = Cursor {
+            id: cursor_name.to_owned(),
+            head: capped_head.clone(),
+            txs: vec![tx],
+            monitor_tx: self.monitor_tx.clone(),
+        };
+        self.cursors.push(cur);
+        rx
     }
 }

@@ -58,6 +58,54 @@ impl Block {
         }
         address_ids.into_iter().collect()
     }
+
+    /// Create a fake block holding genesis data.
+    ///
+    /// Avoids having to use a dedicated type for genesis only.
+    pub fn from_genesis_boxes(boxes: Vec<BoxData>) -> Block {
+        Self {
+            header: Header {
+                extension_id: "".to_owned(),
+                difficulty: "".to_owned(),
+                votes: [0, 0, 0],
+                timestamp: crate::constants::GENESIS_TIMESTAMP,
+                size: 0,
+                state_root: "".to_owned(),
+                height: 0,
+                n_bits: 0,
+                version: 0,
+                id: ZERO_HEADER.to_owned(),
+                ad_proofs_root: "".to_owned(),
+                transactions_root: "".to_owned(),
+                extension_hash: "".to_owned(),
+                pow_solutions: node::models::POWSolutions {
+                    pk: "".to_owned(),
+                    w: "".to_owned(),
+                    n: "".to_owned(),
+                    d: 0f64,
+                },
+                ad_proofs_id: "".to_owned(),
+                transactions_id: "".to_owned(),
+                parent_id: "".to_owned(),
+            },
+            transactions: vec![
+                // Single fake transaction outputting all genesis boxes
+                Transaction {
+                    id: "".to_owned(),
+                    index: 0,
+                    outputs: boxes,
+                    inputs: vec![],
+                    data_inputs: vec![],
+                },
+            ],
+            extension: node::models::Extension {
+                header_id: ZERO_HEADER.to_owned(),
+                digest: "".to_owned(),
+                fields: vec![],
+            },
+            size: 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

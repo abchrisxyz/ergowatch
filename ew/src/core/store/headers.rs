@@ -1,6 +1,6 @@
 use tokio_postgres::Client;
 use tokio_postgres::Transaction;
-use tracing::debug;
+use tracing::trace;
 
 use crate::core::types::Head;
 use crate::core::types::Height;
@@ -8,10 +8,10 @@ use crate::core::types::Timestamp;
 
 /// Retrieve head from latest header.
 pub(super) async fn last_head(client: &Client) -> Head {
-    debug!("reading last header");
+    trace!("reading last header");
     let qry = "select max(height) from core.headers";
     let max_h: Option<Height> = client.query_one(qry, &[]).await.unwrap().get(0);
-    debug!("Max height in core.headers is {:?}", max_h);
+    trace!("max height in core.headers is {:?}", max_h);
     if max_h.is_none() {
         return Head::initial();
     }

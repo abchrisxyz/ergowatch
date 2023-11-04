@@ -19,6 +19,18 @@ pub struct Batch {
     pub supply_composition: CompositionRecord,
 }
 
+pub struct BalData {
+    pub diff_records: Vec<DiffRecord>,
+}
+
+impl From<Batch> for BalData {
+    fn from(batch: Batch) -> Self {
+        BalData {
+            diff_records: batch.diff_records,
+        }
+    }
+}
+
 // /// Data to be restored and/or modified after a roll back.
 // pub struct RollbackBatch {
 //     /// Height of the rolled back block.

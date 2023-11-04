@@ -1,6 +1,4 @@
-use crate::core::types::BoxData;
 use crate::core::types::CoreData;
-use crate::core::types::Head;
 use crate::core::types::Timestamp;
 
 use super::types::Action;
@@ -25,26 +23,6 @@ pub(super) struct Parser {
 impl Parser {
     pub fn new(cache: ParserCache) -> Self {
         Self { cache }
-    }
-
-    pub(super) fn extract_genesis_batch(&mut self, boxes: &Vec<BoxData>) -> Batch {
-        let head = Head::genesis();
-
-        // Get genesis out of first box
-        let genesis_timestamp = boxes[0].output_timestamp;
-
-        // Init cache
-        self.cache.last_hourly = TimestampRecord::new(0, genesis_timestamp);
-        self.cache.last_daily = TimestampRecord::new(0, genesis_timestamp);
-        self.cache.last_weekly = TimestampRecord::new(0, genesis_timestamp);
-
-        // Prepare batch
-        Batch {
-            header: MiniHeader::new(head.height, genesis_timestamp, head.header_id),
-            hourly: vec![Action::INSERT(TimestampRecord::new(0, genesis_timestamp))],
-            daily: vec![Action::INSERT(TimestampRecord::new(0, genesis_timestamp))],
-            weekly: vec![Action::INSERT(TimestampRecord::new(0, genesis_timestamp))],
-        }
     }
 
     pub(super) fn extract_batch(&mut self, data: &CoreData) -> Batch {

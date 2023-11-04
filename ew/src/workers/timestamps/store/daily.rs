@@ -1,12 +1,13 @@
 use crate::core::types::Height;
 use crate::core::types::Timestamp;
-use tokio_postgres::Client;
+use tokio_postgres::GenericClient;
 use tokio_postgres::Transaction;
 
 use super::super::types::TimestampRecord;
 
 /// Returns record with latest timestamp, if any
-pub(super) async fn get_last(client: &Client) -> Option<TimestampRecord> {
+pub(super) async fn get_last(client: &impl GenericClient) -> Option<TimestampRecord> {
+    tracing::trace!("get last");
     let qry = "
         select height
             , timestamp
@@ -25,6 +26,7 @@ pub(super) async fn get_last(client: &Client) -> Option<TimestampRecord> {
 
 /// Insert
 pub(super) async fn insert(pgtx: &Transaction<'_>, record: &TimestampRecord) {
+    tracing::trace!("insert {record:?}");
     let stmt = "insert into timestamps.daily (height, timestamp) values ($1, $2);";
     pgtx.execute(stmt, &[&record.height, &record.timestamp])
         .await
@@ -33,6 +35,7 @@ pub(super) async fn insert(pgtx: &Transaction<'_>, record: &TimestampRecord) {
 
 /// Update timestamp of record with same height.
 pub(super) async fn update(pgtx: &Transaction<'_>, record: &TimestampRecord) {
+    tracing::trace!("update {record:?}");
     let stmt = "
         update timestamps.daily
         set timestamp = $2
@@ -44,6 +47,7 @@ pub(super) async fn update(pgtx: &Transaction<'_>, record: &TimestampRecord) {
 
 /// Delete records at `height`.
 pub(super) async fn delete_at(pgtx: &Transaction<'_>, height: &Height) {
+    tracing::trace!("delete at {height}");
     let stmt = "
         delete from timestamps.daily
         where height = $1;";
@@ -52,6 +56,7 @@ pub(super) async fn delete_at(pgtx: &Transaction<'_>, height: &Height) {
 
 /// Delete all records with a timestamp after `timestamp`
 pub(super) async fn delete_after(pgtx: &Transaction<'_>, timestamp: Timestamp) {
+    tracing::trace!("delete after {timestamp}");
     let stmt = "
         delete from timestamps.daily
         where timestamp > $1;";

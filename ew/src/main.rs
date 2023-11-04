@@ -38,25 +38,25 @@ async fn main() -> Result<(), &'static str> {
 
     // Env variables
     let pg_uri = env::var("EW_POSTGRES_URI").unwrap();
-    tracing::info!("found EW_POSTGRES_URI environment variable");
+    tracing::debug!("found EW_POSTGRES_URI environment variable");
 
     let node_url = env::var("EW_NODE_URL").unwrap();
-    tracing::info!("found EW_NODE_URL environment variable");
+    tracing::debug!("found EW_NODE_URL environment variable");
 
     let mut monitor = Monitor::new();
 
     tracing::info!("configuring tracker");
     let node = Node::new("local-node", &node_url);
     let pgconf = ew::config::PostgresConfig::new(&pg_uri);
-    let mut tracker = Tracker::new(node, pgconf.clone()).await;
+    let mut tracker = Tracker::new(node, pgconf.clone(), monitor.sender()).await;
 
     // Workers
-    let mut erg = workers::erg::Worker::new("erg", &pgconf, &mut tracker, monitor.sender()).await;
-    let mut sigmausd =
-        workers::sigmausd::Worker::new("sigmausd", &pgconf, &mut tracker, monitor.sender()).await;
     let mut timestamps =
         workers::timestamps::Worker::new("timestamps", &pgconf, &mut tracker, monitor.sender())
             .await;
+    let mut erg = workers::erg::Worker::new("erg2", &pgconf, &mut tracker, monitor.sender()).await;
+    let mut sigmausd =
+        workers::sigmausd::Worker::new("sigmausd", &pgconf, &mut tracker, monitor.sender()).await;
 
     // Start monitor
     tokio::spawn(async move {
@@ -73,15 +73,15 @@ async fn main() -> Result<(), &'static str> {
             .await;
     });
 
-    // Start units
+    // Start workers
+    tokio::spawn(async move {
+        timestamps.start().await;
+    });
     tokio::spawn(async move {
         erg.start().await;
     });
     tokio::spawn(async move {
         sigmausd.start().await;
-    });
-    tokio::spawn(async move {
-        timestamps.start().await;
     });
 
     // Wait for ctrl-c

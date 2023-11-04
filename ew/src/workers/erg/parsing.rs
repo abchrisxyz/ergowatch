@@ -9,12 +9,9 @@ use super::types::Batch;
 use super::types::CompositionRecord;
 use super::types::DiffRecord;
 use super::types::MiniHeader;
-use crate::constants::GENESIS_TIMESTAMP;
 use crate::core::types::AddressID;
 use crate::core::types::AddressType;
-use crate::core::types::BoxData;
 use crate::core::types::CoreData;
-use crate::core::types::Head;
 use crate::core::types::NanoERG;
 use crate::core::types::Timestamp;
 
@@ -174,51 +171,6 @@ impl Balance {
 impl Parser {
     pub fn new(cache: ParserCache) -> Self {
         Self { cache }
-    }
-
-    /// Create a batch from genesis boxes.
-    pub fn extract_genesis_batch(&mut self, boxes: &Vec<BoxData>) -> Batch {
-        let head = Head::genesis();
-
-        let balance_changes: Vec<BalanceChange> = boxes
-            .iter()
-            .map(|bx| BalanceChange {
-                address_id: bx.address_id,
-                address_type: bx.address_type.clone(),
-                old: Bal::Spent,
-                new: Bal::Unspent(Balance::new(bx.value, GENESIS_TIMESTAMP)),
-            })
-            .collect();
-
-        self.cache.last_address_counts = counts::derive_new_counts(
-            &self.cache.last_address_counts,
-            &balance_changes,
-        );
-        self.cache.last_supply_composition = composition::from_genesis_boxes(&boxes);
-        
-        Batch {
-            header: MiniHeader {
-                height: head.height,
-                timestamp: GENESIS_TIMESTAMP,
-                id: head.header_id,
-            },
-            diff_records: boxes
-                .iter()
-                .map(|b| DiffRecord {
-                    address_id: b.address_id,
-                    height: 0,
-                    tx_idx: 0,
-                    nano: b.value,
-                })
-                .collect(),
-            balance_records: boxes
-                .iter()
-                .map(|b| BalanceRecord::new(b.address_id, b.value, GENESIS_TIMESTAMP))
-                .collect(),
-            spent_addresses: vec![],
-            address_counts: self.cache.last_address_counts.clone(),
-            supply_composition: self.cache.last_supply_composition.clone(),
-        }
     }
 
     /// Create a batch from core data.

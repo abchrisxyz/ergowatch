@@ -8,8 +8,8 @@ use ew::core::types::BoxData;
 use ew::core::types::CoreData;
 use ew::core::types::Timestamp;
 use ew::core::types::Transaction;
+use ew::framework::Workflow;
 use ew::workers::erg::ErgWorkFlow;
-use ew::workers::Workflow;
 
 const TS_10K: Timestamp = 1563159993440; // timestamp of block 10000
 

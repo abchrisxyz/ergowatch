@@ -41,7 +41,7 @@ pub(super) async fn get_max_id(client: &impl GenericClient) -> AddressID {
 
 /// Insert new address and get new id back.
 pub(super) async fn index_new(pgtx: &Transaction<'_>, rec: &AddressRecord) {
-    tracing::debug!("inserting address: {:?}", rec);
+    tracing::trace!("inserting address: {:?}", rec);
     let stmt = "insert into core.addresses(id, spot_height, address) values ($1, $2, $3)";
     pgtx.execute(stmt, &[&rec.id, &rec.spot_height, &rec.address])
         .await

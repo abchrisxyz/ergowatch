@@ -1,115 +1,78 @@
-use std::sync::Arc;
-use tokio::sync::mpsc;
-use tracing::info;
-
 use crate::core::node::Node;
 use crate::core::node::NodeError;
 use crate::core::store::Store;
-use crate::core::tracking::messages::TrackingMessage;
+use crate::core::types::Block;
 use crate::core::types::CoreData;
 use crate::core::types::Head;
 use crate::core::types::Header;
-use crate::core::types::HeaderID;
-use crate::monitor::CursorMessage;
-use crate::monitor::CursorRollback;
-use crate::monitor::MonitorMessage;
+pub use crate::framework::Cursor;
+use crate::framework::StampedData;
 
-pub(super) struct Cursor {
-    pub(super) name: String,
-    pub(super) height: i32,
-    pub(super) header_id: String,
-    pub(super) node: Node,
-    /// MPSC channel senders
-    pub(super) txs: Vec<mpsc::Sender<TrackingMessage>>,
-    pub polling_interval: tokio::time::Duration,
-    pub monitor_tx: mpsc::Sender<MonitorMessage>,
-}
-
-impl Cursor {
-    /// Checks if cursor is at given position
-    pub fn is_at(&self, height: i32, header_id: &str) -> bool {
-        self.height == height && self.header_id == header_id
-    }
-
-    /// Checks if cursor is at same position as other
-    pub fn is_on(&self, other: &Self) -> bool {
-        self.is_at(other.height, &other.header_id)
-    }
-
-    /// Merge other cursor into self.
-    ///
-    /// Other's channels are taken over by self.
-    pub async fn merge(&mut self, mut other: Self) {
-        // Signal to monitor that the other cursor will get dropped.
-        other
-            .monitor_tx
-            .send(MonitorMessage::CursorDrop(other.name))
-            .await
-            .unwrap();
-        // Take over channels of other cursor.
-        self.txs.append(&mut other.txs);
-    }
-
+impl Cursor<CoreData> {
     /// Progress the cursor.
     ///
     /// Returns immediately if the next block is not available, if the channel
     /// is full, or after the next block was sent.
-    pub async fn step(&mut self, store: &mut Store) {
-        match self.fetch_new_headers().await.unwrap() {
+    pub(super) async fn step(&mut self, node: &Node, store: &mut Store) {
+        match self.fetch_new_headers(node).await.unwrap() {
             None => (),
-            Some(new_headers) => self.process_new_headers(new_headers, store).await,
+            Some(new_headers) => self.process_new_headers(new_headers, node, store).await,
         }
     }
 
     /// Watch for new blocks
     ///
     /// Syncs cursor to head and keeps polling for new blocks.
-    pub async fn watch(&mut self, store: &mut Store) {
-        tracing::debug!("starting watch loop");
+    pub(super) async fn watch(&mut self, node: &Node, store: &mut Store) {
+        tracing::debug!("[{}] starting watch loop", self.id);
         loop {
-            let new_headers = self.wait_for_new_blocks().await;
-            self.process_new_headers(new_headers, store).await;
+            let new_headers = self.wait_for_new_blocks(node).await;
+            self.process_new_headers(new_headers, node, store).await;
         }
     }
 
     /// Dispatches genesis boxes from the store if needed.
-    pub async fn ensure_genesis_boxes(&mut self, store: &mut Store) {
-        if self.height > -1 {
+    pub(super) async fn ensure_genesis_boxes(&mut self, store: &mut Store) {
+        if self.head.height > -1 {
             return;
         };
         let boxes = store.get_genesis_boxes().await;
-        for tx in &self.txs {
-            tx.send(TrackingMessage::Genesis(boxes.clone()))
-                .await
-                .unwrap()
-        }
-        let head = Head::genesis();
-        self.height = head.height;
-        self.header_id = head.header_id;
+        let fake_block = Block::from_genesis_boxes(boxes);
+        let data = StampedData {
+            height: fake_block.header.height,
+            header_id: fake_block.header.id.clone(),
+            parent_id: "".to_owned(),
+            data: CoreData { block: fake_block },
+        };
+        self.include(data).await;
     }
 
-    async fn process_new_headers(&mut self, new_headers: Vec<Header>, store: &mut Store) {
-        tracing::debug!(
-            "[{}] processing {} new headers",
-            self.name,
-            new_headers.len()
-        );
+    async fn process_new_headers(
+        &mut self,
+        new_headers: Vec<Header>,
+        node: &Node,
+        store: &mut Store,
+    ) {
+        tracing::debug!("[{}] processing {} new headers", self.id, new_headers.len());
         for new_header in new_headers {
-            if new_header.height == self.height {
+            if new_header.height == self.head.height {
                 // Different block at same height, last included block is
                 // not part of main chain anymore, so roll back and start over.
-                tracing::warn!(">>>>>>>>>   same height");
-                self.roll_back(store).await;
+                tracing::warn!("last included block is not part of main chain anymore");
+                let prev: Head = store.roll_back(&self.head).await;
+                self.roll_back(prev).await;
+                break;
             }
-            assert_eq!(new_header.height, self.height + 1);
-            if new_header.parent_id != self.header_id {
+            assert_eq!(new_header.height, self.head.height + 1);
+            if new_header.parent_id != self.head.header_id {
                 // New block is not a child of current last block.
-                tracing::warn!(">>>>>>>>>   not a child");
-                self.roll_back(store).await;
+                tracing::warn!("new block is not a child of current last block");
+                let prev: Head = store.roll_back(&self.head).await;
+                self.roll_back(prev).await;
                 break;
             } else {
-                match self.include(&new_header.id, store).await {
-                    Ok(_) => (), // all good, keep going
+                let block = match node.api.block(&new_header.id).await {
+                    Ok(b) => b,
                     Err(NodeError::API404Notfound(url)) => {
                         // Block wasn't found. This can happen when at the tip of
                         // the chain and the header is in but the corresponding
@@ -123,25 +86,38 @@ impl Cursor {
                         panic!("{:?}", other_node_error)
                     }
                 };
+
+                assert_eq!(block.header.height, self.head.height + 1);
+                let core_data = store.process(block).await;
+
+                let data = StampedData {
+                    height: core_data.block.header.height,
+                    header_id: core_data.block.header.id.clone(),
+                    parent_id: core_data.block.header.parent_id.clone(),
+                    data: core_data,
+                };
+
+                self.include(data).await;
             }
         }
     }
 
     /// Return a header id for next height, once available.
-    async fn wait_for_new_blocks(&self) -> Vec<Header> {
+    async fn wait_for_new_blocks(&self, node: &Node) -> Vec<Header> {
+        let polling_interval = tokio::time::Duration::from_millis(5000);
         loop {
-            match self.fetch_new_headers().await {
+            match self.fetch_new_headers(node).await {
                 Ok(res) => match res {
                     Some(headers) => {
                         return headers;
                     }
                     None => {
-                        tokio::time::sleep(self.polling_interval).await;
+                        tokio::time::sleep(polling_interval).await;
                     }
                 },
                 Err(e) => {
                     tracing::warn!("{}", e);
-                    tokio::time::sleep(self.polling_interval).await;
+                    tokio::time::sleep(polling_interval).await;
                 }
             }
         }
@@ -149,11 +125,13 @@ impl Cursor {
 
     /// Return header id's for next few heights, if any.
     //TODO: Can probably avoid deserializing whole headers by using dedicated type with relevant fields only.
-    async fn fetch_new_headers(&self) -> Result<Option<Vec<Header>>, NodeError> {
-        let fr = self.height;
+    pub(super) async fn fetch_new_headers(
+        &self,
+        node: &Node,
+    ) -> Result<Option<Vec<Header>>, NodeError> {
+        let fr = self.head.height;
         let to = fr + 100;
-        let headers: Vec<Header> = self
-            .node
+        let headers: Vec<Header> = node
             .api
             .chainslice(fr, to)
             .await?
@@ -164,7 +142,7 @@ impl Cursor {
         match headers.len() {
             // one header
             1 => {
-                if headers[0].id == self.header_id {
+                if headers[0].id == self.head.header_id {
                     Ok(None)
                 } else {
                     Ok(Some(headers))
@@ -178,73 +156,5 @@ impl Cursor {
             // more than 1 header
             _ => Ok(Some(headers)),
         }
-    }
-
-    /// Submit block for inclusion and update cursor
-    async fn include(&mut self, header_id: &HeaderID, store: &mut Store) -> Result<(), NodeError> {
-        info!(
-            "[{}] including block {} for height {}",
-            self.name,
-            header_id,
-            self.height + 1
-        );
-
-        let block = self.node.api.block(header_id).await?;
-        assert_eq!(block.header.height, self.height + 1);
-        let core_data: CoreData = store.process(block).await;
-
-        let payload = Arc::new(core_data);
-        // Broadcast inclusion of next block
-        for tx in &self.txs {
-            tx.send(TrackingMessage::Include(payload.clone()))
-                .await
-                .unwrap();
-        }
-        // Update position
-        self.height += 1;
-        self.header_id = header_id.clone();
-
-        // Notify monitor
-        self.monitor_tx
-            .send(MonitorMessage::Cursor(CursorMessage::new(
-                self.name.clone(),
-                self.height,
-            )))
-            .await
-            .unwrap();
-
-        Ok(())
-    }
-
-    /// Submit block for roll back and update cursor
-    async fn roll_back(&mut self, store: &mut Store) {
-        info!(
-            "[{}] Rolling back block {} for height {}",
-            self.name, self.header_id, self.height
-        );
-        // Retrieve data of block to be rolled back
-        let curr = Head {
-            height: self.height,
-            header_id: self.header_id.clone(),
-        };
-        let prev: Head = store.roll_back(&curr).await;
-        // Broadcast roll back
-        for tx in &self.txs {
-            tx.send(TrackingMessage::Rollback(curr.height))
-                .await
-                .unwrap();
-        }
-        // Wind back the cursor
-        self.height = prev.height;
-        self.header_id = prev.header_id;
-
-        // Notify monitor
-        self.monitor_tx
-            .send(MonitorMessage::Rollback(CursorRollback::new(
-                self.name.clone(),
-                self.height,
-            )))
-            .await
-            .unwrap();
     }
 }

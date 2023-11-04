@@ -102,7 +102,7 @@ pub(super) async fn map_boxes(
 
 /// Retrieves collection of BoxData representing genesis boxes.
 pub(super) async fn get_genesis_boxes(client: &Client) -> Vec<BoxData> {
-    tracing::debug!("retrieving genesis boxes");
+    tracing::trace!("retrieving genesis boxes");
     let qry = "
         select b.box_id
             , b.creation_height

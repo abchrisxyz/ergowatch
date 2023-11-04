@@ -7,10 +7,12 @@ use crate::core::types::AddressID;
 use crate::core::types::Head;
 use crate::core::types::Height;
 use crate::core::types::NanoERG;
+use crate::framework::StampedData;
 use crate::utils::Schema;
 
 use super::parsing::Bal;
 use super::parsing::ParserCache;
+use super::types::BalData;
 use super::types::BalanceRecord;
 use super::Batch;
 
@@ -53,6 +55,10 @@ impl Store {
         &self.head
     }
 
+    pub(super) async fn contains_head(&self, head: &Head) -> bool {
+        headers::exists(&self.client, head).await
+    }
+
     pub(super) async fn load_parser_cache(&self) -> ParserCache {
         ParserCache {
             last_address_counts: counts::get_last(&self.client).await,
@@ -60,7 +66,7 @@ impl Store {
         }
     }
 
-    pub(super) async fn persist(&mut self, batch: Batch) {
+    pub(super) async fn persist(&mut self, batch: &Batch) {
         // tracing::debug!("persisting data for block {}", batch.header.height);
         let pgtx = self.client.transaction().await.unwrap();
 
@@ -101,6 +107,19 @@ impl Store {
         self.head = headers::get_last(&self.client)
             .await
             .map_or(Head::initial(), |h| h.head());
+    }
+
+    pub(super) async fn get_at(&self, height: Height) -> StampedData<BalData> {
+        let stamp = headers::get_stamp_at(&self.client, height).await;
+
+        StampedData {
+            height: stamp.height,
+            header_id: stamp.header_id,
+            parent_id: stamp.parent_id,
+            data: BalData {
+                diff_records: diffs::select_at(&self.client, height).await,
+            },
+        }
     }
 
     /// Retrieve and map balance records for given address id's.

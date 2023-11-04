@@ -42,7 +42,7 @@ pub(super) async fn get_max_id(client: &impl GenericClient) -> AssetID {
 
 /// Insert new token and get new id back.
 pub(super) async fn index_new(pgtx: &Transaction<'_>, rec: &TokenRecord) {
-    tracing::debug!("inserting token: {:?}", rec);
+    tracing::trace!("inserting token: {:?}", rec);
     let stmt = "insert into core.tokens(asset_id, spot_height, token_id) values ($1, $2, $3)";
     pgtx.execute(stmt, &[&rec.asset_id, &rec.spot_height, &rec.token_id])
         .await

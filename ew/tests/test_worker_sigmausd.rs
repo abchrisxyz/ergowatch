@@ -7,6 +7,7 @@ use ew::core::types::BoxData;
 use ew::core::types::CoreData;
 use ew::core::types::Timestamp;
 use ew::core::types::Transaction;
+use ew::framework::Workflow;
 use ew::workers::sigmausd::constants::BANK_NFT;
 use ew::workers::sigmausd::constants::CONTRACT_ADDRESS_ID;
 use ew::workers::sigmausd::constants::CONTRACT_CREATION_HEIGHT;
@@ -14,7 +15,6 @@ use ew::workers::sigmausd::constants::ORACLE_EPOCH_PREP_ADDRESS_ID;
 use ew::workers::sigmausd::constants::ORACLE_NFT;
 use ew::workers::sigmausd::constants::SC_ASSET_ID;
 use ew::workers::sigmausd::SigmaUSD;
-use ew::workers::Workflow;
 
 // Contract was launched 25 MAR 2021.
 // Here's a timestamp rounding up to 26 MAR 2021.

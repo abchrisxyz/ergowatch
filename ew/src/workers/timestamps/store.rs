@@ -105,6 +105,25 @@ impl Store {
 
     /// Roll back changes from last block.
     pub(super) async fn roll_back(&mut self, height: Height) {
+        // Delete timestamps after parent's block's timestamp and reinsert
+        // parent block's timestamp if necessary.
+        // In examples below, we roll back block 8.
+        //
+        // blocks :     6     7        8
+        // windows:        |        |
+        // before :        6        7  8
+        // after  :        6  7
+        //
+        // blocks :     5      6       7   8
+        // windows:        |        |
+        // before :        5        6      8
+        // after  :        5        6  7
+        //
+        // blocks :     5     6  7  8
+        // windows:        |        |
+        // before :        5        8
+        // after  :        5     7
+
         tracing::debug!("rolling back block {}", height);
         assert_eq!(self.head.height, height);
 
@@ -112,13 +131,50 @@ impl Store {
 
         // Delete header at h
         headers::delete_at(&pgtx, height).await;
-        let last_timestamp = headers::get_last(&pgtx).await.unwrap().timestamp;
+        let parent_header = headers::get_last(&pgtx).await.unwrap();
 
         // Delete timestamps past new latest one
-        hourly::delete_after(&pgtx, last_timestamp).await;
-        daily::delete_after(&pgtx, last_timestamp).await;
-        weekly::delete_after(&pgtx, last_timestamp).await;
+        hourly::delete_after(&pgtx, parent_header.timestamp).await;
+        daily::delete_after(&pgtx, parent_header.timestamp).await;
+        weekly::delete_after(&pgtx, parent_header.timestamp).await;
 
+        // Reinsert last hourly timestamp if needed
+        let last = hourly::get_last(&pgtx)
+            .await
+            .expect("always data left after a roll back");
+        if last.height < parent_header.height {
+            hourly::insert(
+                &pgtx,
+                &TimestampRecord::new(parent_header.height, parent_header.timestamp),
+            )
+            .await;
+        }
+
+        // Reinsert last daily timestamp if needed
+        let last = daily::get_last(&pgtx)
+            .await
+            .expect("always data left after a roll back");
+        if last.height < parent_header.height {
+            daily::insert(
+                &pgtx,
+                &TimestampRecord::new(parent_header.height, parent_header.timestamp),
+            )
+            .await;
+        }
+
+        // Reinsert last weekly timestamp if needed
+        let last = weekly::get_last(&pgtx)
+            .await
+            .expect("always data left after a roll back");
+        if last.height < parent_header.height {
+            weekly::insert(
+                &pgtx,
+                &TimestampRecord::new(parent_header.height, parent_header.timestamp),
+            )
+            .await;
+        }
+
+        // Commit db transaction
         pgtx.commit().await.unwrap();
 
         // Reload head
