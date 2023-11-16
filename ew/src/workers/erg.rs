@@ -67,12 +67,16 @@ impl Workflow for ErgWorkFlow {
 impl Sourceable for ErgWorkFlow {
     type S = BalData;
 
+    /// Returns true if data for `head` has been included.
     async fn contains_head(&self, head: &Head) -> bool {
         // Initial head is always contained but will not be stored,
         // so hande explicitly.
         head.is_initial() || self.store.contains_head(head).await
     }
 
+    /// Get data for given `head`.
+    ///
+    /// Used by lagging cursors to retrieve data.
     async fn get_at(&self, height: Height) -> StampedData<Self::S> {
         self.store.get_at(height).await
     }

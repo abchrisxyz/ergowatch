@@ -31,7 +31,11 @@ pub trait Workflow {
 pub trait Sourceable {
     type S;
 
+    /// Returns true if data for `head` has been included.
     async fn contains_head(&self, head: &Head) -> bool;
 
+    /// Get data for given `head`.
+    ///
+    /// Used by lagging cursors to retrieve data.
     async fn get_at(&self, height: Height) -> StampedData<Self::S>;
 }
