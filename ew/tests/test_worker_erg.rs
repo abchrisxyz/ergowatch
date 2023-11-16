@@ -10,7 +10,7 @@ use tokio_postgres::Client;
 
 use ew::core::types::AddressID;
 use ew::core::types::Timestamp;
-use ew::framework::Workflow;
+use ew::framework::EventHandling;
 use ew::workers::erg::ErgWorkFlow;
 use ew::workers::erg_diffs::types::DiffData;
 

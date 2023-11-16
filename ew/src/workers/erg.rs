@@ -21,8 +21,8 @@ use async_trait::async_trait;
 use crate::config::PostgresConfig;
 use crate::core::types::Header;
 use crate::core::types::Height;
+use crate::framework::EventHandling;
 use crate::framework::StampedData;
-use crate::framework::Workflow;
 use crate::workers::erg_diffs::types::DiffData;
 use parsing::Parser;
 use store::Store;
@@ -30,7 +30,7 @@ use types::Batch;
 
 const WORKER_ID: &'static str = "erg";
 
-pub type Worker = crate::framework::Worker<ErgWorkFlow>;
+pub type Worker = crate::framework::LeafWorker<ErgWorkFlow>;
 
 pub struct ErgWorkFlow {
     parser: Parser,
@@ -38,7 +38,7 @@ pub struct ErgWorkFlow {
 }
 
 #[async_trait]
-impl Workflow for ErgWorkFlow {
+impl EventHandling for ErgWorkFlow {
     type U = DiffData;
     type D = ();
 

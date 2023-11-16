@@ -1,8 +1,11 @@
 use tokio_postgres::types::Type;
+use tokio_postgres::Client;
 use tokio_postgres::GenericClient;
 use tokio_postgres::Transaction;
 
 use super::super::types::DiffRecord;
+use super::super::types::SupplyDiff;
+use crate::core::types::AddressID;
 use crate::core::types::Height;
 
 /// Insert collection of diff records.
@@ -54,6 +57,31 @@ pub async fn select_at(client: &impl GenericClient, height: Height) -> Vec<DiffR
             height: r.get(1),
             tx_idx: r.get(2),
             nano: r.get(3),
+        })
+        .collect()
+}
+
+/// Get aggregate series of balance diffs for given addresses.
+pub async fn select_aggregate_series(
+    client: &Client,
+    address_ids: &Vec<AddressID>,
+) -> Vec<SupplyDiff> {
+    let sql = "
+        select height
+            , sum(nano)
+        from erg.balance_diffs
+        where address_id = any ($1)
+        group by 1
+        order by 1;
+    ";
+    client
+        .query(sql, &[&address_ids])
+        .await
+        .unwrap()
+        .iter()
+        .map(|r| SupplyDiff {
+            height: r.get(0),
+            nano: r.get(1),
         })
         .collect()
 }

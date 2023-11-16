@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 
+use super::querying::QueryHandler;
 use super::StampedData;
 use crate::config::PostgresConfig;
 use crate::core::types::Header;
@@ -26,8 +27,8 @@ pub trait Workflow {
     fn header<'a>(&'a self) -> &'a Header;
 }
 
-#[async_trait]
 /// Describes a workflow that can be turned into a source.
+#[async_trait]
 pub trait Sourceable {
     type S;
 
@@ -38,4 +39,12 @@ pub trait Sourceable {
     ///
     /// Used by lagging cursors to retrieve data.
     async fn get_at(&self, height: Height) -> StampedData<Self::S>;
+}
+
+/// Describes query-emitting workflows
+#[async_trait]
+pub trait Querying {
+    type Q: Query;
+
+    fn connect_to_query_handler(&mut self, query_handler: &QueryHandler<Self::Q>);
 }

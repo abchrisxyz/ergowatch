@@ -1,4 +1,5 @@
 mod parsing;
+pub mod queries;
 mod store;
 pub mod types;
 
@@ -9,16 +10,17 @@ use crate::config::PostgresConfig;
 use crate::core::types::CoreData;
 use crate::core::types::Header;
 use crate::core::types::Height;
-use crate::framework::SourceWorker;
-use crate::framework::Sourceable;
+use crate::framework::EventEmission;
+use crate::framework::EventHandling;
+use crate::framework::QueryHandling;
+use crate::framework::QueryableSourceWorker;
 use crate::framework::StampedData;
-use crate::framework::Workflow;
 use parsing::Parser;
 use store::Store;
 
 const WORKER_ID: &'static str = "erg_diffs";
 
-pub type Worker = SourceWorker<ErgDiffsWorkFlow>;
+pub type Worker = QueryableSourceWorker<ErgDiffsWorkFlow>;
 
 pub struct ErgDiffsWorkFlow {
     parser: Parser,
@@ -26,7 +28,7 @@ pub struct ErgDiffsWorkFlow {
 }
 
 #[async_trait]
-impl Workflow for ErgDiffsWorkFlow {
+impl EventHandling for ErgDiffsWorkFlow {
     type U = CoreData;
     type D = DiffData;
 
@@ -55,7 +57,7 @@ impl Workflow for ErgDiffsWorkFlow {
 }
 
 #[async_trait]
-impl Sourceable for ErgDiffsWorkFlow {
+impl EventEmission for ErgDiffsWorkFlow {
     type S = DiffData;
 
     /// Returns true if data for `header` has been included.
@@ -70,5 +72,15 @@ impl Sourceable for ErgDiffsWorkFlow {
     /// Used by lagging cursors to retrieve data.
     async fn get_at(&self, height: Height) -> StampedData<Self::S> {
         self.store.get_at(height).await
+    }
+}
+
+#[async_trait]
+impl QueryHandling for ErgDiffsWorkFlow {
+    type Q = queries::DiffsQuery;
+    type R = queries::DiffsQueryResponse;
+
+    async fn execute(&self, query: Self::Q) -> Self::R {
+        self.store.query_balance_diffs(query).await
     }
 }

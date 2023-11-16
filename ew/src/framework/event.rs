@@ -21,6 +21,15 @@ impl<D> Event<D> {
     }
 }
 
+pub enum HandledEvent<D> {
+    /// Downstream data from processing a new block event
+    Include(StampedData<D>),
+    /// New (previous) header resulting from a rollback.
+    Rollback(Header),
+    /// Skipped event (e.g. prior to a worker's start height)
+    Skipped,
+}
+
 pub struct Stamp {
     pub height: Height,
     pub header_id: HeaderID,

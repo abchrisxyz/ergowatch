@@ -1,3 +1,5 @@
+use postgres_types::ToSql;
+
 use crate::core::types::AddressID;
 use crate::core::types::Height;
 use crate::core::types::NanoERG;
@@ -47,5 +49,18 @@ impl DiffRecord {
             tx_idx,
             nano,
         }
+    }
+}
+
+/// An address agnostic balance change.
+#[derive(Debug, ToSql)]
+pub struct SupplyDiff {
+    pub height: Height,
+    pub nano: NanoERG,
+}
+
+impl SupplyDiff {
+    pub fn new(height: Height, nano: NanoERG) -> Self {
+        Self { height, nano }
     }
 }

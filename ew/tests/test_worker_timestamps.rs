@@ -7,7 +7,7 @@ use ew::core::types::Block;
 use ew::core::types::BoxData;
 use ew::core::types::CoreData;
 use ew::core::types::Header;
-use ew::framework::Workflow;
+use ew::framework::EventHandling;
 use ew::workers::timestamps::TimestampsWorkFlow;
 
 pub fn set_tracing_subscriber(set: bool) -> Option<tracing::dispatcher::DefaultGuard> {

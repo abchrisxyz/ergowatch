@@ -8,7 +8,7 @@ use ew::core::types::BoxData;
 use ew::core::types::CoreData;
 use ew::core::types::Timestamp;
 use ew::core::types::Transaction;
-use ew::framework::Workflow;
+use ew::framework::EventHandling;
 use ew::workers::sigmausd::constants::BANK_NFT;
 use ew::workers::sigmausd::constants::CONTRACT_ADDRESS_ID;
 use ew::workers::sigmausd::constants::CONTRACT_CREATION_HEIGHT;

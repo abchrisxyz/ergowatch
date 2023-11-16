@@ -11,7 +11,7 @@ use ew::core::types::Height;
 use ew::core::types::NanoERG;
 use ew::core::types::Timestamp;
 use ew::core::types::Transaction;
-use ew::framework::Workflow;
+use ew::framework::EventHandling;
 use ew::workers::erg_diffs::ErgDiffsWorkFlow;
 use tokio_postgres::Client;
 

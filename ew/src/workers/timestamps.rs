@@ -8,15 +8,15 @@ use crate::config::PostgresConfig;
 use crate::core::types::CoreData;
 use crate::core::types::Header;
 use crate::core::types::Height;
+use crate::framework::EventHandling;
+use crate::framework::LeafWorker;
 use crate::framework::StampedData;
-use crate::framework::Worker as SimpleWorker;
-use crate::framework::Workflow;
 use parsing::Parser;
 use store::Store;
 
 const WORKER_ID: &'static str = "timestamps";
 
-pub type Worker = SimpleWorker<TimestampsWorkFlow>;
+pub type Worker = LeafWorker<TimestampsWorkFlow>;
 
 pub struct TimestampsWorkFlow {
     parser: Parser,
@@ -24,7 +24,7 @@ pub struct TimestampsWorkFlow {
 }
 
 #[async_trait]
-impl Workflow for TimestampsWorkFlow {
+impl EventHandling for TimestampsWorkFlow {
     type U = CoreData;
     type D = ();
 

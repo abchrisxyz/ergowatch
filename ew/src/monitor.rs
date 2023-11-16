@@ -46,12 +46,12 @@ impl CursorRollback {
 
 #[derive(Debug, Serialize)]
 pub struct WorkerMessage {
-    name: String,
+    name: &'static str,
     height: Height,
 }
 
 impl WorkerMessage {
-    pub fn new(name: String, height: Height) -> Self {
+    pub fn new(name: &'static str, height: Height) -> Self {
         Self { name, height }
     }
 }
@@ -61,7 +61,7 @@ struct MonitorData {
     /// Cursor specific timers
     cursors: HashMap<String, CursorStatus>,
     /// Workers
-    workers: HashMap<String, Height>,
+    workers: HashMap<&'static str, Height>,
 }
 
 #[derive(Serialize, Clone)]
@@ -198,7 +198,7 @@ async fn status(Extension(state): Extension<SharedState>) -> Json<Status> {
     let workers: Vec<WorkerMessage> = data
         .workers
         .iter()
-        .map(|(k, v)| WorkerMessage::new(k.clone(), *v))
+        .map(|(k, v)| WorkerMessage::new(*k, *v))
         .collect();
     Json(Status { cursors, workers })
 }

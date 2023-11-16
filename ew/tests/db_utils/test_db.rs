@@ -46,6 +46,7 @@ impl TestDB {
         }
     }
 
+    /// Initialize core schema.
     pub async fn init_core(&self) {
         self.client
             .batch_execute(include_str!("../../src/core/store/schema.sql"))

@@ -14,6 +14,7 @@ use crate::framework::store::SourcableStore;
 use crate::framework::store::StoreDef;
 use crate::framework::StampedData;
 
+use super::queries;
 use super::types::Batch;
 use super::types::DiffData;
 use super::WORKER_ID;
@@ -55,5 +56,14 @@ impl SourcableStore for InnerStore {
         DiffData {
             diff_records: diffs::select_at(client, height).await,
         }
+    }
+}
+
+impl Store {
+    pub(super) async fn query_balance_diffs(
+        &self,
+        query: queries::DiffsQuery,
+    ) -> queries::DiffsQueryResponse {
+        diffs::select_aggregate_series(&self.get_client(), &query.address_ids).await
     }
 }

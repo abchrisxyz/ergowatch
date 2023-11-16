@@ -144,6 +144,17 @@ impl<B: BatchStore + SourcableStore> PgStore<B> {
     }
 }
 
+pub trait PatchableStore {
+    type P; // Patch type
+    fn stage_rollback_patch(&mut self, patch: Self::P);
+}
+
+impl<S: BatchStore + PatchableStore> PgStore<S> {
+    pub fn stage_rollback_patch(&mut self, patch: S::P) {
+        self.batch_store.stage_rollback_patch(patch);
+    }
+}
+
 pub struct StoreDef {
     pub schema_name: &'static str,
     pub worker_id: &'static str,

@@ -9,8 +9,8 @@ use crate::config::PostgresConfig;
 use crate::core::types::CoreData;
 use crate::core::types::Header;
 use crate::core::types::Height;
+use crate::framework::EventHandling;
 use crate::framework::StampedData;
-use crate::framework::Workflow;
 use constants::CONTRACT_CREATION_HEIGHT;
 use parsing::Parser;
 use store::Store;
@@ -18,7 +18,7 @@ use types::Batch;
 
 const WORKER_ID: &'static str = "sigmausd";
 
-pub type Worker = crate::framework::Worker<SigmaUSD>;
+pub type Worker = crate::framework::LeafWorker<SigmaUSD>;
 
 pub struct SigmaUSD {
     parser: Parser,
@@ -26,7 +26,7 @@ pub struct SigmaUSD {
 }
 
 #[async_trait]
-impl Workflow for SigmaUSD {
+impl EventHandling for SigmaUSD {
     type U = CoreData;
     type D = ();
 
