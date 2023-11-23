@@ -1,7 +1,10 @@
-use tokio_postgres::Client;
-use tokio_postgres::NoTls;
+mod db_utils;
 
-use ew::config::PostgresConfig;
+use db_utils::TestDB;
+
+use ew::constants::GENESIS_TIMESTAMP;
+use tokio_postgres::Client;
+
 use ew::core::types::AddressID;
 use ew::core::types::Block;
 use ew::core::types::BoxData;
@@ -19,49 +22,37 @@ pub fn set_tracing_subscriber(set: bool) -> Option<tracing::dispatcher::DefaultG
     }
     let subscriber = tracing_subscriber::fmt()
         .compact()
-        .with_max_level(tracing::Level::DEBUG)
+        .with_max_level(tracing::Level::INFO)
+        .with_env_filter("ew=trace")
         .finish();
     Some(tracing::subscriber::set_default(subscriber))
 }
 
-/// Prepare a test db and return corresponfing config.
-async fn prep_db(db_name: &str) -> PostgresConfig {
-    tracing::info!("Preparing test db: {}", db_name);
-    // Connection string to main test db - see docker-compose-test.yml
-    let pg_uri: &str = "postgresql://test:test@localhost:5433/test_db";
-    let (client, connection) = tokio_postgres::connect(pg_uri, NoTls).await.unwrap();
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("connection error: {}", e);
-        }
-    });
-
-    // Fresh empty db
-    let stmt = format!("drop database if exists {};", db_name);
-    client.execute(&stmt, &[]).await.unwrap();
-    let stmt = format!("create database {};", db_name);
-    client.execute(&stmt, &[]).await.unwrap();
-
-    // Connection string to new db
-    let uri = format!("postgresql://test:test@localhost:5433/{}", db_name);
-    PostgresConfig::new(&uri)
-}
-
 #[tokio::test]
-async fn test_empty_block_pre_launch() {
-    let pgconf = prep_db("erg_empty_block_pre").await;
-    let block = Block::dummy().height(100);
-    let data = CoreData { block };
-    let mut workflow = ErgWorkFlow::new(&pgconf).await;
-    workflow.include_block(&data).await;
-}
+async fn test_empty_blocks() {
+    let _guard = set_tracing_subscriber(false);
+    let test_db = TestDB::new("erg_empty_blocks").await;
 
-#[tokio::test]
-async fn test_empty_block_post_launch() {
-    let pgconf = prep_db("erg_empty_block_post").await;
-    let block = Block::dummy().height(100);
-    let mut workflow = ErgWorkFlow::new(&pgconf).await;
-    workflow.include_block(&CoreData { block }).await;
+    // Genesis
+    let dummy_genesis_boxes = vec![BoxData::dummy()
+        .creation_height(0)
+        .timestamp(GENESIS_TIMESTAMP)];
+    let genesis_block = Block::from_genesis_boxes(dummy_genesis_boxes);
+
+    // Next block
+    let block = Block::child_of(&genesis_block).timestamp(GENESIS_TIMESTAMP + 120_000);
+
+    // Process blocks
+    let mut workflow = ErgWorkFlow::new(&test_db.pgconf).await;
+    workflow
+        .include_block(
+            &CoreData {
+                block: genesis_block,
+            }
+            .into(),
+        )
+        .await;
+    workflow.include_block(&CoreData { block }.into()).await;
 }
 
 #[tokio::test]
@@ -70,22 +61,16 @@ async fn test_rollback() {
     let addr_a: AddressID = 1001;
     let addr_b: AddressID = 1002;
     let addr_c: AddressID = 1003;
-    let pgconf = prep_db("erg_rollback").await;
+    let test_db = TestDB::new("erg_rollback").await;
+    test_db.init_core().await;
 
-    // Prepare a db client we'll use to inspect the db
-    let (client, connection) = tokio_postgres::connect(&pgconf.connection_uri, NoTls)
-        .await
-        .unwrap();
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("connection error: {}", e);
-        }
-    });
+    // Genesis
+    // Keeping it empty this time to simplify test assertions.
+    let genesis_block = Block::from_genesis_boxes(vec![]);
 
     // Block X
     let ts_x = TS_10K;
-    let block_x = Block::dummy()
-        .height(10000)
+    let block_x = Block::child_of(&genesis_block)
         .timestamp(ts_x)
         .add_tx(
             // Create A out of thin air (otherwise A ends up with a negative balance)
@@ -99,10 +84,10 @@ async fn test_rollback() {
                 .add_output(BoxData::dummy().address_id(addr_a).value(100_000_000_000))
                 .add_output(BoxData::dummy().address_id(addr_b).value(5_000_000_000)),
         );
+
     // Block Y
     let ts_y = ts_x + 120_000;
-    let block_y = Block::dummy()
-        .height(10001)
+    let block_y = Block::child_of(&block_x)
         .timestamp(ts_y)
         .add_tx(
             // B sends 5 to C, creating C and spending B
@@ -111,18 +96,34 @@ async fn test_rollback() {
                 .add_output(BoxData::dummy().address_id(addr_c).value(5_000_000_000)),
         )
         .add_tx(
-            // C sends 1 to B, modifying A
+            // C sends 1 to A, modifying A
             Transaction::dummy()
                 .add_input(BoxData::dummy().address_id(addr_c).value(1_000_000_000))
                 .add_output(BoxData::dummy().address_id(addr_a).value(1_000_000_000)),
         );
-    let mut workflow = ErgWorkFlow::new(&pgconf).await;
+
+    // Register core header for parent of rolled back blocks
+    test_db.insert_core_header(&(&block_x.header).into()).await;
+
+    let mut workflow = ErgWorkFlow::new(&test_db.pgconf).await;
     let height_y = block_y.header.height;
-    workflow.include_block(&CoreData { block: block_x }).await;
-    workflow.include_block(&CoreData { block: block_y }).await;
+    workflow
+        .include_block(
+            &CoreData {
+                block: genesis_block,
+            }
+            .into(),
+        )
+        .await;
+    workflow
+        .include_block(&CoreData { block: block_x }.into())
+        .await;
+    workflow
+        .include_block(&CoreData { block: block_y }.into())
+        .await;
 
     // Check db state before rollback
-    let balances = get_balances(&client).await;
+    let balances = get_balances(&test_db.client).await;
     assert_eq!(balances.len(), 2);
     assert_eq!(balances[0], (addr_a, 101_000_000_000, 1563159994628));
     assert_eq!(balances[1], (addr_c, 4_000_000_000, TS_10K + 120_000));
@@ -131,7 +132,7 @@ async fn test_rollback() {
     workflow.roll_back(height_y).await;
 
     // Check db state after rollback
-    let balances = get_balances(&client).await;
+    let balances = get_balances(&test_db.client).await;
     assert_eq!(balances.len(), 2);
     assert_eq!(balances[0], (addr_a, 100_000_000_000, TS_10K - 1));
     assert_eq!(balances[1], (addr_b, 5_000_000_000, TS_10K));

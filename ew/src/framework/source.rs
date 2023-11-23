@@ -2,16 +2,16 @@ use async_trait::async_trait;
 use tokio::sync::mpsc::Receiver;
 
 use super::event::Event;
-use crate::core::types::Head;
+use crate::core::types::Header;
 
 #[async_trait]
 pub trait Source {
     type S: Send;
 
-    fn head(&self) -> &Head;
+    fn header(&self) -> &Header;
 
     /// Returns true if `head` is part of source's processed main cahin.
-    async fn contains_head(&self, head: &Head) -> bool;
+    async fn contains_header(&self, header: &Header) -> bool;
 
-    async fn subscribe(&mut self, head: Head, cursor_name: &str) -> Receiver<Event<Self::S>>;
+    async fn subscribe(&mut self, header: Header, cursor_name: &str) -> Receiver<Event<Self::S>>;
 }

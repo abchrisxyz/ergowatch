@@ -19,19 +19,18 @@ use super::types::Block;
 use super::types::BoxData;
 use super::types::BoxID;
 use super::types::CoreData;
-use super::types::Head;
+use super::types::Header;
 use super::types::Height;
 use super::types::Registers;
 use super::types::TokenID;
 use super::types::Transaction;
 use crate::config::PostgresConfig;
-use crate::constants::GENESIS_TIMESTAMP;
 use crate::utils::Schema;
 
 #[derive(Debug)]
 pub(super) struct Store {
     client: tokio_postgres::Client,
-    head: Head,
+    header: Header,
     address_cache: AddressCache,
     asset_cache: AssetCache,
 }
@@ -100,39 +99,39 @@ impl Store {
         let schema = Schema::new("core", include_str!("store/schema.sql"));
         schema.init(&mut client).await;
 
-        let head = headers::last_head(&client).await;
-        tracing::debug!("current head: {:?}", &head);
+        let header = headers::get_last_main(&client)
+            .await
+            .unwrap_or(Header::initial());
+        tracing::debug!("current header: {:?}", &header);
         let last_address_id = addresses::get_max_id(&mut client).await;
         let last_asset_id = tokens::get_max_id(&mut client).await;
 
         Self {
             client,
-            head,
+            header,
             address_cache: AddressCache::new(last_address_id),
             asset_cache: AssetCache::new(last_asset_id),
         }
     }
 
-    pub(super) fn head(&self) -> &Head {
-        &self.head
+    pub(super) fn header(&self) -> &Header {
+        &self.header
     }
 
-    pub(super) async fn contains_head(&self, head: &Head) -> bool {
-        headers::exists(&self.client, head).await
+    pub(super) async fn contains_header(&self, header: &Header) -> bool {
+        headers::exists_and_is_main_chain(&self.client, header).await
     }
 
     pub(super) async fn include_genesis_boxes(&mut self, boxes: String) {
         tracing::info!("including genesis boxes");
-        assert!(self.head.is_initial());
-        self.head = Head::genesis();
+        assert!(self.header.is_initial());
+        self.header = Header::genesis();
+        let height = self.header.height;
+
         let pgtx = self.client.transaction().await.unwrap();
 
-        // Genesis timestamp
-        let timestamp = GENESIS_TIMESTAMP;
-        let height = self.head.height;
-
         // Index dummy header for genesis
-        headers::insert(&pgtx, self.head.height, timestamp, &self.head.header_id).await;
+        headers::insert_main(&pgtx, &self.header).await;
 
         // Index genesis boxes
         let node_boxes: Vec<node::models::Output> = serde_json::from_str(&boxes).unwrap();
@@ -208,23 +207,24 @@ impl Store {
 
         // Check if block is new or already processed.
         // If new, ensure it is a child of current tip.
-        let is_next_block = node_block.header.height > self.head.height;
+        let is_next_block = node_block.header.height > self.header.height;
         if is_next_block {
-            assert_eq!(node_block.header.height, self.head.height + 1);
-            assert_eq!(node_block.header.parent_id, self.head.header_id);
+            assert_eq!(node_block.header.height, self.header.height + 1);
+            assert_eq!(node_block.header.parent_id, self.header.header_id);
         }
 
         // Wrap everyting in one db transaction
         let pgtx = self.client.transaction().await.unwrap();
 
+        // Update head
         if is_next_block {
-            headers::insert(
-                &pgtx,
-                node_block.header.height,
-                node_block.header.timestamp,
-                &node_block.header.id,
-            )
-            .await;
+            self.header = Header {
+                height: node_block.header.height,
+                timestamp: node_block.header.timestamp,
+                header_id: node_block.header.id.clone(),
+                parent_id: node_block.header.parent_id.clone(),
+            };
+            headers::insert_main(&pgtx, &self.header).await;
         }
 
         // Index/load outputs
@@ -267,12 +267,6 @@ impl Store {
             .collect();
         let mut inputs: HashMap<BoxID, BoxData> = boxes::map_boxes(&pgtx, input_box_ids).await;
 
-        // Update head
-        if is_next_block {
-            self.head.height = node_block.header.height;
-            self.head.header_id = node_block.header.id.clone();
-        }
-
         // Convert to core block
         let core_block = Block {
             header: node_block.header.into(),
@@ -312,23 +306,23 @@ impl Store {
         CoreData { block: core_block }
     }
 
-    /// Roll back block at given `head`.
+    /// Roll back block with given `header`.
     ///
     /// Must be the last included block.
-    /// Return head representing previous block in store.
-    pub(super) async fn roll_back(&mut self, head: &Head) -> Head {
-        assert_eq!(&self.head, head);
+    /// Returna headwe representing previous block in store.
+    pub(super) async fn roll_back(&mut self, header: &Header) -> Header {
+        assert_eq!(&self.header, header);
 
         let pgtx = self.client.transaction().await.unwrap();
 
-        // Delete header at height h
-        headers::delete(&pgtx, head.height).await;
+        // Delete main chain header at height h
+        headers::delete_main_at(&pgtx, header.height).await;
 
         // Delete boxes registered ar height h
-        boxes::delete_at(&pgtx, head.height).await;
+        boxes::delete_at(&pgtx, header.height).await;
 
         // Delete addresses spotted at height h
-        let n_deleted = addresses::delete_at(&pgtx, head.height).await;
+        let n_deleted = addresses::delete_at(&pgtx, header.height).await;
         // Reset the cache if there where any new ones in rolled back block.
         // A bit radical, but not taking any risks. This will only affect synced
         // cursors anyway, so block processing time is less of an issue.
@@ -337,7 +331,7 @@ impl Store {
         }
 
         // Delete tokens spotted at height h
-        let n_deleted = tokens::delete_at(&pgtx, head.height).await;
+        let n_deleted = tokens::delete_at(&pgtx, header.height).await;
         // Reset the cache if there where any new ones in rolled back block.
         // Same comments as for address cache above.
         if n_deleted > 0 {
@@ -346,12 +340,14 @@ impl Store {
 
         pgtx.commit().await.unwrap();
 
-        // Retrieve previous head
-        let prev_head = headers::last_head(&self.client).await;
+        // Retrieve previous header
+        let prev_header = headers::get_last_main(&self.client)
+            .await
+            .expect("Rollback implies previous headers");
 
         // Decrement store head and return
-        self.head = prev_head.clone();
-        prev_head
+        self.header = prev_header.clone();
+        prev_header
     }
 
     /// Checks if store contains genesis boxes

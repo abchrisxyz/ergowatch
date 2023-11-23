@@ -1,6 +1,7 @@
-use tokio_postgres::NoTls;
+mod db_utils;
 
-use ew::config::PostgresConfig;
+use db_utils::TestDB;
+
 use ew::core::types::AddressID;
 use ew::core::types::Block;
 use ew::core::types::BoxData;
@@ -22,62 +23,62 @@ const TS_26MAR2021: Timestamp = 1616761700471;
 // This one rounds up to 1 APR 2021.
 const TS_01APR2021: Timestamp = 1617283540731;
 
-/// Prepare a test db and return corresponfing config.
-async fn prep_db(db_name: &str) -> PostgresConfig {
-    tracing::info!("Preparing test db: {}", db_name);
-    // Connection string to main test db - see docker-compose-test.yml
-    let pg_uri: &str = "postgresql://test:test@localhost:5433/test_db";
-    let (client, connection) = tokio_postgres::connect(pg_uri, NoTls).await.unwrap();
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("connection error: {}", e);
-        }
-    });
+const CONTRACT_CREATION_HEADER_ID: &str =
+    "fd35b157811f0950169e0f86b8f7e9ae0f13c49a46848ff40aa8dad26b030fde";
 
-    // Fresh empty db
-    let stmt = format!("drop database if exists {};", db_name);
-    client.execute(&stmt, &[]).await.unwrap();
-    let stmt = format!("create database {};", db_name);
-    client.execute(&stmt, &[]).await.unwrap();
-
-    // Connection string to new db
-    let uri = format!("postgresql://test:test@localhost:5433/{}", db_name);
-    PostgresConfig::new(&uri)
+pub fn set_tracing_subscriber(set: bool) -> Option<tracing::dispatcher::DefaultGuard> {
+    if !set {
+        return None;
+    }
+    let subscriber = tracing_subscriber::fmt()
+        .compact()
+        // .with_max_level(tracing::Level::TRACE)
+        .with_env_filter("ew=trace")
+        .finish();
+    Some(tracing::subscriber::set_default(subscriber))
 }
 
 #[tokio::test]
 async fn test_empty_block_pre_launch() {
-    let pgconf = prep_db("sigmausd_empty_block_pre").await;
+    let _guard = set_tracing_subscriber(false);
+    let test_db = TestDB::new("sigmausd_empty_block_pre").await;
     let block = Block::dummy().height(100);
     let data = CoreData { block };
-    let mut workflow = SigmaUSD::new(&pgconf).await;
-    workflow.include_block(&data).await;
+    let mut workflow = SigmaUSD::new(&test_db.pgconf).await;
+    workflow.include_block(&data.into()).await;
 }
 
 #[tokio::test]
 async fn test_empty_block_post_launch() {
-    let pgconf = prep_db("sigmausd_empty_block_post").await;
-    let block = Block::dummy().height(CONTRACT_CREATION_HEIGHT + 100);
-    let mut workflow = SigmaUSD::new(&pgconf).await;
-    workflow.include_block(&CoreData { block }).await;
+    let _guard = set_tracing_subscriber(false);
+    let test_db = TestDB::new("sigmausd_empty_block_post").await;
+    let block = Block::dummy()
+        .height(CONTRACT_CREATION_HEIGHT + 1)
+        .parent_id(CONTRACT_CREATION_HEADER_ID);
+    let mut workflow = SigmaUSD::new(&test_db.pgconf).await;
+    workflow.include_block(&CoreData { block }.into()).await;
 }
 
 #[tokio::test]
 async fn test_no_events() {
-    let pgconf = prep_db("sigmausd_no_events").await;
+    let _guard = set_tracing_subscriber(false);
+    let test_db = TestDB::new("sigmausd_no_events").await;
     let block = Block::dummy()
-        .height(CONTRACT_CREATION_HEIGHT + 100)
+        .height(CONTRACT_CREATION_HEIGHT + 1)
+        .parent_id(CONTRACT_CREATION_HEADER_ID)
         .timestamp(TS_26MAR2021);
-    let mut workflow = SigmaUSD::new(&pgconf).await;
-    workflow.include_block(&CoreData { block }).await;
+    let mut workflow = SigmaUSD::new(&test_db.pgconf).await;
+    workflow.include_block(&CoreData { block }.into()).await;
 }
 
 #[tokio::test]
 async fn test_sc_minting() {
-    let pgconf = prep_db("sigmausd_sc_minting").await;
+    let _guard = set_tracing_subscriber(false);
+    let test_db = TestDB::new("sigmausd_sc_minting").await;
     let user: AddressID = 12345;
     let block = Block::dummy()
-        .height(CONTRACT_CREATION_HEIGHT + 100)
+        .height(CONTRACT_CREATION_HEIGHT + 1)
+        .parent_id(CONTRACT_CREATION_HEADER_ID)
         .timestamp(TS_26MAR2021)
         // User mints 200 SigUSD for 100 ERG
         .add_tx(
@@ -108,18 +109,24 @@ async fn test_sc_minting() {
                         .add_asset(SC_ASSET_ID, 200_00),
                 ),
         );
-    let mut workflow = SigmaUSD::new(&pgconf).await;
-    workflow.include_block(&CoreData { block }).await;
+    let mut workflow = SigmaUSD::new(&test_db.pgconf).await;
+    workflow.include_block(&CoreData { block }.into()).await;
 }
 
 #[tokio::test]
 async fn test_rollback() {
-    let pgconf = prep_db("sigmausd_rollback").await;
+    let _guard = set_tracing_subscriber(false);
+    let test_db = TestDB::new("sigmausd_rollback").await;
+    test_db.init_core().await;
     let user: AddressID = 12345;
     let service: AddressID = 6789;
-    let height = CONTRACT_CREATION_HEIGHT + 100;
-    let block = Block::dummy()
-        .height(height)
+
+    let block1 = Block::dummy()
+        .height(CONTRACT_CREATION_HEIGHT + 1)
+        .parent_id(CONTRACT_CREATION_HEADER_ID)
+        .timestamp(TS_26MAR2021);
+
+    let block2 = Block::child_of(&block1)
         // Timestamp far enough after contract launch to ensure all
         // ohlc's have a new window. Otherwise, the rollback will
         // delete the only weekly/monthy record that exists (the ones
@@ -166,7 +173,17 @@ async fn test_rollback() {
             ),
         );
 
-    let mut workflow = SigmaUSD::new(&pgconf).await;
-    workflow.include_block(&CoreData { block }).await;
-    workflow.roll_back(height).await;
+    // Register core header for block 1 to allow worker to restore it
+    // after rolling back block 2.
+    test_db.insert_core_header(&(&block1.header).into()).await;
+
+    let mut workflow = SigmaUSD::new(&test_db.pgconf).await;
+    workflow
+        .include_block(&CoreData { block: block1 }.into())
+        .await;
+    let block2_height = block2.header.height;
+    workflow
+        .include_block(&CoreData { block: block2 }.into())
+        .await;
+    workflow.roll_back(block2_height).await;
 }

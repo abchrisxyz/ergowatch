@@ -48,14 +48,13 @@ pub(super) async fn refresh(pgtx: &Transaction<'_>) {
             fees,
             volume
         )
-        select t.service_address_id
+        select service_address_id
             , count(*)
             , min(timestamp) as first_tx
             , max(timestamp) as last_tx
             , sum(service_fee) as fees
             , sum(abs(reserves_diff)) as volume
-        from sigmausd.bank_transactions t
-        join sigmausd.headers h on h.height = t.height
+        from sigmausd.bank_transactions
         group by 1
         -- order by first_tx to reproduce order of appearance
         order by 3;

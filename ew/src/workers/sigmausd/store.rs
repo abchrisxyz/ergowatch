@@ -1,67 +1,42 @@
-use tokio_postgres::NoTls;
+use async_trait::async_trait;
+use tokio_postgres::Client;
+use tokio_postgres::Transaction;
 
-use crate::config::PostgresConfig;
-use crate::core::types::Head;
-use crate::core::types::Height;
-use crate::utils::Schema;
+use crate::core::types::Header;
+use crate::framework::store::BatchStore;
+use crate::framework::store::PgStore;
+use crate::framework::store::Schema;
+use crate::framework::StampedData;
 
 use super::parsing::ParserCache;
 use super::types::Event;
 use super::Batch;
 
 mod bank_transactions;
-mod headers;
 mod history;
 mod ohlcs;
 mod oracle_postings;
 mod services;
 
-pub struct Store {
-    client: tokio_postgres::Client,
-    head: Head,
-}
+pub(super) const SCHEMA: Schema = Schema {
+    name: super::WORKER_ID,
+    sql: include_str!("store/schema.sql"),
+};
 
-impl Store {
-    pub async fn new(pgconf: PostgresConfig) -> Self {
-        tracing::debug!("initializing new store");
-        let (mut client, connection) = tokio_postgres::connect(&pgconf.connection_uri, NoTls)
-            .await
-            .unwrap();
+pub(super) struct SpecStore {}
 
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
-            }
-        });
+pub(super) type Store = PgStore<SpecStore>;
 
-        let schema = Schema::new("sigmausd", include_str!("store/schema.sql"));
-        schema.init(&mut client).await;
+#[async_trait]
+impl BatchStore for SpecStore {
+    type B = Batch;
 
-        let head = headers::get_last(&client).await.head();
-        tracing::debug!("head: {:?}", &head);
-
-        Self { client, head }
+    async fn new() -> Self {
+        Self {}
     }
 
-    pub(super) fn get_head(&self) -> &Head {
-        &self.head
-    }
-
-    pub(super) async fn load_parser_cache(&self) -> ParserCache {
-        ParserCache {
-            bank_transaction_count: bank_transactions::get_count(&self.client).await,
-            last_history_record: history::get_latest(&self.client).await,
-            last_ohlc_group: ohlcs::get_latest_group(&self.client).await,
-        }
-    }
-
-    pub(super) async fn persist(&mut self, batch: Batch) {
-        tracing::debug!("persisting data for block {}", batch.header.height);
-        let pgtx = self.client.transaction().await.unwrap();
-
-        // Header
-        headers::insert(&pgtx, &batch.header).await;
-
+    async fn persist(&mut self, pgtx: &Transaction<'_>, stamped_batch: &StampedData<Self::B>) {
+        let batch = &stamped_batch.data;
         // Events
         for event in &batch.events {
             match event {
@@ -71,12 +46,12 @@ impl Store {
         }
 
         // History record
-        if let Some(hr) = batch.history_record {
+        if let Some(ref hr) = batch.history_record {
             history::insert(&pgtx, &hr).await;
         }
 
         // OHLC's
-        let height = batch.header.height;
+        let height = stamped_batch.height;
         ohlcs::upsert_daily_records(&pgtx, &batch.daily_ohlc_records, height).await;
         ohlcs::upsert_weekly_records(&pgtx, &batch.weekly_ohlc_records, height).await;
         ohlcs::upsert_monthly_records(&pgtx, &batch.monthly_ohlc_records, height).await;
@@ -85,22 +60,12 @@ impl Store {
         for diff in &batch.service_diffs {
             services::upsert(&pgtx, diff).await;
         }
-
-        pgtx.commit().await.unwrap();
-
-        // Update head
-        self.head = batch.header.head();
     }
 
-    /// Roll back changes from last block.
-    pub(super) async fn roll_back(&mut self, height: Height) {
+    async fn roll_back(&mut self, pgtx: &Transaction<'_>, header: &Header) {
+        let height = header.height;
         tracing::debug!("rolling back block {}", height);
-        assert_eq!(self.head.height, height);
-
-        let pgtx = self.client.transaction().await.unwrap();
-
-        // Delete header at h
-        headers::delete_at(&pgtx, height).await;
+        // assert_eq!(self.head.height, height);
 
         // Delete bank txs at h
         bank_transactions::detele_at(&pgtx, height).await;
@@ -118,14 +83,13 @@ impl Store {
         ohlcs::roll_back_daily(&pgtx, height).await;
         ohlcs::roll_back_weekly(&pgtx, height).await;
         ohlcs::roll_back_monthly(&pgtx, height).await;
+    }
+}
 
-        pgtx.commit().await.unwrap();
-
-        // Reload head
-        let header = headers::get_last(&self.client).await;
-        self.head = Head {
-            height: header.height,
-            header_id: header.id,
-        }
+pub(super) async fn load_parser_cache(client: &Client) -> ParserCache {
+    ParserCache {
+        bank_transaction_count: bank_transactions::get_count(client).await,
+        last_history_record: history::get_latest(client).await,
+        last_ohlc_group: ohlcs::get_latest_group(client).await,
     }
 }

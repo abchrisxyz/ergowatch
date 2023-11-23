@@ -13,14 +13,23 @@ create table erg._rev (
 insert into erg._rev (rev_major, rev_minor) values (1, 0);
 comment on table erg._rev is 'Current schema revision';
 
+-------------------------------------------------------------------------------
+-- Last processed header for each worker managing this schema
+-------------------------------------------------------------------------------
+create table erg._header (
+    worker_id text primary key,
+    height integer not null,
+	timestamp bigint not null,
+    header_id text not null,
+    parent_id text not null
+);
 
 -------------------------------------------------------------------------------
--- Headers
+-- Timestamps (for diffs)
 -------------------------------------------------------------------------------
-create table erg.headers (
+create table erg.timestamps (
     height integer primary key,
-    timestamp bigint not null,
-    id text not null
+    timestamp bigint not null
 );
 
 -------------------------------------------------------------------------------

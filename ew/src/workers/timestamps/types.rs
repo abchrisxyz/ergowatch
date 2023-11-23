@@ -1,33 +1,10 @@
-use crate::core::types::Head;
-use crate::core::types::HeaderID;
 use crate::core::types::Height;
 use crate::core::types::Timestamp;
 
 pub(super) struct Batch {
-    pub(super) header: MiniHeader,
     pub(super) hourly: Vec<Action>,
     pub(super) daily: Vec<Action>,
     pub(super) weekly: Vec<Action>,
-}
-
-pub struct MiniHeader {
-    pub height: Height,
-    pub timestamp: Timestamp,
-    pub id: HeaderID,
-}
-
-impl MiniHeader {
-    pub fn new(height: Height, timestamp: Timestamp, id: HeaderID) -> Self {
-        Self {
-            height,
-            timestamp,
-            id,
-        }
-    }
-
-    pub fn head(&self) -> Head {
-        Head::new(self.height, self.id.clone())
-    }
 }
 
 #[derive(Debug, PartialEq)]

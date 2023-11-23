@@ -5,6 +5,7 @@ mod block_4;
 mod block_5;
 mod genesis;
 use ew::core::testing::NodeBlock;
+use ew::core::types::Header;
 use serde_json;
 
 pub use block_1::BLOCK_1;
@@ -48,6 +49,17 @@ impl TestBlock {
     /// Returns block's header id
     pub fn header_id(&self) -> &str {
         &self.block.header.id
+    }
+
+    /// Returns a Header for current block
+    #[allow(dead_code)] // Not used by all tests
+    pub fn header(&self) -> Header {
+        Header {
+            height: self.block.header.height,
+            timestamp: self.block.header.timestamp,
+            header_id: self.block.header.id.clone(),
+            parent_id: self.block.header.parent_id.clone(),
+        }
     }
 
     /// Returns block's height

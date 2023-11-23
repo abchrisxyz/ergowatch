@@ -1,14 +1,11 @@
 use postgres_from_row::FromRow;
 
 use crate::core::types::AddressID;
-use crate::core::types::Head;
-use crate::core::types::HeaderID;
 use crate::core::types::Height;
 use crate::core::types::NanoERG;
 use crate::core::types::Timestamp;
 
 pub struct Batch {
-    pub header: MiniHeader,
     pub diff_records: Vec<DiffRecord>,
     pub balance_records: Vec<BalanceRecord>,
     /// Address id's who's balance became zero
@@ -43,26 +40,7 @@ impl From<Batch> for BalData {
 //     pub spent_balances: Vec<BalanceRecord>,
 // }
 
-pub struct MiniHeader {
-    pub height: Height,
-    pub timestamp: Timestamp,
-    pub id: HeaderID,
-}
-
-impl MiniHeader {
-    pub fn new(height: Height, timestamp: Timestamp, id: HeaderID) -> Self {
-        Self {
-            height,
-            timestamp,
-            id,
-        }
-    }
-
-    pub fn head(&self) -> Head {
-        Head::new(self.height, self.id.clone())
-    }
-}
-
+#[cfg_attr(feature = "test-utilities", derive(Debug))]
 pub struct DiffRecord {
     pub address_id: AddressID,
     pub height: Height,

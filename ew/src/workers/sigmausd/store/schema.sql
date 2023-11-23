@@ -8,12 +8,13 @@ create table sigmausd._rev (
 );
 insert into sigmausd._rev (rev_major, rev_minor) values (1, 0);
 
--- Selected header fields from included blocks.
--- Would be available from core.headers too but we try to keep schemas self contained.
-create table sigmausd.headers (
-    height integer primary key,
+-- Last processed header for each worker managing this schema
+create table sigmausd._header (
+    worker_id text primary key,
+    height integer not null,
     timestamp bigint not null,
-    id text not null
+    header_id text not null,
+    parent_id text not null
 );
 
 /*
@@ -26,9 +27,8 @@ create table sigmausd.bank_transactions (
     idx integer primary key,
     -- Height of inclusion block
     height integer not null,
-    -- Timestamp of inclusion block
-    -- Having it duplicated here makes restoring service stats after a rollback
-    -- much easier.
+    -- Timestamp of inclusion block (required during rollbacks)
+    timestamp bigint not null,
     -- Change in bank reserves (nanoERG)
     reserves_diff bigint not null,
     -- Change in circulating stable coins
@@ -169,8 +169,14 @@ create table sigmausd._log_rc_ohlc_monthly (
 -----------------------------------------------------------------------------------------
 -- Initialize state
 -----------------------------------------------------------------------------------------
-insert into sigmausd.headers (height, timestamp, id)
-values (453064, 1616706545437, 'fd35b157811f0950169e0f86b8f7e9ae0f13c49a46848ff40aa8dad26b030fde');
+insert into sigmausd._header (worker_id, height, timestamp, header_id, parent_id)
+values (
+    'sigmausd', -- must match the WORKER_ID const declared in sigmausd worker
+    453064,
+    1616706545437,
+    'fd35b157811f0950169e0f86b8f7e9ae0f13c49a46848ff40aa8dad26b030fde',
+    '6fbf04c19bf97a558b0254cd09f77813b91cd5cdb40d22613bb8512046924dbd'
+);
 
 insert into sigmausd.history (
     height,

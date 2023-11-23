@@ -1,11 +1,12 @@
-use tokio_postgres::Client;
-use tokio_postgres::NoTls;
+mod db_utils;
 
-use ew::config::PostgresConfig;
+use db_utils::TestDB;
 use ew::constants::GENESIS_TIMESTAMP;
+use ew::constants::ZERO_HEADER;
 use ew::core::types::Block;
 use ew::core::types::BoxData;
 use ew::core::types::CoreData;
+use ew::core::types::Header;
 use ew::framework::Workflow;
 use ew::workers::timestamps::TimestampsWorkFlow;
 
@@ -15,49 +16,18 @@ pub fn set_tracing_subscriber(set: bool) -> Option<tracing::dispatcher::DefaultG
     }
     let subscriber = tracing_subscriber::fmt()
         .compact()
-        // .with_max_level(tracing::Level::TRACE)
+        .with_max_level(tracing::Level::INFO)
         .with_env_filter("ew=trace")
         .finish();
     Some(tracing::subscriber::set_default(subscriber))
 }
 
-/// Prepare a test db and return corresponfing config.
-async fn prep_db(db_name: &str) -> PostgresConfig {
-    tracing::info!("Preparing test db: {}", db_name);
-    // Connection string to main test db - see docker-compose-test.yml
-    let pg_uri: &str = "postgresql://test:test@localhost:5433/test_db";
-    let (client, connection) = tokio_postgres::connect(pg_uri, NoTls).await.unwrap();
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("connection error: {}", e);
-        }
-    });
-
-    // Fresh empty db
-    let stmt = format!("drop database if exists {};", db_name);
-    client.execute(&stmt, &[]).await.unwrap();
-    let stmt = format!("create database {};", db_name);
-    client.execute(&stmt, &[]).await.unwrap();
-
-    // Connection string to new db
-    let uri = format!("postgresql://test:test@localhost:5433/{}", db_name);
-    PostgresConfig::new(&uri)
-}
-
 #[tokio::test]
 async fn test_normal() {
     let _guard = set_tracing_subscriber(false);
-    let pgconf = prep_db("timestamps_normal").await;
 
-    // Prepare a db client we'll use to inspect the db
-    let (client, connection) = tokio_postgres::connect(&pgconf.connection_uri, NoTls)
-        .await
-        .unwrap();
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("connection error: {}", e);
-        }
-    });
+    // Prepare test db
+    let test_db = TestDB::new("timestamps_normal").await;
 
     // Genesis
     let dummy_genesis_boxes = vec![BoxData::dummy()
@@ -68,29 +38,34 @@ async fn test_normal() {
     // Next block
     let block = Block::dummy()
         .height(1)
+        .parent_id(ZERO_HEADER)
         .timestamp(GENESIS_TIMESTAMP + 120_000);
-    let mut workflow = TimestampsWorkFlow::new(&pgconf).await;
+
+    let mut workflow = TimestampsWorkFlow::new(&test_db.pgconf).await;
 
     // Process blocks
     workflow
-        .include_block(&CoreData {
-            block: genesis_block,
-        })
+        .include_block(
+            &CoreData {
+                block: genesis_block,
+            }
+            .into(),
+        )
         .await;
-    workflow.include_block(&CoreData { block }).await;
+    workflow.include_block(&CoreData { block }.into()).await;
 
     // Check db
-    let hourly = get_hourly_timestamps(&client).await;
+    let hourly = get_hourly_timestamps(&test_db).await;
     assert_eq!(hourly.len(), 2);
     assert_eq!(hourly[0], (0, GENESIS_TIMESTAMP));
     assert_eq!(hourly[1], (1, GENESIS_TIMESTAMP + 120_000));
 
-    let daily = get_daily_timestamps(&client).await;
+    let daily = get_daily_timestamps(&test_db).await;
     assert_eq!(daily.len(), 2);
     assert_eq!(daily[0], (0, GENESIS_TIMESTAMP));
     assert_eq!(daily[1], (1, GENESIS_TIMESTAMP + 120_000));
 
-    let weekly = get_weekly_timestamps(&client).await;
+    let weekly = get_weekly_timestamps(&test_db).await;
     assert_eq!(weekly.len(), 2);
     assert_eq!(weekly[0], (0, GENESIS_TIMESTAMP));
     assert_eq!(weekly[1], (1, GENESIS_TIMESTAMP + 120_000));
@@ -99,17 +74,10 @@ async fn test_normal() {
 #[tokio::test]
 async fn test_rollback() {
     let _guard = set_tracing_subscriber(false);
-    let pgconf = prep_db("timestamps_rollback").await;
 
-    // Prepare a db client we'll use to inspect the db
-    let (client, connection) = tokio_postgres::connect(&pgconf.connection_uri, NoTls)
-        .await
-        .unwrap();
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("connection error: {}", e);
-        }
-    });
+    // Prepare test db
+    let test_db = TestDB::new("timestamps_rollback").await;
+    test_db.init_core().await;
 
     // Genesis
     let dummy_genesis_boxes = vec![BoxData::dummy()
@@ -119,38 +87,52 @@ async fn test_rollback() {
 
     // Block X
     let ts_x = GENESIS_TIMESTAMP + 120_000;
-    let block_x = Block::dummy().height(1).timestamp(ts_x);
+    let block_x = Block::dummy()
+        .height(1)
+        .parent_id(ZERO_HEADER)
+        .timestamp(ts_x);
 
     // Block Y
     let ts_y = ts_x + 86_400_000;
-    let block_y = Block::dummy().height(2).timestamp(ts_y);
+    let block_y = Block::child_of(&block_x).timestamp(ts_y);
 
-    let mut workflow = TimestampsWorkFlow::new(&pgconf).await;
+    let mut workflow = TimestampsWorkFlow::new(&test_db.pgconf).await;
     let height_y = block_y.header.height;
+
+    // Register core header for parent of rolled back blocks
+    let h = Header::from(&block_x.header);
+    test_db.insert_core_header(&h).await;
 
     // Process blocks
     workflow
-        .include_block(&CoreData {
-            block: genesis_block,
-        })
+        .include_block(
+            &CoreData {
+                block: genesis_block,
+            }
+            .into(),
+        )
         .await;
-    workflow.include_block(&CoreData { block: block_x }).await;
-    workflow.include_block(&CoreData { block: block_y }).await;
+    workflow
+        .include_block(&CoreData { block: block_x }.into())
+        .await;
+    workflow
+        .include_block(&CoreData { block: block_y }.into())
+        .await;
 
     // Check db
-    let hourly = get_hourly_timestamps(&client).await;
+    let hourly = get_hourly_timestamps(&test_db).await;
     assert_eq!(hourly.len(), 26);
     assert_eq!(hourly[0], (0, GENESIS_TIMESTAMP));
     assert_eq!(hourly[1], (1, GENESIS_TIMESTAMP + 3_600_000));
     assert_eq!(hourly[25], (2, ts_y));
 
-    let daily = get_daily_timestamps(&client).await;
+    let daily = get_daily_timestamps(&test_db).await;
     assert_eq!(daily.len(), 3);
     assert_eq!(daily[0], (0, GENESIS_TIMESTAMP));
     assert_eq!(daily[1], (1, GENESIS_TIMESTAMP + 46_800_000));
     assert_eq!(daily[2], (2, ts_y));
 
-    let weekly = get_weekly_timestamps(&client).await;
+    let weekly = get_weekly_timestamps(&test_db).await;
     assert_eq!(weekly.len(), 2);
     assert_eq!(weekly[0], (0, GENESIS_TIMESTAMP));
     assert_eq!(weekly[1], (2, ts_y));
@@ -159,24 +141,25 @@ async fn test_rollback() {
     workflow.roll_back(height_y).await;
 
     // Recheck db
-    let hourly = get_hourly_timestamps(&client).await;
+    let hourly = get_hourly_timestamps(&test_db).await;
     assert_eq!(hourly.len(), 2);
     assert_eq!(hourly[0], (0, GENESIS_TIMESTAMP));
     assert_eq!(hourly[1], (1, ts_x));
 
-    let daily = get_daily_timestamps(&client).await;
+    let daily = get_daily_timestamps(&test_db).await;
     assert_eq!(daily.len(), 2);
     assert_eq!(daily[0], (0, GENESIS_TIMESTAMP));
     assert_eq!(daily[1], (1, ts_x));
 
-    let weekly = get_weekly_timestamps(&client).await;
+    let weekly = get_weekly_timestamps(&test_db).await;
     assert_eq!(weekly.len(), 2);
     assert_eq!(weekly[0], (0, GENESIS_TIMESTAMP));
     assert_eq!(weekly[1], (1, ts_x));
 }
 
-async fn get_hourly_timestamps(client: &Client) -> Vec<(i32, i64)> {
-    client
+async fn get_hourly_timestamps(test_db: &TestDB) -> Vec<(i32, i64)> {
+    test_db
+        .client
         .query(
             "select height
                 , timestamp
@@ -191,8 +174,9 @@ async fn get_hourly_timestamps(client: &Client) -> Vec<(i32, i64)> {
         .collect()
 }
 
-async fn get_daily_timestamps(client: &Client) -> Vec<(i32, i64)> {
-    client
+async fn get_daily_timestamps(test_db: &TestDB) -> Vec<(i32, i64)> {
+    test_db
+        .client
         .query(
             "select height
                 , timestamp
@@ -207,8 +191,9 @@ async fn get_daily_timestamps(client: &Client) -> Vec<(i32, i64)> {
         .collect()
 }
 
-async fn get_weekly_timestamps(client: &Client) -> Vec<(i32, i64)> {
-    client
+async fn get_weekly_timestamps(test_db: &TestDB) -> Vec<(i32, i64)> {
+    test_db
+        .client
         .query(
             "select height
                 , timestamp

@@ -8,12 +8,12 @@ use super::types::BalanceRecord;
 use super::types::Batch;
 use super::types::CompositionRecord;
 use super::types::DiffRecord;
-use super::types::MiniHeader;
 use crate::core::types::AddressID;
 use crate::core::types::AddressType;
 use crate::core::types::CoreData;
 use crate::core::types::NanoERG;
 use crate::core::types::Timestamp;
+use crate::framework::StampedData;
 
 mod balances;
 mod composition;
@@ -176,16 +176,10 @@ impl Parser {
     /// Create a batch from core data.
     pub fn extract_batch(
         &mut self,
-        data: &CoreData,
+        stamped_data: &StampedData<CoreData>,
         balances: HashMap<AddressID, BalanceRecord>,
-    ) -> Batch {
-        let block = &data.block;
-
-        let header = MiniHeader::new(
-            block.header.height,
-            block.header.timestamp,
-            block.header.id.clone(),
-        );
+    ) -> StampedData<Batch> {
+        let block = &stamped_data.data.block;
 
         let typed_diffs = diffs::extract_balance_diffs(&block);
         let balance_changes =
@@ -200,8 +194,7 @@ impl Parser {
             &typed_diffs,
         );
 
-        Batch {
-            header,
+        stamped_data.wrap(Batch {
             // Extract spent addresses from balance changes
             spent_addresses: balance_changes
                 .iter()
@@ -223,7 +216,7 @@ impl Parser {
             diff_records: typed_diffs.into_iter().map(|td| td.record).collect(),
             address_counts: self.cache.last_address_counts.clone(),
             supply_composition: self.cache.last_supply_composition.clone(),
-        }
+        })
     }
 }
 

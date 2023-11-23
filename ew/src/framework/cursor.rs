@@ -3,14 +3,14 @@ use tokio::sync::mpsc::Sender;
 
 use super::event::Event;
 use super::event::StampedData;
-use crate::core::types::Head;
+use crate::core::types::Header;
 use crate::monitor::CursorMessage;
 use crate::monitor::CursorRollback;
 use crate::monitor::MonitorMessage;
 
 pub struct Cursor<D> {
     pub id: String,
-    pub head: Head,
+    pub header: Header,
     // status: Status,
     /// Collections of senders to listening workers
     pub txs: Vec<Sender<Event<D>>>,
@@ -20,13 +20,13 @@ pub struct Cursor<D> {
 
 impl<D> Cursor<D> {
     /// Checks if cursor is at given position
-    pub fn is_at(&self, head: &Head) -> bool {
-        self.head == *head
+    pub fn is_at(&self, header: &Header) -> bool {
+        self.header == *header
     }
 
     /// Checks if cursor is at same position as other
     pub fn is_on(&self, other: &Self) -> bool {
-        self.is_at(&other.head)
+        self.is_at(&other.header)
     }
 
     pub fn rename(mut self, id: &str) -> Self {
@@ -59,33 +59,38 @@ impl<D> Cursor<D> {
         );
         // assert_eq!(stamped_data.stamp.height, self.head.height + 1);
         // assert_eq!(stamped_data.stamp.parent_id, self.head.header_id);
-        let new_head = Head::new(data.height, data.header_id.clone());
+        let new_header = Header {
+            height: data.height,
+            timestamp: data.timestamp,
+            header_id: data.header_id.clone(),
+            parent_id: data.parent_id.clone(),
+        };
         self.send(Event::Include(Arc::new(data))).await;
-        self.head = new_head;
+        self.header = new_header;
         self.report_status().await;
     }
 
-    pub async fn roll_back(&mut self, previous_head: Head) {
+    pub async fn roll_back(&mut self, previous_header: Header) {
         tracing::warn!(
             "[{}] rolling back data for block {} {}",
             self.id,
-            self.head.height,
-            self.head.header_id
+            self.header.height,
+            self.header.header_id
         );
-        assert_eq!(previous_head.height, self.head.height - 1);
+        assert_eq!(previous_header.height, self.header.height - 1);
 
         // Report rollback to monitor
         self.monitor_tx
             .send(MonitorMessage::Rollback(CursorRollback::new(
                 self.id.clone(),
-                self.head.height,
+                self.header.height,
             )))
             .await
             .unwrap();
 
         // Rollback event carries the height to be rolled back
-        self.send(Event::Rollback(self.head.height)).await;
-        self.head = previous_head;
+        self.send(Event::Rollback(self.header.height)).await;
+        self.header = previous_header;
         self.report_status().await;
     }
 
@@ -118,7 +123,7 @@ impl<D> Cursor<D> {
         self.monitor_tx
             .send(MonitorMessage::Cursor(CursorMessage::new(
                 self.id.clone(),
-                self.head.height,
+                self.header.height,
             )))
             .await
             .unwrap();

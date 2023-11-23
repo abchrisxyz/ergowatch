@@ -14,7 +14,6 @@ use super::types::Batch;
 use super::types::DailyOHLC;
 use super::types::Event;
 use super::types::HistoryRecord;
-use super::types::MiniHeader;
 use super::types::MonthlyOHLC;
 use super::types::OraclePosting;
 use super::types::ServiceStats;
@@ -28,6 +27,7 @@ use crate::core::types::Height;
 use crate::core::types::NanoERG;
 use crate::core::types::Timestamp;
 use crate::core::types::Transaction;
+use crate::framework::StampedData;
 use crate::workers::sigmausd::types::OHLCGroup;
 
 pub struct Parser {
@@ -50,14 +50,12 @@ impl Parser {
         Self { cache }
     }
 
-    pub(super) fn extract_batch(&mut self, data: &CoreData) -> Batch {
-        let block = &data.block;
+    pub(super) fn extract_batch(
+        &mut self,
+        stamped_data: &StampedData<CoreData>,
+    ) -> StampedData<Batch> {
+        let block = &stamped_data.data.block;
         assert!(block.header.height > CONTRACT_CREATION_HEIGHT);
-        let header = MiniHeader::new(
-            block.header.height,
-            block.header.timestamp,
-            block.header.id.clone(),
-        );
 
         // Extract events from block transactions
         let events = extract_events(block, self.cache.bank_transaction_count);
@@ -102,33 +100,43 @@ impl Parser {
         }
 
         // Pack new batch
-        Batch {
-            header,
+        stamped_data.wrap(Batch {
             events,
             history_record,
             daily_ohlc_records,
             weekly_ohlc_records,
             monthly_ohlc_records,
             service_diffs,
-        }
+        })
     }
 }
 
 fn extract_events(block: &Block, bank_tx_count: i32) -> Vec<Event> {
     let mut local_bank_tx_count = bank_tx_count;
     let height = block.header.height;
+    let timestamp = block.header.timestamp;
     block
         .transactions
         .iter()
-        .filter_map(|tx| extract_event(tx, height, &mut local_bank_tx_count))
+        .filter_map(|tx| extract_event(tx, height, timestamp, &mut local_bank_tx_count))
         .collect()
 }
 
 /// Extracts an event from the transaction, if any.
-fn extract_event(tx: &Transaction, height: Height, bank_tx_count: &mut i32) -> Option<Event> {
+fn extract_event(
+    tx: &Transaction,
+    height: Height,
+    timestamp: Timestamp,
+    bank_tx_count: &mut i32,
+) -> Option<Event> {
     // Look for presence of bank box in outputs
     if tx_has_bank_box(tx) {
-        return Some(Event::BankTx(extract_bank_tx(tx, height, bank_tx_count)));
+        return Some(Event::BankTx(extract_bank_tx(
+            tx,
+            height,
+            timestamp,
+            bank_tx_count,
+        )));
     } else if tx_has_oracle_prep_box(tx) {
         return Some(Event::Oracle(extract_oracle_posting(tx, height)));
     }
@@ -149,7 +157,12 @@ fn tx_has_oracle_prep_box(tx: &Transaction) -> bool {
 }
 
 /// Build a bank transaction from a tx known to contain a bank box
-fn extract_bank_tx(tx: &Transaction, height: Height, bank_tx_count: &mut i32) -> BankTransaction {
+fn extract_bank_tx(
+    tx: &Transaction,
+    height: Height,
+    timestamp: Timestamp,
+    bank_tx_count: &mut i32,
+) -> BankTransaction {
     // New bank box id
     let bank_outputs: Vec<&BoxData> = tx
         .outputs
@@ -258,6 +271,7 @@ fn extract_bank_tx(tx: &Transaction, height: Height, bank_tx_count: &mut i32) ->
     BankTransaction {
         index: *bank_tx_count,
         height,
+        timestamp,
         reserves_diff,
         circ_sc_diff,
         circ_rc_diff,
@@ -516,8 +530,9 @@ mod tests {
             .add_output(output1);
 
         let height = 600;
+        let timestamp = 123456789;
         let mut bank_tx_count = 5;
-        let event = extract_event(&tx, height, &mut bank_tx_count);
+        let event = extract_event(&tx, height, timestamp, &mut bank_tx_count);
         assert!(event.is_none());
         assert_eq!(bank_tx_count, 5);
     }
@@ -534,8 +549,9 @@ mod tests {
             .add_output(output1);
 
         let height = 600;
+        let timestamp = 123456789;
         let mut bank_tx_count = 5;
-        let event = extract_event(&tx, height, &mut bank_tx_count);
+        let event = extract_event(&tx, height, timestamp, &mut bank_tx_count);
         assert!(event.is_none());
         assert_eq!(bank_tx_count, 5);
     }
@@ -567,11 +583,13 @@ mod tests {
             .add_output(user_output);
 
         let height = 600;
+        let timestamp = 123456789;
         let bank_tx_count = 5;
         let mut new_bank_tx_count = bank_tx_count;
-        match extract_event(&tx, height, &mut new_bank_tx_count).unwrap() {
+        match extract_event(&tx, height, timestamp, &mut new_bank_tx_count).unwrap() {
             Event::BankTx(btx) => {
                 assert_eq!(btx.height, height);
+                assert_eq!(btx.timestamp, timestamp);
                 assert_eq!(btx.box_id, tx.outputs[0].box_id);
                 assert_eq!(btx.reserves_diff, 100);
                 assert_eq!(btx.circ_sc_diff, 200);
@@ -618,9 +636,10 @@ mod tests {
             .add_output(fee_output);
 
         let height = 600;
+        let timestamp = 123456789;
         let bank_tx_count = 5;
         let mut new_bank_tx_count = bank_tx_count;
-        match extract_event(&tx, height, &mut new_bank_tx_count).unwrap() {
+        match extract_event(&tx, height, timestamp, &mut new_bank_tx_count).unwrap() {
             Event::BankTx(btx) => {
                 assert_eq!(btx.height, height);
                 assert_eq!(btx.box_id, tx.outputs[0].box_id);
@@ -671,9 +690,10 @@ mod tests {
             .add_output(fee_output);
 
         let height = 600;
+        let timestamp = 123456789;
         let bank_tx_count = 5;
         let mut new_bank_tx_count = bank_tx_count;
-        match extract_event(&tx, height, &mut new_bank_tx_count).unwrap() {
+        match extract_event(&tx, height, timestamp, &mut new_bank_tx_count).unwrap() {
             Event::BankTx(btx) => {
                 assert_eq!(btx.height, height);
                 assert_eq!(btx.box_id, tx.outputs[0].box_id);
@@ -721,9 +741,10 @@ mod tests {
             .add_output(other2_output);
 
         let height = 600;
+        let timestamp = 123456789;
         let bank_tx_count = 5;
         let mut new_bank_tx_count = bank_tx_count;
-        match extract_event(&tx, height, &mut new_bank_tx_count).unwrap() {
+        match extract_event(&tx, height, timestamp, &mut new_bank_tx_count).unwrap() {
             Event::BankTx(btx) => {
                 assert_eq!(btx.height, height);
                 assert_eq!(btx.box_id, tx.outputs[0].box_id);
@@ -767,9 +788,10 @@ mod tests {
             .add_output(user_output);
 
         let height = 600;
+        let timestamp = 123456789;
         let bank_tx_count = 5;
         let mut new_bank_tx_count = bank_tx_count;
-        match extract_event(&tx, height, &mut new_bank_tx_count).unwrap() {
+        match extract_event(&tx, height, timestamp, &mut new_bank_tx_count).unwrap() {
             Event::BankTx(btx) => {
                 assert_eq!(btx.height, height);
                 assert_eq!(btx.box_id, tx.outputs[0].box_id);
@@ -814,9 +836,10 @@ mod tests {
             .add_output(user_output);
 
         let height = 600;
+        let timestamp = 123456789;
         let bank_tx_count = 5;
         let mut new_bank_tx_count = bank_tx_count;
-        match extract_event(&tx, height, &mut new_bank_tx_count).unwrap() {
+        match extract_event(&tx, height, timestamp, &mut new_bank_tx_count).unwrap() {
             Event::BankTx(btx) => {
                 assert_eq!(btx.height, height);
                 assert_eq!(btx.box_id, tx.outputs[0].box_id);
@@ -866,9 +889,10 @@ mod tests {
             .add_output(fee_output);
 
         let height = 600;
+        let timestamp = 123456789;
         let bank_tx_count = 5;
         let mut new_bank_tx_count = bank_tx_count;
-        match extract_event(&tx, height, &mut new_bank_tx_count).unwrap() {
+        match extract_event(&tx, height, timestamp, &mut new_bank_tx_count).unwrap() {
             Event::BankTx(btx) => {
                 assert_eq!(btx.height, height);
                 assert_eq!(btx.box_id, tx.outputs[0].box_id);
@@ -914,9 +938,10 @@ mod tests {
             .add_output(fee_output);
 
         let height = 600;
+        let timestamp = 123456789;
         let bank_tx_count = 5;
         let mut new_bank_tx_count = bank_tx_count;
-        match extract_event(&tx, height, &mut new_bank_tx_count).unwrap() {
+        match extract_event(&tx, height, timestamp, &mut new_bank_tx_count).unwrap() {
             Event::BankTx(btx) => {
                 assert_eq!(btx.height, height);
                 assert_eq!(btx.box_id, tx.outputs[0].box_id);
@@ -948,9 +973,10 @@ mod tests {
             .add_output(prep_output);
 
         let height = 600;
+        let timestamp = 123456789;
         let bank_tx_count = 5;
         let mut new_bank_tx_count = bank_tx_count;
-        match extract_event(&tx, height, &mut new_bank_tx_count).unwrap() {
+        match extract_event(&tx, height, timestamp, &mut new_bank_tx_count).unwrap() {
             Event::Oracle(posting) => {
                 assert_eq!(posting.height, height);
                 assert_eq!(posting.datapoint, 305810397);
@@ -993,6 +1019,7 @@ mod tests {
         let events = vec![Event::BankTx(BankTransaction {
             index: 5,
             height: 1020,
+            timestamp: 123456789,
             reserves_diff: 100,
             circ_sc_diff: 200,
             circ_rc_diff: 0,
@@ -1090,7 +1117,7 @@ mod tests {
             date!(2021 - 07 - 15)
         );
 
-        let _batch = parser.extract_batch(&data);
+        let _batch = parser.extract_batch(&data.into());
 
         // Check state after
         assert_eq!(parser.cache.bank_transaction_count, 123);
@@ -1148,7 +1175,7 @@ mod tests {
             date!(2021 - 07 - 15)
         );
 
-        let _batch = parser.extract_batch(&data);
+        let _batch = parser.extract_batch(&data.into());
 
         // Check state after
         assert_eq!(parser.cache.bank_transaction_count, 124);
@@ -1203,6 +1230,7 @@ mod tests {
             Event::BankTx(BankTransaction {
                 index: 1,
                 height: 600_000,
+                timestamp: 123456789,
                 reserves_diff: 1000,
                 circ_sc_diff: 100,
                 circ_rc_diff: 0,
@@ -1213,6 +1241,7 @@ mod tests {
             Event::BankTx(BankTransaction {
                 index: 2,
                 height: 600_000,
+                timestamp: 123456789,
                 reserves_diff: 2000,
                 circ_sc_diff: 200,
                 circ_rc_diff: 0,
@@ -1223,6 +1252,7 @@ mod tests {
             Event::BankTx(BankTransaction {
                 index: 3,
                 height: 600_000,
+                timestamp: 123456789,
                 reserves_diff: -500,
                 circ_sc_diff: 0,
                 circ_rc_diff: 100,

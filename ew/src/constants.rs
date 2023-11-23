@@ -1,6 +1,7 @@
 use crate::core::types::Timestamp;
 
 pub const GENESIS_TIMESTAMP: Timestamp = 1561978800000;
+pub const ZERO_HEADER: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 pub mod address_ids {
     use crate::core::types::AddressID;

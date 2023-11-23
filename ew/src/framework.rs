@@ -1,6 +1,7 @@
 mod cursor;
 mod event;
 mod source;
+pub mod store;
 mod worker;
 mod workflow;
 

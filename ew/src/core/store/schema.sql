@@ -10,7 +10,10 @@ insert into core._rev (rev_major, rev_minor) values (1, 0);
 create table core.headers (
     height integer primary key,
     timestamp bigint not null,
-    id text not null
+    header_id text not null,
+	parent_id text not null,
+	-- Flag set to false for rolled back blocks.
+	main_chain bool not null
 );
 
 -- Composite type representing a token balance

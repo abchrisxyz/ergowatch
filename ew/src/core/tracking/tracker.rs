@@ -7,7 +7,7 @@ use crate::core::node::Node;
 use crate::core::store::Store;
 use crate::core::tracking::cursor::Cursor;
 use crate::core::types::CoreData;
-use crate::core::types::Head;
+use crate::core::types::Header;
 use crate::framework::Event;
 use crate::framework::Source;
 use crate::monitor::MonitorMessage;
@@ -46,8 +46,8 @@ impl Tracker {
     }
 
     /// Get head of tracker's store.
-    pub fn head(&self) -> &Head {
-        self.store.head()
+    pub fn header(&self) -> &Header {
+        self.store.header()
     }
 
     // /// Returns true if `head` is part of tracker's processed main cahin.
@@ -60,7 +60,7 @@ impl Tracker {
     pub async fn start(&mut self) {
         tracing::info!("Starting tracker");
         // Before starting, reorder cursors by decreasing position.
-        self.cursors.sort_by_key(|c| -c.head.height);
+        self.cursors.sort_by_key(|c| -c.header.height);
         // Rename first cursor to `main` as any other will be merged into it.
         self.cursors[0].id = "main".to_owned();
 
@@ -91,8 +91,8 @@ impl Tracker {
     /// Attempts to merge cursors when at the same height
     async fn merge_cursors(&mut self) {
         // Check if any of the cursors are mergeable.
-        let main_head = &self.cursors[0].head;
-        if !self.cursors.iter().skip(1).any(|c| c.is_at(main_head)) {
+        let main_header = &self.cursors[0].header;
+        if !self.cursors.iter().skip(1).any(|c| c.is_at(main_header)) {
             // Nope, stop here.
             return;
         }
@@ -108,7 +108,7 @@ impl Tracker {
                 // to merge identical cursors behind tip. However, the chances of
                 // this occuring are very slim.
                 merged[0].merge(cur).await;
-            } else if cur.head.height > merged[0].head.height {
+            } else if cur.header.height > merged[0].header.height {
                 // If next cursor is higher, add to start of new collection
                 merged.insert(0, cur);
             } else {
@@ -134,19 +134,19 @@ impl Tracker {
 impl Source for Tracker {
     type S = CoreData;
 
-    fn head(&self) -> &Head {
-        self.store.head()
+    fn header(&self) -> &Header {
+        self.store.header()
     }
 
-    async fn contains_head(&self, head: &Head) -> bool {
+    async fn contains_header(&self, header: &Header) -> bool {
         // Initial head is always contained but will not be stored,
         // so hande explicitly.
-        head.is_initial() || self.store.contains_head(head).await
+        header.is_initial() || self.store.contains_header(header).await
     }
 
     async fn subscribe(
         &mut self,
-        head: Head,
+        header: Header,
         // TODO: cursor name should not be set by caller
         cursor_name: &str,
     ) -> mpsc::Receiver<Event<CoreData>> {
@@ -157,17 +157,17 @@ impl Source for Tracker {
         // prior. The tracker's store could be empty or not having reached the
         // workflow's start height yet. Because a cursor cannot point past the
         // tracker's head, we cap it to the current tracker's head if needed.
-        let max_head = self.store.head().clone();
-        let capped_head = if head.height > max_head.height {
+        let max_header = self.store.header().clone();
+        let capped_header = if header.height > max_header.height {
             info!("cursor [{cursor_name}] is ahead of tracker - using tracker's height");
-            max_head
+            max_header
         } else {
-            head
+            header
         };
 
         // If there's an existing cursor at same position, we use that one.
         for cur in &mut self.cursors {
-            if cur.is_at(&capped_head) {
+            if cur.is_at(&capped_header) {
                 cur.txs.push(tx);
                 return rx;
             }
@@ -176,7 +176,7 @@ impl Source for Tracker {
         // No existing cursors were found, so we make a new one.
         let cur = Cursor {
             id: cursor_name.to_owned(),
-            head: capped_head.clone(),
+            header: capped_header.clone(),
             txs: vec![tx],
             monitor_tx: self.monitor_tx.clone(),
         };

@@ -3,6 +3,9 @@ use postgres_types::ToSql;
 use serde::Serialize;
 use std::collections::HashSet;
 
+use crate::constants::GENESIS_TIMESTAMP;
+use crate::constants::ZERO_HEADER;
+
 use super::ergo;
 use super::node;
 
@@ -22,8 +25,6 @@ pub type Value = i64;
 pub type Votes = [i8; 3];
 pub type NanoERG = i64;
 
-const ZERO_HEADER: &str = "0000000000000000000000000000000000000000000000000000000000000000";
-
 #[derive(Debug)]
 pub struct CoreData {
     pub block: Block,
@@ -33,7 +34,7 @@ pub struct CoreData {
 #[derive(Debug)]
 #[cfg_attr(feature = "test-utilities", derive(Clone))]
 pub struct Block {
-    pub header: Header,
+    pub header: BlockHeader,
     pub transactions: Vec<Transaction>,
     // pub transactions_size: i32,
     pub extension: node::models::Extension,
@@ -64,7 +65,7 @@ impl Block {
     /// Avoids having to use a dedicated type for genesis only.
     pub fn from_genesis_boxes(boxes: Vec<BoxData>) -> Block {
         Self {
-            header: Header {
+            header: BlockHeader {
                 extension_id: "".to_owned(),
                 difficulty: "".to_owned(),
                 votes: [0, 0, 0],
@@ -108,28 +109,32 @@ impl Block {
     }
 }
 
+/// A short version of block headers
 #[derive(Debug, Clone, PartialEq)]
-pub struct Head {
+pub struct Header {
     pub height: Height,
+    pub timestamp: Timestamp,
     pub header_id: HeaderID,
+    pub parent_id: HeaderID,
 }
 
-impl Head {
-    pub fn new(height: i32, header_id: HeaderID) -> Self {
-        Self { height, header_id }
-    }
-    /// A head representing blank state, before inclusion of genesis blocks.
+impl Header {
+    /// A header representing blank state, before inclusion of genesis blocks.
     pub fn initial() -> Self {
         Self {
             height: -1,
+            timestamp: 0,
             header_id: String::from(""),
+            parent_id: String::from(""),
         }
     }
     /// A head representing state right after inclusion of genesis blocks.
     pub fn genesis() -> Self {
         Self {
             height: 0,
+            timestamp: GENESIS_TIMESTAMP,
             header_id: String::from(ZERO_HEADER),
+            parent_id: String::from(""),
         }
     }
 
@@ -142,9 +147,21 @@ impl Head {
     }
 }
 
+#[cfg(feature = "test-utilities")]
+impl From<&BlockHeader> for Header {
+    fn from(value: &BlockHeader) -> Self {
+        Self {
+            height: value.height,
+            timestamp: value.timestamp,
+            header_id: value.id.clone(),
+            parent_id: value.parent_id.clone(),
+        }
+    }
+}
+
 #[derive(Debug)]
 #[cfg_attr(feature = "test-utilities", derive(Clone))]
-pub struct Header {
+pub struct BlockHeader {
     pub extension_id: String,
     pub difficulty: String,
     pub votes: Votes,
@@ -164,7 +181,7 @@ pub struct Header {
     pub parent_id: HeaderID,
 }
 
-impl From<node::models::Header> for Header {
+impl From<node::models::Header> for BlockHeader {
     fn from(header: node::models::Header) -> Self {
         Self {
             extension_id: header.extension_id,
@@ -328,7 +345,7 @@ pub mod testutils {
         /// (test-util) Creates a dummy block.
         pub fn dummy() -> Self {
             Block {
-                header: Header::dummy(),
+                header: BlockHeader::dummy(),
                 transactions: vec![],
                 extension: Extension {
                     header_id: random_digest32(),
@@ -345,6 +362,16 @@ pub mod testutils {
             }
         }
 
+        /// Returns a dummy block representing a child of `other`.
+        ///
+        /// Child block will have incremented height and parent_id
+        /// set to `other` header_id.
+        pub fn child_of(other: &Self) -> Self {
+            Self::dummy()
+                .height(other.header.height + 1)
+                .parent_id(&other.header.id)
+        }
+
         /// (test-util) Returns block with modified header height.
         pub fn height(&self, height: Height) -> Self {
             let mut block = self.clone();
@@ -359,6 +386,13 @@ pub mod testutils {
             block
         }
 
+        /// (test-util) Returns block with modified header parent_id.
+        pub fn parent_id(&self, parent_id: &str) -> Self {
+            let mut block = self.clone();
+            block.header.parent_id = parent_id.to_owned();
+            block
+        }
+
         /// (test-util) Returns block with appended transaction.
         pub fn add_tx(&self, tx: Transaction) -> Self {
             let mut block = self.clone();
@@ -367,10 +401,10 @@ pub mod testutils {
         }
     }
 
-    impl Header {
+    impl BlockHeader {
         /// (test-util) Dummy header
         pub fn dummy() -> Self {
-            Header {
+            BlockHeader {
                 extension_id: random_digest32(),
                 difficulty: "2187147670978560".to_string(),
                 votes: [0, 0, 0],

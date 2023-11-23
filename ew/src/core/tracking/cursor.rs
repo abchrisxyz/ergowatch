@@ -2,9 +2,8 @@ use crate::core::node::Node;
 use crate::core::node::NodeError;
 use crate::core::store::Store;
 use crate::core::types::Block;
+use crate::core::types::BlockHeader;
 use crate::core::types::CoreData;
-use crate::core::types::Head;
-use crate::core::types::Header;
 pub use crate::framework::Cursor;
 use crate::framework::StampedData;
 
@@ -33,13 +32,14 @@ impl Cursor<CoreData> {
 
     /// Dispatches genesis boxes from the store if needed.
     pub(super) async fn ensure_genesis_boxes(&mut self, store: &mut Store) {
-        if self.head.height > -1 {
+        if self.header.height > -1 {
             return;
         };
         let boxes = store.get_genesis_boxes().await;
         let fake_block = Block::from_genesis_boxes(boxes);
         let data = StampedData {
             height: fake_block.header.height,
+            timestamp: fake_block.header.timestamp,
             header_id: fake_block.header.id.clone(),
             parent_id: "".to_owned(),
             data: CoreData { block: fake_block },
@@ -49,29 +49,33 @@ impl Cursor<CoreData> {
 
     async fn process_new_headers(
         &mut self,
-        new_headers: Vec<Header>,
+        new_block_headers: Vec<BlockHeader>,
         node: &Node,
         store: &mut Store,
     ) {
-        tracing::debug!("[{}] processing {} new headers", self.id, new_headers.len());
-        for new_header in new_headers {
-            if new_header.height == self.head.height {
+        tracing::debug!(
+            "[{}] processing {} new headers",
+            self.id,
+            new_block_headers.len()
+        );
+        for new_block_header in new_block_headers {
+            if new_block_header.height == self.header.height {
                 // Different block at same height, last included block is
                 // not part of main chain anymore, so roll back and start over.
                 tracing::warn!("last included block is not part of main chain anymore");
-                let prev: Head = store.roll_back(&self.head).await;
-                self.roll_back(prev).await;
+                let prev_header = store.roll_back(&self.header).await;
+                self.roll_back(prev_header).await;
                 break;
             }
-            assert_eq!(new_header.height, self.head.height + 1);
-            if new_header.parent_id != self.head.header_id {
+            assert_eq!(new_block_header.height, self.header.height + 1);
+            if new_block_header.parent_id != self.header.header_id {
                 // New block is not a child of current last block.
                 tracing::warn!("new block is not a child of current last block");
-                let prev: Head = store.roll_back(&self.head).await;
-                self.roll_back(prev).await;
+                let prev_header = store.roll_back(&self.header).await;
+                self.roll_back(prev_header).await;
                 break;
             } else {
-                let block = match node.api.block(&new_header.id).await {
+                let block = match node.api.block(&new_block_header.id).await {
                     Ok(b) => b,
                     Err(NodeError::API404Notfound(url)) => {
                         // Block wasn't found. This can happen when at the tip of
@@ -87,11 +91,12 @@ impl Cursor<CoreData> {
                     }
                 };
 
-                assert_eq!(block.header.height, self.head.height + 1);
+                assert_eq!(block.header.height, self.header.height + 1);
                 let core_data = store.process(block).await;
 
                 let data = StampedData {
                     height: core_data.block.header.height,
+                    timestamp: core_data.block.header.timestamp,
                     header_id: core_data.block.header.id.clone(),
                     parent_id: core_data.block.header.parent_id.clone(),
                     data: core_data,
@@ -103,7 +108,7 @@ impl Cursor<CoreData> {
     }
 
     /// Return a header id for next height, once available.
-    async fn wait_for_new_blocks(&self, node: &Node) -> Vec<Header> {
+    async fn wait_for_new_blocks(&self, node: &Node) -> Vec<BlockHeader> {
         let polling_interval = tokio::time::Duration::from_millis(5000);
         loop {
             match self.fetch_new_headers(node).await {
@@ -128,21 +133,21 @@ impl Cursor<CoreData> {
     pub(super) async fn fetch_new_headers(
         &self,
         node: &Node,
-    ) -> Result<Option<Vec<Header>>, NodeError> {
-        let fr = self.head.height;
+    ) -> Result<Option<Vec<BlockHeader>>, NodeError> {
+        let fr = self.header.height;
         let to = fr + 100;
-        let headers: Vec<Header> = node
+        let headers: Vec<BlockHeader> = node
             .api
             .chainslice(fr, to)
             .await?
             .into_iter()
-            .map(|node_header| Header::from(node_header))
+            .map(|node_header| BlockHeader::from(node_header))
             .collect();
 
         match headers.len() {
             // one header
             1 => {
-                if headers[0].id == self.head.header_id {
+                if headers[0].id == self.header.header_id {
                     Ok(None)
                 } else {
                     Ok(Some(headers))

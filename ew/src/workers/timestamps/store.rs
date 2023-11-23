@@ -1,9 +1,12 @@
-use tokio_postgres::NoTls;
+use async_trait::async_trait;
+use tokio_postgres::Client;
+use tokio_postgres::Transaction;
 
-use crate::config::PostgresConfig;
-use crate::core::types::Head;
-use crate::core::types::Height;
-use crate::utils::Schema;
+use crate::core::types::Header;
+use crate::framework::store::BatchStore;
+use crate::framework::store::PgStore;
+use crate::framework::store::Schema;
+use crate::framework::StampedData;
 
 use super::parsing::ParserCache;
 use super::types::Action;
@@ -11,66 +14,33 @@ use super::types::Batch;
 use super::types::TimestampRecord;
 
 mod daily;
-mod headers;
 mod hourly;
+mod timestamps;
 mod weekly;
 
-pub(super) struct Store {
-    client: tokio_postgres::Client,
-    head: Head,
-}
+pub(super) const SCHEMA: Schema = Schema {
+    name: "timestamps",
+    sql: include_str!("store/schema.sql"),
+};
 
-impl Store {
-    pub async fn new(pgconf: PostgresConfig) -> Self {
-        tracing::debug!("initializing new store");
-        let (mut client, connection) = tokio_postgres::connect(&pgconf.connection_uri, NoTls)
-            .await
-            .unwrap();
+pub(super) struct SpecStore {}
 
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
-            }
-        });
+pub(super) type Store = PgStore<SpecStore>;
 
-        let schema = Schema::new("timestamps", include_str!("store/schema.sql"));
-        schema.init(&mut client).await;
+#[async_trait]
+impl BatchStore for SpecStore {
+    type B = Batch;
 
-        let head = headers::get_last(&client)
-            .await
-            .map_or(Head::initial(), |h| h.head());
-        tracing::debug!("head: {:?}", &head);
-
-        Self { client, head }
+    async fn new() -> Self {
+        Self {}
     }
 
-    pub(super) fn get_head(&self) -> &Head {
-        &self.head
-    }
-
-    pub(super) async fn load_parser_cache(&self) -> ParserCache {
-        ParserCache {
-            last_hourly: hourly::get_last(&self.client)
-                .await
-                .unwrap_or(TimestampRecord::initial()),
-            last_daily: daily::get_last(&self.client)
-                .await
-                .unwrap_or(TimestampRecord::initial()),
-            last_weekly: weekly::get_last(&self.client)
-                .await
-                .unwrap_or(TimestampRecord::initial()),
-        }
-    }
-
-    pub(super) async fn persist(&mut self, batch: Batch) {
-        tracing::debug!("persisting data for block {}", batch.header.height);
-        let pgtx = self.client.transaction().await.unwrap();
-
-        // Header
-        headers::insert(&pgtx, &batch.header).await;
+    async fn persist(&mut self, pgtx: &Transaction<'_>, stamped_batch: &StampedData<Self::B>) {
+        // Timestamps
+        timestamps::insert(&pgtx, stamped_batch.height, stamped_batch.timestamp).await;
 
         // Hourly
-        for action in &batch.hourly {
+        for action in &stamped_batch.data.hourly {
             // tracing::debug!("hourly...");
             match action {
                 Action::INSERT(record) => hourly::insert(&pgtx, record).await,
@@ -80,7 +50,7 @@ impl Store {
         }
 
         // Daily
-        for action in &batch.daily {
+        for action in &stamped_batch.data.daily {
             match action {
                 Action::INSERT(record) => daily::insert(&pgtx, record).await,
                 Action::UPDATE(record) => daily::update(&pgtx, record).await,
@@ -89,22 +59,16 @@ impl Store {
         }
 
         // Weekly
-        for action in &batch.weekly {
+        for action in &stamped_batch.data.weekly {
             match action {
                 Action::INSERT(record) => weekly::insert(&pgtx, record).await,
                 Action::UPDATE(record) => weekly::update(&pgtx, record).await,
                 Action::DELETE(height) => weekly::delete_at(&pgtx, height).await,
             }
         }
-
-        pgtx.commit().await.unwrap();
-
-        // Update head
-        self.head = batch.header.head();
     }
 
-    /// Roll back changes from last block.
-    pub(super) async fn roll_back(&mut self, height: Height) {
+    async fn roll_back(&mut self, pgtx: &Transaction<'_>, header: &Header) {
         // Delete timestamps after parent's block's timestamp and reinsert
         // parent block's timestamp if necessary.
         // In examples below, we roll back block 8.
@@ -124,64 +88,66 @@ impl Store {
         // before :        5        8
         // after  :        5     7
 
+        let height = header.height;
         tracing::debug!("rolling back block {}", height);
-        assert_eq!(self.head.height, height);
 
-        let pgtx = self.client.transaction().await.unwrap();
-
-        // Delete header at h
-        headers::delete_at(&pgtx, height).await;
-        let parent_header = headers::get_last(&pgtx).await.unwrap();
+        timestamps::delete_at(&pgtx, height).await;
+        let parent_height = height - 1;
+        let parent_timestamp = timestamps::get_at(pgtx, parent_height).await;
 
         // Delete timestamps past new latest one
-        hourly::delete_after(&pgtx, parent_header.timestamp).await;
-        daily::delete_after(&pgtx, parent_header.timestamp).await;
-        weekly::delete_after(&pgtx, parent_header.timestamp).await;
+        hourly::delete_after(&pgtx, parent_timestamp).await;
+        daily::delete_after(&pgtx, parent_timestamp).await;
+        weekly::delete_after(&pgtx, parent_timestamp).await;
 
         // Reinsert last hourly timestamp if needed
-        let last = hourly::get_last(&pgtx)
+        let last = hourly::get_last(pgtx)
             .await
             .expect("always data left after a roll back");
-        if last.height < parent_header.height {
+        if last.height < parent_height {
             hourly::insert(
                 &pgtx,
-                &TimestampRecord::new(parent_header.height, parent_header.timestamp),
+                &TimestampRecord::new(parent_height, parent_timestamp),
             )
             .await;
         }
 
         // Reinsert last daily timestamp if needed
-        let last = daily::get_last(&pgtx)
+        let last = daily::get_last(pgtx)
             .await
             .expect("always data left after a roll back");
-        if last.height < parent_header.height {
+        if last.height < parent_height {
             daily::insert(
                 &pgtx,
-                &TimestampRecord::new(parent_header.height, parent_header.timestamp),
+                &TimestampRecord::new(parent_height, parent_timestamp),
             )
             .await;
         }
 
         // Reinsert last weekly timestamp if needed
-        let last = weekly::get_last(&pgtx)
+        let last = weekly::get_last(pgtx)
             .await
             .expect("always data left after a roll back");
-        if last.height < parent_header.height {
+        if last.height < parent_height {
             weekly::insert(
                 &pgtx,
-                &TimestampRecord::new(parent_header.height, parent_header.timestamp),
+                &TimestampRecord::new(parent_height, parent_timestamp),
             )
             .await;
         }
+    }
+}
 
-        // Commit db transaction
-        pgtx.commit().await.unwrap();
-
-        // Reload head
-        let header = headers::get_last(&self.client).await.unwrap();
-        self.head = Head {
-            height: header.height,
-            header_id: header.id,
-        }
+pub(super) async fn load_parser_cache(client: &Client) -> ParserCache {
+    ParserCache {
+        last_hourly: hourly::get_last(client)
+            .await
+            .unwrap_or(TimestampRecord::initial()),
+        last_daily: daily::get_last(client)
+            .await
+            .unwrap_or(TimestampRecord::initial()),
+        last_weekly: weekly::get_last(client)
+            .await
+            .unwrap_or(TimestampRecord::initial()),
     }
 }

@@ -1,55 +1,72 @@
 use tokio_postgres::Client;
 use tokio_postgres::Transaction;
-use tracing::trace;
 
-use crate::core::types::Head;
+use crate::core::types::Header;
 use crate::core::types::Height;
-use crate::core::types::Timestamp;
 
-/// Retrieve head from latest header.
-pub(super) async fn last_head(client: &Client) -> Head {
-    trace!("reading last header");
-    let qry = "select max(height) from core.headers";
-    let max_h: Option<Height> = client.query_one(qry, &[]).await.unwrap().get(0);
-    trace!("max height in core.headers is {:?}", max_h);
-    if max_h.is_none() {
-        return Head::initial();
-    }
+/// Retrieve head from latest main chain header.
+pub(super) async fn get_last_main(client: &Client) -> Option<Header> {
+    tracing::trace!("get_last");
     let qry = "
         select height
-            , id
+            , timestamp
+            , header_id
+            , parent_id
         from core.headers
-        order by height desc
-        limit 1;";
-    let row = client.query_one(qry, &[]).await.unwrap();
-    return Head::new(row.get(0), row.get(1));
+        where main_chain is True
+        order by 1 desc
+        limit 1;
+    ";
+    client.query_opt(qry, &[]).await.unwrap().map(|row| Header {
+        height: row.get(0),
+        timestamp: row.get(1),
+        header_id: row.get(2),
+        parent_id: row.get(3),
+    })
 }
 
-pub async fn insert(pgtx: &Transaction<'_>, height: Height, timestamp: Timestamp, id: &String) {
-    let stmt = "insert into core.headers (height, timestamp, id) values ($1, $2, $3);";
-    pgtx.execute(stmt, &[&height, &timestamp, &id])
-        .await
-        .unwrap();
+/// Insert new main chain header
+pub async fn insert_main(pgtx: &Transaction<'_>, header: &Header) {
+    tracing::trace!("insert {header:?}");
+    let stmt = "
+        insert into core.headers (height, timestamp, header_id, parent_id, main_chain)
+        values ($1, $2, $3, $4, True);";
+    pgtx.execute(
+        stmt,
+        &[
+            &header.height,
+            &header.timestamp,
+            &header.header_id,
+            &header.parent_id,
+        ],
+    )
+    .await
+    .unwrap();
 }
 
-/// Delete block at `height`
-pub async fn delete(pgtx: &Transaction<'_>, height: Height) {
-    pgtx.execute("delete from core.headers where height = $1;", &[&height])
-        .await
-        .unwrap();
+/// Delete main chain header at `height`
+pub async fn delete_main_at(pgtx: &Transaction<'_>, height: Height) {
+    tracing::trace!("delete_main_at {height}");
+    pgtx.execute(
+        "delete from core.headers where height = $1 and main_chain;",
+        &[&height],
+    )
+    .await
+    .unwrap();
 }
 
-/// Returns `true` if core.headers has a record for given `head`.
-pub async fn exists(client: &Client, head: &Head) -> bool {
+/// Returns `true` if core.headers has a record for given `header` on main chain.
+pub async fn exists_and_is_main_chain(client: &Client, header: &Header) -> bool {
+    tracing::trace!("exists_and_is_main_chain {header:?}");
     let sql = "
     select exists (
         select height
             , id
         from core.headers
-        where height = $1 and id = $2
+        where height = $1 and id = $2 and main_chain
     );";
     client
-        .query_one(sql, &[&head.height, &head.header_id])
+        .query_one(sql, &[&header.height, &header.header_id])
         .await
         .unwrap()
         .get(0)

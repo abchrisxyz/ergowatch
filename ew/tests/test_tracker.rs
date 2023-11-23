@@ -4,7 +4,7 @@ mod common;
 use ew::config::PostgresConfig;
 use ew::core::types::Block;
 use ew::core::types::CoreData;
-use ew::core::types::Head;
+use ew::core::types::Header;
 use ew::core::types::HeaderID;
 use ew::core::types::Height;
 use ew::framework::Event;
@@ -27,7 +27,7 @@ fn set_tracing_subscriber(set: bool) -> Option<tracing::dispatcher::DefaultGuard
     let subscriber = tracing_subscriber::fmt()
         .compact()
         .with_max_level(tracing::Level::INFO)
-        .with_env_filter("ew=debug")
+        .with_env_filter("ew=trace")
         .finish();
     Some(tracing::subscriber::set_default(subscriber))
 }
@@ -143,7 +143,7 @@ async fn test_straight_chain_single_cursor() {
     let node = Node::new("test-node", mock_node.url());
     let monitor = Monitor::new();
     let mut tracker = Tracker::new(node, prep_db("test_tracker_1").await, monitor.sender()).await;
-    let mut rx = tracker.subscribe(Head::initial(), "C1").await;
+    let mut rx = tracker.subscribe(Header::initial(), "C1").await;
 
     // Start tracker
     tokio::spawn(async move {
@@ -187,7 +187,7 @@ async fn test_straight_chain_three_cursors() {
         let node = Node::new("test-node", mock_node.url());
         let mut tracker = Tracker::new(node, pgconf.clone(), monitor.sender()).await;
         // Cursor is at genesis
-        let mut rx = tracker.subscribe(Head::initial(), "dummy").await;
+        let mut rx = tracker.subscribe(Header::initial(), "dummy").await;
 
         // Start tracker
         tokio::spawn(async move {
@@ -204,15 +204,11 @@ async fn test_straight_chain_three_cursors() {
     let node = Node::new("test-node", mock_node.url());
     let mut tracker = Tracker::new(node, pgconf, monitor.sender()).await;
     // First cursor is on last block
-    let mut rx_a = tracker
-        .subscribe(Head::new(5, TB::from_id("5").header_id().to_string()), "A")
-        .await;
+    let mut rx_a = tracker.subscribe(TB::from_id("5").header(), "A").await;
     // Second cursor starts from scratch
-    let mut rx_b = tracker.subscribe(Head::initial(), "B").await;
+    let mut rx_b = tracker.subscribe(Header::initial(), "B").await;
     // Third cursor is at block 2
-    let mut rx_c = tracker
-        .subscribe(Head::new(2, TB::from_id("2").header_id().to_string()), "C")
-        .await;
+    let mut rx_c = tracker.subscribe(TB::from_id("2").header(), "C").await;
 
     // Start tracker
     tokio::spawn(async move {
@@ -260,12 +256,7 @@ async fn test_fork_handling_not_a_child() {
     let mut tracker = Tracker::new(node, prep_db("test_tracker_3").await, monitor.sender()).await;
     // Assuming we've included 1, 2 and 3bis so far
     // Next block will be 4, which isn't a child of 3bis
-    let mut rx = tracker
-        .subscribe(
-            Head::new(3, TB::from_id("3bis").header_id().to_owned()),
-            "C1",
-        )
-        .await;
+    let mut rx = tracker.subscribe(TB::from_id("3bis").header(), "C1").await;
 
     // Start tracker
     tokio::spawn(async move {
@@ -304,7 +295,7 @@ async fn test_fork_handling_same_height() {
         monitor.sender(),
     )
     .await;
-    let mut rx = tracker.subscribe(Head::initial(), "C1").await;
+    let mut rx = tracker.subscribe(Header::initial(), "C1").await;
 
     // Start tracker
     tokio::spawn(async move {

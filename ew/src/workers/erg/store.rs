@@ -1,14 +1,19 @@
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use tokio_postgres::NoTls;
+use tokio_postgres::Client;
+use tokio_postgres::Transaction;
 
-use crate::config::PostgresConfig;
 use crate::core::types::AddressID;
-use crate::core::types::Head;
+use crate::core::types::Header;
 use crate::core::types::Height;
 use crate::core::types::NanoERG;
+use crate::core::types::Timestamp;
+use crate::framework::store::BatchStore;
+use crate::framework::store::PgStore;
+use crate::framework::store::Schema;
+use crate::framework::store::SourcableStore;
 use crate::framework::StampedData;
-use crate::utils::Schema;
 
 use super::parsing::Bal;
 use super::parsing::ParserCache;
@@ -20,108 +25,70 @@ mod balances;
 mod composition;
 mod counts;
 mod diffs;
-mod headers;
+mod timestamps;
 
-pub struct Store {
-    client: tokio_postgres::Client,
-    head: Head,
-}
+pub(super) const SCHEMA: Schema = Schema {
+    name: "erg",
+    sql: include_str!("store/schema.sql"),
+};
 
-impl Store {
-    pub async fn new(pgconf: PostgresConfig) -> Self {
-        tracing::debug!("initializing new store");
-        let (mut client, connection) = tokio_postgres::connect(&pgconf.connection_uri, NoTls)
-            .await
-            .unwrap();
+pub(super) type Store = PgStore<SpecStore>;
+pub(super) struct SpecStore;
 
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
-            }
-        });
+#[async_trait]
+impl BatchStore for SpecStore {
+    type B = Batch;
 
-        let schema = Schema::new("erg", include_str!("store/schema.sql"));
-        schema.init(&mut client).await;
-
-        let head = headers::get_last(&client)
-            .await
-            .map_or(Head::initial(), |h| h.head());
-        tracing::debug!("head: {:?}", &head);
-
-        Self { client, head }
+    async fn new() -> Self {
+        Self {}
     }
 
-    pub(super) fn get_head(&self) -> &Head {
-        &self.head
-    }
-
-    pub(super) async fn contains_head(&self, head: &Head) -> bool {
-        headers::exists(&self.client, head).await
-    }
-
-    pub(super) async fn load_parser_cache(&self) -> ParserCache {
-        ParserCache {
-            last_address_counts: counts::get_last(&self.client).await,
-            last_supply_composition: composition::get_last(&self.client).await,
-        }
-    }
-
-    pub(super) async fn persist(&mut self, batch: &Batch) {
+    async fn persist(&mut self, pgtx: &Transaction<'_>, stamped_batch: &StampedData<Self::B>) {
         // tracing::debug!("persisting data for block {}", batch.header.height);
-        let pgtx = self.client.transaction().await.unwrap();
-
-        headers::insert(&pgtx, &batch.header).await;
+        let batch = &stamped_batch.data;
+        timestamps::insert(&pgtx, stamped_batch.height, stamped_batch.timestamp).await;
         diffs::insert_many(&pgtx, &batch.diff_records).await;
         balances::upsert_many(&pgtx, &batch.balance_records).await;
         balances::delete_many(&pgtx, &batch.spent_addresses).await;
         counts::insert(&pgtx, &batch.address_counts).await;
         composition::insert(&pgtx, &batch.supply_composition).await;
-
-        pgtx.commit().await.unwrap();
-
-        // Update head
-        self.head = batch.header.head();
     }
 
-    /// Roll back changes from last block.
-    pub(super) async fn roll_back(&mut self, height: Height) {
-        tracing::debug!("rolling back block {}", height);
-        assert_eq!(self.head.height, height);
+    async fn roll_back(&mut self, pgtx: &Transaction<'_>, header: &Header) {
+        tracing::debug!("rolling back block {}", header.height);
 
         // Prepare rollback data for balances
-        let brc: BalanceRollbackChanges = prepare_balance_rollback(&self.client, height).await;
+        let brc: BalanceRollbackChanges =
+            prepare_balance_rollback(&pgtx, header.height, header.timestamp).await;
 
-        let pgtx = self.client.transaction().await.unwrap();
-
-        headers::delete_at(&pgtx, height).await;
-        diffs::delete_at(&pgtx, height).await;
+        timestamps::delete_at(&pgtx, header.height).await;
+        diffs::delete_at(&pgtx, header.height).await;
         balances::upsert_many(&pgtx, &brc.upserts).await;
         balances::delete_many(&pgtx, &brc.deletes).await;
-        headers::delete_at(&pgtx, height).await;
-        counts::delete_at(&pgtx, height).await;
-        composition::delete_at(&pgtx, height).await;
-
-        pgtx.commit().await.unwrap();
-
-        // Reload head
-        self.head = headers::get_last(&self.client)
-            .await
-            .map_or(Head::initial(), |h| h.head());
+        counts::delete_at(&pgtx, header.height).await;
+        composition::delete_at(&pgtx, header.height).await;
     }
+}
 
-    pub(super) async fn get_at(&self, height: Height) -> StampedData<BalData> {
-        let stamp = headers::get_stamp_at(&self.client, height).await;
+#[async_trait]
+impl SourcableStore for SpecStore {
+    type S = BalData;
 
-        StampedData {
-            height: stamp.height,
-            header_id: stamp.header_id,
-            parent_id: stamp.parent_id,
-            data: BalData {
-                diff_records: diffs::select_at(&self.client, height).await,
-            },
+    async fn get_at(&self, client: &Client, height: Height) -> Self::S {
+        BalData {
+            diff_records: diffs::select_at(client, height).await,
         }
     }
+}
 
+pub(super) async fn load_parser_cache(client: &Client) -> ParserCache {
+    ParserCache {
+        last_address_counts: counts::get_last(&client).await,
+        last_supply_composition: composition::get_last(&client).await,
+    }
+}
+
+impl Store {
     /// Retrieve and map balance records for given address id's.
     ///
     /// Does not inlcude zero balances.
@@ -130,7 +97,7 @@ impl Store {
         address_ids: Vec<AddressID>,
     ) -> HashMap<AddressID, BalanceRecord> {
         // TODO: cache
-        let recs = balances::get_many(&self.client, &address_ids).await;
+        let recs = balances::get_many(self.get_client(), &address_ids).await;
         let mut map = HashMap::new();
         for r in recs {
             map.insert(r.address_id, r);
@@ -153,19 +120,16 @@ struct BalanceRollbackChanges {
 ///
 /// * `client`: read-only db client
 /// * `height`: height of block getting rolled back
+/// * `timestamp`: timestamp of block getting rolled back
 ///     
 /// Doesn't apply any changes - only reads from db.
 async fn prepare_balance_rollback(
-    client: &tokio_postgres::Client,
+    pgtx: &Transaction<'_>,
     height: Height,
+    timestamp: Timestamp,
 ) -> BalanceRollbackChanges {
-    // Get last header to retrieve rolled back block timestamp
-    let header = headers::get_last(client).await.unwrap();
-    assert_eq!(header.height, height);
-    let timestamp = header.timestamp;
-
     // Retrieve diff records in rolled back block.
-    let diff_records = diffs::select_at(client, height).await;
+    let diff_records = diffs::select_at(pgtx, height).await;
 
     // Aggregate diffs by address
     let mut diff_lookup: HashMap<AddressID, NanoERG> = HashMap::new();
@@ -182,7 +146,7 @@ async fn prepare_balance_rollback(
 
     // Retrieve current balances for diffed addresses
     let diff_addys: Vec<AddressID> = diff_lookup.keys().into_iter().cloned().collect();
-    let balance_records = balances::get_many(client, &diff_addys).await;
+    let balance_records = balances::get_many(pgtx, &diff_addys).await;
 
     // Convert diff addresses to a HashSet
     let diff_addys: HashSet<AddressID> = diff_addys.into_iter().collect();
@@ -223,7 +187,7 @@ async fn prepare_balance_rollback(
 
     // Recalculate balance and age from previous diff records
     for spent_address_id in spent_addys {
-        let timestamped_diffs = diffs::get_address_diffs(client, spent_address_id).await;
+        let timestamped_diffs = diffs::get_address_diffs(pgtx, spent_address_id).await;
         let bal = timestamped_diffs
             .iter()
             .take(timestamped_diffs.len() - 1) // don't include last diff from current block

@@ -10,7 +10,7 @@ use super::Source;
 use super::Sourceable;
 use super::Workflow;
 use crate::config::PostgresConfig;
-use crate::core::types::Head;
+use crate::core::types::Header;
 use crate::monitor::MonitorMessage;
 use crate::monitor::WorkerMessage;
 
@@ -42,20 +42,20 @@ impl<W: Workflow> Worker<W> {
         // Here, we check for such cases and roll back the workflow until back
         // on the main chain again.
         // Skip this is if the workflow is ahead of the tracker.
-        if workflow.head().height <= source.head().height {
+        if workflow.header().height <= source.header().height {
             // Rolling back any blocks past the split.
-            while !source.contains_head(workflow.head()).await {
+            while !source.contains_header(workflow.header()).await {
                 tracing::info!(
                     "workflow `{}` is not on main chain - rolling back {:?}",
                     &id,
-                    workflow.head(),
+                    workflow.header(),
                 );
-                workflow.roll_back(workflow.head().height).await;
+                workflow.roll_back(workflow.header().height).await;
             }
         }
 
         // let rx = tracker.add_cursor(id.to_owned(), workflow.head().clone(), &monitor_tx);
-        let rx = source.subscribe(workflow.head().clone(), id).await;
+        let rx = source.subscribe(workflow.header().clone(), id).await;
 
         Self {
             id: String::from(id),
@@ -83,13 +83,13 @@ impl<W: Workflow> Worker<W> {
         match event {
             Event::Include(payload) => {
                 // Capped cursor may dispatch events prior to workflow's head. Ignore them.
-                if payload.height <= self.workflow.head().height {
+                if payload.height <= self.workflow.header().height {
                     return;
                 }
                 self.include(&payload).await;
             }
             Event::Rollback(height) => {
-                assert_eq!(height, self.workflow.head().height);
+                assert_eq!(height, self.workflow.header().height);
                 self.workflow.roll_back(height).await;
             }
         };
@@ -98,11 +98,11 @@ impl<W: Workflow> Worker<W> {
 
     async fn include(&mut self, payload: &StampedData<W::U>) -> W::D {
         // Check next block is indeed child of last included one
-        let head = self.workflow.head();
+        let head = self.workflow.header();
         assert_eq!(payload.height, head.height + 1);
         assert_eq!(payload.parent_id, head.header_id);
         // All good, proceed
-        let d = self.workflow.include_block(&payload.data).await;
+        let d = self.workflow.include_block(&payload).await;
         d
     }
 
@@ -111,7 +111,7 @@ impl<W: Workflow> Worker<W> {
         self.monitor_tx
             .send(MonitorMessage::Worker(WorkerMessage::new(
                 self.id.clone(),
-                self.workflow.head().height,
+                self.workflow.header().height,
             )))
             .await
             .unwrap();
@@ -190,20 +190,14 @@ impl<W: Workflow + Sourceable<S = W::D>> SourceWorker<W> {
 
     async fn process_upstream_event(&mut self, event: Event<W::U>) {
         match event {
-            Event::Include(data) => {
+            Event::Include(stamped_data) => {
                 // Capped cursor may dispatch events prior to workflow's head. Ignore them.
-                if data.height <= self.worker.workflow.head().height {
+                if stamped_data.height <= self.worker.workflow.header().height {
                     return;
                 }
-                let ds_data = self.worker.include(&data).await;
+                let downstream_data = self.worker.include(&stamped_data).await;
                 if let Some(ref mut cursor) = self.tracking_cursor {
-                    let stamped_data = StampedData {
-                        height: data.height,
-                        header_id: data.header_id.clone(),
-                        parent_id: data.parent_id.clone(),
-                        data: ds_data,
-                    };
-                    cursor.include(stamped_data).await;
+                    cursor.include(stamped_data.wrap(downstream_data)).await;
                 }
             }
             Event::Rollback(height) => {
@@ -219,12 +213,12 @@ impl<W: Workflow + Sourceable<S = W::D>> SourceWorker<W> {
     /// Step lagging cursors by n blocks
     async fn progress_lagging_cursors(&mut self, n: i32) {
         // In any case, do not go past current source position
-        let max_height = self.worker.workflow.head().height;
+        let max_height = self.worker.workflow.header().height;
 
         for cursor in &mut self.lagging_cursors {
-            let steps = std::cmp::min(n, max_height - cursor.head.height);
+            let steps = std::cmp::min(n, max_height - cursor.header.height);
             for _ in 0..steps {
-                let height = cursor.head.height + 1;
+                let height = cursor.header.height + 1;
                 let data = self.worker.workflow.get_at(height).await;
                 cursor.include(data).await;
             }
@@ -240,7 +234,7 @@ impl<W: Workflow + Sourceable<S = W::D>> SourceWorker<W> {
         // make it the tracking cursor.
 
         // Collect indices of lagging cursors ready to be merged
-        let current_head = self.worker.workflow.head();
+        let current_head = self.worker.workflow.header();
         let ready: Vec<usize> = self
             .lagging_cursors
             .iter()
@@ -268,16 +262,16 @@ impl<W: Workflow + Sourceable<S = W::D>> SourceWorker<W> {
 impl<W: Workflow + Sourceable<S = W::D> + Send + Sync> Source for SourceWorker<W> {
     type S = W::D;
 
-    fn head(&self) -> &Head {
-        &self.worker.workflow.head()
+    fn header(&self) -> &Header {
+        &self.worker.workflow.header()
     }
 
-    async fn contains_head(&self, head: &Head) -> bool {
-        self.worker.workflow.contains_head(head).await
+    async fn contains_header(&self, header: &Header) -> bool {
+        self.worker.workflow.contains_header(header).await
     }
 
     // TODO: cursor name should not be set by caller
-    async fn subscribe(&mut self, head: Head, cursor_name: &str) -> Receiver<Event<Self::S>> {
+    async fn subscribe(&mut self, header: Header, cursor_name: &str) -> Receiver<Event<Self::S>> {
         // Create new channel
         let (tx, rx) = tokio::sync::mpsc::channel(super::EVENT_CHANNEL_CAPACITY);
 
@@ -285,23 +279,23 @@ impl<W: Workflow + Sourceable<S = W::D> + Send + Sync> Source for SourceWorker<W
         // prior. The source store could be empty or not having reached the
         // downstream workflow's start height yet. Because a cursor cannot point
         // past its worker's head, we cap it to the current worker's head if needed.
-        let max_head = self.worker.workflow.head().clone();
-        let capped_head = if head.height > max_head.height {
+        let max_header = self.worker.workflow.header().clone();
+        let capped_header = if header.height > max_header.height {
             tracing::info!(
                 "cursor [{}] is ahead of tracker - using tracker's height",
                 cursor_name
             );
-            max_head
+            max_header
         } else {
-            head
+            header
         };
 
-        let is_tracking = &capped_head == self.worker.workflow.head();
+        let is_tracking = &capped_header == self.worker.workflow.header();
 
         let make_cursor = |tx| -> Cursor<Self::S> {
             Cursor {
                 id: cursor_name.to_owned(),
-                head: capped_head.clone(),
+                header: capped_header.clone(),
                 txs: vec![tx],
                 monitor_tx: self.worker.monitor_tx.clone(),
             }
@@ -320,7 +314,7 @@ impl<W: Workflow + Sourceable<S = W::D> + Send + Sync> Source for SourceWorker<W
 
         // Check if any of  the lagging cursors is at the same position
         for cursor in &mut self.lagging_cursors {
-            if cursor.is_at(&capped_head) {
+            if cursor.is_at(&capped_header) {
                 cursor.txs.push(tx);
                 return rx;
             }

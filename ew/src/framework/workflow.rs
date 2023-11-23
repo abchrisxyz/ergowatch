@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use super::StampedData;
 use crate::config::PostgresConfig;
-use crate::core::types::Head;
+use crate::core::types::Header;
 use crate::core::types::Height;
 
 #[async_trait]
@@ -17,13 +17,13 @@ pub trait Workflow {
     // async fn include_genesis_boxes(&mut self, data: &Self::U) -> Self::D;
 
     /// Process new block data.
-    async fn include_block(&mut self, data: &Self::U) -> Self::D;
+    async fn include_block(&mut self, data: &StampedData<Self::U>) -> Self::D;
 
     /// Roll back a block and return previous head.
-    async fn roll_back(&mut self, height: Height) -> Head;
+    async fn roll_back(&mut self, height: Height) -> Header;
 
-    /// Get last processed head.
-    fn head<'a>(&'a self) -> &'a Head;
+    /// Get last processed header.
+    fn header<'a>(&'a self) -> &'a Header;
 }
 
 #[async_trait]
@@ -31,8 +31,8 @@ pub trait Workflow {
 pub trait Sourceable {
     type S;
 
-    /// Returns true if data for `head` has been included.
-    async fn contains_head(&self, head: &Head) -> bool;
+    /// Returns true if data for `header` has been included.
+    async fn contains_header(&self, header: &Header) -> bool;
 
     /// Get data for given `head`.
     ///

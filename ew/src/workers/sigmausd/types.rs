@@ -2,8 +2,6 @@ use rust_decimal::Decimal;
 
 use crate::core::types::AddressID;
 use crate::core::types::BoxID;
-use crate::core::types::Head;
-use crate::core::types::HeaderID;
 use crate::core::types::Height;
 use crate::core::types::NanoERG;
 use crate::core::types::Timestamp;
@@ -12,33 +10,12 @@ use super::constants::DEFAULT_RSV_PRICE;
 
 /// Data extracted from a block and ready to be stored.
 pub struct Batch {
-    pub header: MiniHeader,
     pub events: Vec<Event>,
     pub history_record: Option<HistoryRecord>,
     pub daily_ohlc_records: Vec<DailyOHLC>,
     pub weekly_ohlc_records: Vec<WeeklyOHLC>,
     pub monthly_ohlc_records: Vec<MonthlyOHLC>,
     pub service_diffs: Vec<ServiceStats>,
-}
-
-pub struct MiniHeader {
-    pub height: Height,
-    pub timestamp: Timestamp,
-    pub id: HeaderID,
-}
-
-impl MiniHeader {
-    pub fn new(height: Height, timestamp: Timestamp, id: HeaderID) -> Self {
-        Self {
-            height,
-            timestamp,
-            id,
-        }
-    }
-
-    pub fn head(&self) -> Head {
-        Head::new(self.height, self.id.clone())
-    }
 }
 
 pub enum Event {
@@ -53,6 +30,7 @@ pub enum Event {
 pub struct BankTransaction {
     pub index: i32,
     pub height: Height,
+    pub timestamp: Timestamp,
     pub reserves_diff: NanoERG,
     pub circ_sc_diff: i64,
     pub circ_rc_diff: i64,

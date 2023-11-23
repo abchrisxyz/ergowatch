@@ -3,8 +3,9 @@ use crate::core::types::Timestamp;
 
 use super::types::Action;
 use super::types::Batch;
-use super::types::MiniHeader;
 use super::types::TimestampRecord;
+use crate::core::types::Header;
+use crate::framework::StampedData;
 
 const HOUR_MS: i64 = 3_600_000;
 const DAY_MS: i64 = 86_400_000;
@@ -25,12 +26,11 @@ impl Parser {
         Self { cache }
     }
 
-    pub(super) fn extract_batch(&mut self, data: &CoreData) -> Batch {
-        let header = MiniHeader::new(
-            data.block.header.height,
-            data.block.header.timestamp,
-            data.block.header.id.clone(),
-        );
+    pub(super) fn extract_batch(
+        &mut self,
+        stamped_data: &StampedData<CoreData>,
+    ) -> StampedData<Batch> {
+        let header = Header::from(stamped_data);
 
         let hourly_actions = extract_actions(&header, &mut self.cache.last_hourly, Hourly {});
         let daily_actions = extract_actions(&header, &mut self.cache.last_daily, Daily {});
@@ -42,12 +42,11 @@ impl Parser {
         self.cache.last_weekly = weekly_actions.last().unwrap().get_inserted().unwrap();
 
         // Pack new batch
-        Batch {
-            header,
+        stamped_data.wrap(Batch {
             hourly: hourly_actions,
             daily: daily_actions,
             weekly: weekly_actions,
-        }
+        })
     }
 }
 
@@ -141,7 +140,7 @@ impl Window for Weekly {
 }
 
 fn extract_actions(
-    header: &MiniHeader,
+    header: &Header,
     last_record: &TimestampRecord,
     window: impl Window,
 ) -> Vec<Action> {
@@ -195,8 +194,8 @@ mod tests {
     use super::extract_actions;
     use super::Action;
     use super::Daily;
+    use super::Header;
     use super::Hourly;
-    use super::MiniHeader;
     use super::TimestampRecord;
     use super::Weekly;
     use super::Window;
@@ -249,10 +248,11 @@ mod tests {
             height: 5,
             timestamp: 86_400_000 * 5 + 5000,
         };
-        let header = MiniHeader {
+        let header = Header {
             height: 6,
             timestamp: 86_400_000 * 5 + 6000,
-            id: "dummy".to_owned(),
+            header_id: "dummy".to_owned(),
+            parent_id: "dummy".to_owned(),
         };
         let actions = extract_actions(&header, &last_record, Daily {});
         assert_eq!(actions.len(), 2);
@@ -269,10 +269,11 @@ mod tests {
             height: 5,
             timestamp: 86_400_000 * 5,
         };
-        let header = MiniHeader {
+        let header = Header {
             height: 6,
             timestamp: 86_400_000 * 5 + 6000,
-            id: "dummy".to_owned(),
+            header_id: "dummy".to_owned(),
+            parent_id: "dummy".to_owned(),
         };
 
         let actions = extract_actions(&header, &last_record, Daily {});
@@ -289,10 +290,11 @@ mod tests {
             height: 5,
             timestamp: 86_400_000 * 5 + 5000,
         };
-        let header = MiniHeader {
+        let header = Header {
             height: 6,
             timestamp: 86_400_000 * 6 + 6000,
-            id: "dummy".to_owned(),
+            header_id: "dummy".to_owned(),
+            parent_id: "dummy".to_owned(),
         };
         let expected_update = TimestampRecord {
             height: 5,
@@ -313,10 +315,11 @@ mod tests {
             height: 5,
             timestamp: 86_400_000 * 5 + 5000,
         };
-        let header = MiniHeader {
+        let header = Header {
             height: 6,
             timestamp: 86_400_000 * 6,
-            id: "dummy".to_owned(),
+            header_id: "dummy".to_owned(),
+            parent_id: "dummy".to_owned(),
         };
         let expected_update = TimestampRecord {
             height: 5,
@@ -337,10 +340,11 @@ mod tests {
             height: 5,
             timestamp: 86_400_000 * 5,
         };
-        let header = MiniHeader {
+        let header = Header {
             height: 6,
             timestamp: 86_400_000 * 6,
-            id: "dummy".to_owned(),
+            header_id: "dummy".to_owned(),
+            parent_id: "dummy".to_owned(),
         };
         let actions = extract_actions(&header, &last_record, Daily {});
         assert_eq!(actions.len(), 1);
@@ -356,10 +360,11 @@ mod tests {
             height: 5,
             timestamp: 86_400_000 * 5 + 5000,
         };
-        let header = MiniHeader {
+        let header = Header {
             height: 6,
             timestamp: 86_400_000 * 8 + 6000,
-            id: "dummy".to_owned(),
+            header_id: "dummy".to_owned(),
+            parent_id: "dummy".to_owned(),
         };
         let update = TimestampRecord {
             height: 5,
@@ -390,10 +395,11 @@ mod tests {
             height: 5,
             timestamp: 86_400_000 * 5,
         };
-        let header = MiniHeader {
+        let header = Header {
             height: 6,
             timestamp: 86_400_000 * 8 + 6000,
-            id: "dummy".to_owned(),
+            header_id: "dummy".to_owned(),
+            parent_id: "dummy".to_owned(),
         };
         let intermediate0 = TimestampRecord {
             height: 5,
@@ -424,10 +430,11 @@ mod tests {
             height: 5,
             timestamp: 86_400_000 * 5 + 5000,
         };
-        let header = MiniHeader {
+        let header = Header {
             height: 6,
             timestamp: 86_400_000 * 8,
-            id: "dummy".to_owned(),
+            header_id: "dummy".to_owned(),
+            parent_id: "dummy".to_owned(),
         };
         let update = TimestampRecord {
             height: 5,
@@ -453,10 +460,11 @@ mod tests {
             height: 5,
             timestamp: 86_400_000 * 5,
         };
-        let header = MiniHeader {
+        let header = Header {
             height: 6,
             timestamp: 86_400_000 * 8,
-            id: "dummy".to_owned(),
+            header_id: "dummy".to_owned(),
+            parent_id: "dummy".to_owned(),
         };
         let intermediate1 = TimestampRecord {
             height: 5,
@@ -482,10 +490,11 @@ mod tests {
             height: 0,
             timestamp: 86_400_000,
         };
-        let header = MiniHeader {
+        let header = Header {
             height: 1,
             timestamp: 86_400_000 + 120_000,
-            id: "dummy".to_owned(),
+            header_id: "dummy".to_owned(),
+            parent_id: "dummy".to_owned(),
         };
         let actions = extract_actions(&header, &last_record, Weekly {});
         assert_eq!(actions.len(), 1);

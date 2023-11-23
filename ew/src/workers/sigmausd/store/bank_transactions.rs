@@ -19,6 +19,7 @@ pub(super) async fn insert(pgtx: &Transaction<'_>, btx: &BankTransaction) {
         insert into sigmausd.bank_transactions (
             idx,
             height,
+            timestamp,
             reserves_diff,
             circ_sc_diff,
             circ_rc_diff,
@@ -26,13 +27,14 @@ pub(super) async fn insert(pgtx: &Transaction<'_>, btx: &BankTransaction) {
             service_fee,
             service_address_id
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8);
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9);
     ";
     pgtx.execute(
         sql,
         &[
             &btx.index,
             &btx.height,
+            &btx.timestamp,
             &btx.reserves_diff,
             &btx.circ_sc_diff,
             &btx.circ_rc_diff,
