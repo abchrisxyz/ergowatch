@@ -34,3 +34,11 @@ pub mod address_ids {
     /// All (re)emission related contracts.
     pub const EMISSION_CONTRACTS: [AddressID; 3] = [EMISSION, REEMISSION, PAY_TO_REEMISSION];
 }
+
+pub mod settings {
+    use crate::core::types::Height;
+    /// Maximum number of blocks that can be rolled back.
+    ///
+    /// If exceeded, some workers will have to be resynced from scratch.
+    pub const ROLLBACK_HORIZON: Height = 20;
+}

@@ -1,3 +1,17 @@
+/*
+    Consumes diffs from erg_diffs to maintain unspent balances
+    and some (cex-independent) metrics.
+    Balances and metrics is same worker for now but will have to
+    be separated ideally into erg_balances and erg_metrics1 workers.
+    When doing so, erg_balances will have to be able to replay
+    balances to allow for lagging downstream workers. Can be implemented
+    by maintaining a dedicated balance table for each lagging cursor.
+    Those tables can be initialized through a query to erg_diffs to
+    obtain balances for a cursor's starting height.
+    When cursors can be merged, could assert dedicated balance table is
+    identical to main one.
+*/
+
 mod parsing;
 mod store;
 mod types;
@@ -5,22 +19,18 @@ mod types;
 use async_trait::async_trait;
 
 use crate::config::PostgresConfig;
-use crate::core::types::CoreData;
 use crate::core::types::Header;
 use crate::core::types::Height;
-use crate::framework::SourceWorker;
-use crate::framework::Sourceable;
 use crate::framework::StampedData;
 use crate::framework::Workflow;
+use crate::workers::erg_diffs::types::DiffData;
 use parsing::Parser;
 use store::Store;
-use types::BalData;
 use types::Batch;
 
 const WORKER_ID: &'static str = "erg";
 
-// switch to framework::SourceWorker here
-pub type Worker = SourceWorker<ErgWorkFlow>;
+pub type Worker = crate::framework::Worker<ErgWorkFlow>;
 
 pub struct ErgWorkFlow {
     parser: Parser,
@@ -29,8 +39,8 @@ pub struct ErgWorkFlow {
 
 #[async_trait]
 impl Workflow for ErgWorkFlow {
-    type U = CoreData;
-    type D = BalData;
+    type U = DiffData;
+    type D = ();
 
     async fn new(pgconf: &PostgresConfig) -> Self {
         let store = Store::new(pgconf, &store::SCHEMA).await;
@@ -39,16 +49,14 @@ impl Workflow for ErgWorkFlow {
         Self { parser, store }
     }
 
-    async fn include_block(&mut self, data: &StampedData<CoreData>) -> Self::D {
+    async fn include_block(&mut self, data: &StampedData<DiffData>) -> Self::D {
         // Get current balances for all addresses within block
         let balances = self
             .store
-            .map_balance_records(data.data.block.transacting_addresses())
+            .map_balance_records(data.data.diffed_addresses())
             .await;
         let stamped_batch = self.parser.extract_batch(data, balances);
         self.store.persist(&stamped_batch).await;
-
-        BalData::from(stamped_batch.data)
     }
 
     async fn roll_back(&mut self, height: Height) -> Header {
@@ -61,24 +69,5 @@ impl Workflow for ErgWorkFlow {
 
     fn header<'a>(&'a self) -> &'a Header {
         self.store.get_header()
-    }
-}
-
-#[async_trait]
-impl Sourceable for ErgWorkFlow {
-    type S = BalData;
-
-    /// Returns true if data for `header` has been included.
-    async fn contains_header(&self, header: &Header) -> bool {
-        // Initial header is always contained but will not be stored,
-        // so handle explicitly.
-        header.is_initial() || self.store.is_main_chain(header).await
-    }
-
-    /// Get data for given `head`.
-    ///
-    /// Used by lagging cursors to retrieve data.
-    async fn get_at(&self, height: Height) -> StampedData<Self::S> {
-        self.store.get_at(height).await
     }
 }

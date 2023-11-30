@@ -7,18 +7,16 @@ use super::types::AddressCounts;
 use super::types::BalanceRecord;
 use super::types::Batch;
 use super::types::CompositionRecord;
-use super::types::DiffRecord;
 use crate::core::types::AddressID;
 use crate::core::types::AddressType;
-use crate::core::types::CoreData;
 use crate::core::types::NanoERG;
 use crate::core::types::Timestamp;
 use crate::framework::StampedData;
+use crate::workers::erg_diffs::types::DiffData;
 
 mod balances;
 mod composition;
 mod counts;
-mod diffs;
 
 pub struct Parser {
     cache: ParserCache,
@@ -27,22 +25,6 @@ pub struct Parser {
 pub struct ParserCache {
     pub last_address_counts: AddressCounts,
     pub last_supply_composition: CompositionRecord,
-}
-
-/// Holds a diff record with corresponding address type.
-struct TypedDiff {
-    pub record: DiffRecord,
-    pub address_type: AddressType,
-}
-
-#[cfg(test)]
-impl TypedDiff {
-    pub fn new(record: DiffRecord, address_type: AddressType) -> Self {
-        Self {
-            record,
-            address_type,
-        }
-    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -114,42 +96,6 @@ impl Bal {
             }
         }
     }
-
-    /// Reverse accrual of given diff `amount` applied at `timestamp`.
-    /// 
-    /// * `amount`: the diff amount previously accrued and to be reversed.
-    /// * `timestamp`: timestamp of the block the diff was accrued.
-    pub fn reverse(&self, amount: NanoERG, timestamp: Timestamp) -> Self {
-        match self {
-            Bal::Spent => panic!("Can't reverse value of a spent balance. Instead, restore it from earlier balance diff records, if any."),
-            Bal::Unspent(bal) => {
-                if amount == 0 {
-                    return Self::Unspent(Balance::new(amount, timestamp));
-                }
-                if amount == bal.nano {
-                    return Self::Spent;
-                }
-                let reversed_nano = bal.nano - amount;
-                
-                let reversed_mat = if amount <= 0 {
-                    // Balance was decreased, so timestamp unaffected.
-                    // Restore by adding nano's back.
-                    bal.mean_age_timestamp
-                } else {
-                // Balance was added to, so timestamp increased.
-                    assert!(reversed_nano > 0);
-                    ((Decimal::from_i64(bal.mean_age_timestamp).unwrap()
-                        * Decimal::from_i64(bal.nano).unwrap()
-                        - Decimal::from_i64(timestamp).unwrap()
-                            * Decimal::from_i64(amount).unwrap())
-                        / Decimal::from_i64(reversed_nano).unwrap())
-                    .to_i64()
-                    .unwrap()
-                };
-                Self::Unspent(Balance::new(reversed_nano, reversed_mat))
-            }
-        }
-    }
 }
 
 /// Balance value and timestamp.
@@ -176,23 +122,17 @@ impl Parser {
     /// Create a batch from core data.
     pub fn extract_batch(
         &mut self,
-        stamped_data: &StampedData<CoreData>,
+        stamped_data: &StampedData<DiffData>,
         balances: HashMap<AddressID, BalanceRecord>,
     ) -> StampedData<Batch> {
-        let block = &stamped_data.data.block;
-
-        let typed_diffs = diffs::extract_balance_diffs(&block);
+        let diffs = &stamped_data.data.diff_records;
         let balance_changes =
-            balances::extract_balance_changes(&balances, &typed_diffs, block.header.timestamp);
+            balances::extract_balance_changes(&balances, diffs, stamped_data.timestamp);
 
-        self.cache.last_address_counts = counts::derive_new_counts(
-            &self.cache.last_address_counts,
-            &balance_changes,
-        );
-        self.cache.last_supply_composition = composition::derive_record(
-            &self.cache.last_supply_composition,
-            &typed_diffs,
-        );
+        self.cache.last_address_counts =
+            counts::derive_new_counts(&self.cache.last_address_counts, &balance_changes);
+        self.cache.last_supply_composition =
+            composition::derive_record(&self.cache.last_supply_composition, diffs);
 
         stamped_data.wrap(Batch {
             // Extract spent addresses from balance changes
@@ -213,43 +153,8 @@ impl Parser {
                     )),
                 })
                 .collect(),
-            diff_records: typed_diffs.into_iter().map(|td| td.record).collect(),
             address_counts: self.cache.last_address_counts.clone(),
             supply_composition: self.cache.last_supply_composition.clone(),
         })
-    }
-}
-
-
-#[cfg(test)]
-mod tests {
-    use core::panic;
-
-    use super::*;
-
-    const TS_10K: Timestamp = 1563159993440; // timestamp of block 10000
-
-    #[test]
-    fn test_bal_roundtrip_positive_diff() {
-        let bal = Bal::Unspent(Balance::new(1000, TS_10K));
-        let diff_amount = 300;
-        let diff_ts = TS_10K + 120_000;
-        let roundtripped_bal = bal.accrue(diff_amount, diff_ts).reverse(diff_amount, diff_ts);
-        match roundtripped_bal {
-            Bal::Spent => panic!(),
-            Bal::Unspent(b) => {
-                assert_eq!(1000, b.nano);
-                // Allow 1ms rounding error
-                assert_eq!((TS_10K - b.mean_age_timestamp).abs(), 1);
-            }
-        }
-    }
-
-    #[test]
-    fn test_bal_roundtrip_negative_diff() {
-        let bal = Bal::Unspent(Balance::new(1000, TS_10K));
-        let diff_amount = -500;
-        let diff_ts = TS_10K + 120_000;
-        assert_eq!(bal, bal.accrue(diff_amount, diff_ts).reverse(diff_amount, diff_ts));
     }
 }

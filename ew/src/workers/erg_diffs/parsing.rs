@@ -3,17 +3,33 @@ use std::collections::HashMap;
 
 use itertools::Itertools;
 
-use super::super::types::DiffRecord;
-use super::TypedDiff;
+use super::types::Batch;
+use super::types::DiffRecord;
 use crate::core::types::AddressID;
-use crate::core::types::AddressType;
 use crate::core::types::Block;
+use crate::core::types::CoreData;
 use crate::core::types::Height;
 use crate::core::types::NanoERG;
 use crate::core::types::Transaction;
+use crate::framework::StampedData;
+
+pub struct Parser {}
+
+impl Parser {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub fn extract_batch(&self, stamped_data: &StampedData<CoreData>) -> StampedData<Batch> {
+        let batch = Batch {
+            diff_records: extract_diff_records(&stamped_data.data.block),
+        };
+        stamped_data.wrap(batch)
+    }
+}
 
 /// Extract non-zero balance diffs from transactions
-pub(super) fn extract_balance_diffs(block: &Block) -> Vec<TypedDiff> {
+pub(super) fn extract_diff_records(block: &Block) -> Vec<DiffRecord> {
     block
         .transactions
         .iter()
@@ -23,9 +39,8 @@ pub(super) fn extract_balance_diffs(block: &Block) -> Vec<TypedDiff> {
 }
 
 /// Generates a collection of diff records from a block transaction.
-fn parse_tx(tx: &Transaction, height: Height, tx_idx: i16) -> Vec<TypedDiff> {
+fn parse_tx(tx: &Transaction, height: Height, tx_idx: i16) -> Vec<DiffRecord> {
     let mut map: HashMap<AddressID, NanoERG> = HashMap::new();
-    let mut types: HashMap<AddressID, AddressType> = HashMap::new();
     for input in &tx.inputs {
         match map.entry(input.address_id) {
             Entry::Occupied(mut e) => {
@@ -33,7 +48,6 @@ fn parse_tx(tx: &Transaction, height: Height, tx_idx: i16) -> Vec<TypedDiff> {
             }
             Entry::Vacant(e) => {
                 e.insert(-input.value);
-                types.insert(input.address_id, input.address_id.address_type());
             }
         }
     }
@@ -44,23 +58,19 @@ fn parse_tx(tx: &Transaction, height: Height, tx_idx: i16) -> Vec<TypedDiff> {
             }
             Entry::Vacant(e) => {
                 e.insert(output.value);
-                types.insert(output.address_id, output.address_id.address_type());
             }
         }
     }
     map.into_iter()
         .filter(|(_, nano)| nano != &0)
-        .map(|(address_id, nano)| TypedDiff {
-            record: DiffRecord {
-                address_id: address_id,
-                height,
-                tx_idx,
-                nano,
-            },
-            address_type: types[&address_id].clone(),
+        .map(|(address_id, nano)| DiffRecord {
+            address_id: address_id,
+            height,
+            tx_idx,
+            nano,
         })
         // Order by amount - for consistency across instances and tests
-        .sorted_by_key(|r| r.record.nano)
+        .sorted_by_key(|r| r.nano)
         .collect()
 }
 
@@ -73,25 +83,25 @@ mod tests {
 
     #[test]
     fn test_simple_transfer() {
-        let addr_a = AddressID::dummy(1231);
-        let addr_b = AddressID::dummy(4561);
+        let addr_a = AddressID(123);
+        let addr_b = AddressID(456);
         let block = Block::dummy().height(123456).add_tx(
             Transaction::dummy()
                 .add_input(BoxData::dummy().address_id(addr_a).value(1000))
                 .add_output(BoxData::dummy().address_id(addr_b).value(1000)),
         );
-        let recs = extract_balance_diffs(&block);
+        let recs = extract_diff_records(&block);
         assert_eq!(recs.len(), 2);
         // 1st tx - address A got - 1000
-        assert_eq!(recs[0].record.address_id, addr_a);
-        assert_eq!(recs[0].record.height, 123456);
-        assert_eq!(recs[0].record.tx_idx, 0);
-        assert_eq!(recs[0].record.nano, -1000);
+        assert_eq!(recs[0].address_id, addr_a);
+        assert_eq!(recs[0].height, 123456);
+        assert_eq!(recs[0].tx_idx, 0);
+        assert_eq!(recs[0].nano, -1000);
         // 1st tx - address B got + 1000
-        assert_eq!(recs[1].record.address_id, addr_b);
-        assert_eq!(recs[1].record.height, 123456);
-        assert_eq!(recs[1].record.tx_idx, 0);
-        assert_eq!(recs[1].record.nano, 1000);
+        assert_eq!(recs[1].address_id, addr_b);
+        assert_eq!(recs[1].height, 123456);
+        assert_eq!(recs[1].tx_idx, 0);
+        assert_eq!(recs[1].nano, 1000);
     }
 
     #[test]
@@ -99,9 +109,9 @@ mod tests {
         // A sends 400 to B
         // C does nothing (might have been a token transfer)
         // B consolidates
-        let addr_a = AddressID::dummy(1231);
-        let addr_b = AddressID::dummy(4561);
-        let addr_c = AddressID::dummy(7891);
+        let addr_a = AddressID(123);
+        let addr_b = AddressID(456);
+        let addr_c = AddressID(789);
         let block = Block::dummy()
             .height(123456)
             .add_tx(
@@ -121,27 +131,27 @@ mod tests {
                     .add_output(BoxData::dummy().address_id(addr_a).value(300))
                     .add_output(BoxData::dummy().address_id(addr_c).value(4700)),
             );
-        let recs = extract_balance_diffs(&block);
+        let recs = extract_diff_records(&block);
         assert_eq!(recs.len(), 4);
         // 1st tx - address A got - 400
-        assert_eq!(recs[0].record.address_id, addr_a);
-        assert_eq!(recs[0].record.height, 123456);
-        assert_eq!(recs[0].record.tx_idx, 0);
-        assert_eq!(recs[0].record.nano, -400);
+        assert_eq!(recs[0].address_id, addr_a);
+        assert_eq!(recs[0].height, 123456);
+        assert_eq!(recs[0].tx_idx, 0);
+        assert_eq!(recs[0].nano, -400);
         // 1st tx - address B got + 400
-        assert_eq!(recs[1].record.address_id, addr_b);
-        assert_eq!(recs[1].record.height, 123456);
-        assert_eq!(recs[1].record.tx_idx, 0);
-        assert_eq!(recs[1].record.nano, 400);
+        assert_eq!(recs[1].address_id, addr_b);
+        assert_eq!(recs[1].height, 123456);
+        assert_eq!(recs[1].tx_idx, 0);
+        assert_eq!(recs[1].nano, 400);
         // 2nd tx - address C got - 300
-        assert_eq!(recs[2].record.address_id, addr_c);
-        assert_eq!(recs[2].record.height, 123456);
-        assert_eq!(recs[2].record.tx_idx, 1);
-        assert_eq!(recs[2].record.nano, -300);
+        assert_eq!(recs[2].address_id, addr_c);
+        assert_eq!(recs[2].height, 123456);
+        assert_eq!(recs[2].tx_idx, 1);
+        assert_eq!(recs[2].nano, -300);
         // 2nd tx - address A got + 300
-        assert_eq!(recs[3].record.address_id, addr_a);
-        assert_eq!(recs[3].record.height, 123456);
-        assert_eq!(recs[3].record.tx_idx, 1);
-        assert_eq!(recs[3].record.nano, 300);
+        assert_eq!(recs[3].address_id, addr_a);
+        assert_eq!(recs[3].height, 123456);
+        assert_eq!(recs[3].tx_idx, 1);
+        assert_eq!(recs[3].nano, 300);
     }
 }

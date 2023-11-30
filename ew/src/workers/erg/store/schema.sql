@@ -1,13 +1,13 @@
-create schema erg;
+create schema if not exists erg;
 comment on schema erg is 'ERG balances, age and supply metrics';
 
 -------------------------------------------------------------------------------
 -- Timestamps (for diffs)
 -------------------------------------------------------------------------------
-create table erg.timestamps (
-    height integer primary key,
-    timestamp bigint not null
-);
+-- create table erg.timestamps (
+--     height integer primary key,
+--     timestamp bigint not null
+-- );
 
 -------------------------------------------------------------------------------
 -- Balances
@@ -22,19 +22,26 @@ create table erg.balances (
     check (nano > 0)
 );
 
--------------------------------------------------------------------------------
--- Diffs
--------------------------------------------------------------------------------
-create table erg.balance_diffs (
-    address_id bigint not null,
-    height integer not null,
-    -- Index of block transaction
-    tx_idx smallint not null,
-    -- Balance difference in nanoERG
-    nano bigint not null,
-    primary key (address_id, height, tx_idx)
+-- Balance logs to enable rollbacks.
+
+-- Log changed or spent balances as they where prior to modification
+-- by block at given height.
+create table erg._log_balances_previous_state_at (
+	height integer not null,
+	address_id bigint not null,
+	nano bigint not null,
+	mean_age_timestamp bigint not null,
+	primary key(height, address_id)
 );
-create index on erg.balance_diffs using brin(height);
+create index on erg._log_balances_previous_state_at(height);
+
+-- Logs address id's for which a balance was created at given height.
+create table erg._log_balances_created_at (
+	height integer not null,
+	address_id bigint not null,
+	primary key(height, address_id)
+);
+create index on erg._log_balances_created_at(height);
 
 -------------------------------------------------------------------------------
 -- Address counts

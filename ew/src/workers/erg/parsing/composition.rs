@@ -1,23 +1,23 @@
 use super::super::types::CompositionRecord;
-use super::TypedDiff;
 use crate::constants::address_ids::EMISSION_CONTRACTS;
 use crate::core::types::AddressType;
+use crate::workers::erg_diffs::types::DiffRecord;
 
 pub(super) fn derive_record(
     cache: &CompositionRecord,
-    typed_diffs: &Vec<TypedDiff>,
+    diffs: &Vec<DiffRecord>,
 ) -> CompositionRecord {
     let mut next = cache.clone();
     next.height += 1;
-    for diff in typed_diffs {
+    for diff in diffs {
         // Skip emission contracts
-        if EMISSION_CONTRACTS.contains(&diff.record.address_id) {
+        if EMISSION_CONTRACTS.contains(&diff.address_id) {
             continue;
         }
-        match diff.address_type {
-            AddressType::P2PK => next.p2pks += diff.record.nano,
-            AddressType::Other => next.contracts += diff.record.nano,
-            AddressType::Miner => next.miners += diff.record.nano,
+        match diff.address_id.address_type() {
+            AddressType::P2PK => next.p2pks += diff.nano,
+            AddressType::Other => next.contracts += diff.nano,
+            AddressType::Miner => next.miners += diff.nano,
         }
     }
     next
@@ -26,7 +26,6 @@ pub(super) fn derive_record(
 #[cfg(test)]
 mod tests {
     use super::super::AddressID;
-    use super::super::DiffRecord;
     use super::*;
 
     #[test]
@@ -37,11 +36,8 @@ mod tests {
             contracts: 3000,
             miners: 4000,
         };
-        let typed_diffs: Vec<TypedDiff> = vec![TypedDiff::new(
-            DiffRecord::new(AddressID::dummy(123), 1001, 0, 500),
-            AddressType::P2PK,
-        )];
-        let rec = derive_record(&cache, &typed_diffs);
+        let diffs: Vec<DiffRecord> = vec![DiffRecord::new(AddressID::p2pk(123), 1001, 0, 500)];
+        let rec = derive_record(&cache, &diffs);
         assert_eq!(rec.height, 1001);
         assert_eq!(rec.p2pks, 2500);
         assert_eq!(rec.contracts, 3000);
@@ -56,25 +52,13 @@ mod tests {
             contracts: 3000,
             miners: 4000,
         };
-        let typed_diffs: Vec<TypedDiff> = vec![
-            TypedDiff::new(
-                DiffRecord::new(AddressID::dummy(123), 1001, 0, 500),
-                AddressType::P2PK,
-            ),
-            TypedDiff::new(
-                DiffRecord::new(EMISSION_CONTRACTS[0], 1001, 0, -75),
-                AddressType::Other,
-            ),
-            TypedDiff::new(
-                DiffRecord::new(AddressID::dummy(456), 1001, 0, 67),
-                AddressType::Miner,
-            ),
-            TypedDiff::new(
-                DiffRecord::new(AddressID::dummy(789), 1001, 0, -300),
-                AddressType::Other,
-            ),
+        let diffs: Vec<DiffRecord> = vec![
+            DiffRecord::new(AddressID::p2pk(123), 1001, 0, 500),
+            DiffRecord::new(EMISSION_CONTRACTS[0], 1001, 0, -75),
+            DiffRecord::new(AddressID::miner(456), 1001, 0, 67),
+            DiffRecord::new(AddressID::other(789), 1001, 0, -300),
         ];
-        let rec = derive_record(&cache, &typed_diffs);
+        let rec = derive_record(&cache, &diffs);
         assert_eq!(rec.height, 1001);
         assert_eq!(rec.p2pks, 2500);
         assert_eq!(rec.contracts, 2700);

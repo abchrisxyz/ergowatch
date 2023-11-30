@@ -54,7 +54,10 @@ async fn main() -> Result<(), &'static str> {
     let mut timestamps =
         workers::timestamps::Worker::new("timestamps", &pgconf, &mut tracker, monitor.sender())
             .await;
-    let mut erg = workers::erg::Worker::new("erg2", &pgconf, &mut tracker, monitor.sender()).await;
+    let mut erg_diffs =
+        workers::erg_diffs::Worker::new("erg_diffs", &pgconf, &mut tracker, monitor.sender()).await;
+    let mut erg =
+        workers::erg::Worker::new("erg2", &pgconf, &mut erg_diffs, monitor.sender()).await;
     let mut sigmausd =
         workers::sigmausd::Worker::new("sigmausd", &pgconf, &mut tracker, monitor.sender()).await;
 
@@ -76,6 +79,9 @@ async fn main() -> Result<(), &'static str> {
     // Start workers
     tokio::spawn(async move {
         timestamps.start().await;
+    });
+    tokio::spawn(async move {
+        erg_diffs.start().await;
     });
     tokio::spawn(async move {
         erg.start().await;

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::core::types::CoreData;
+use crate::core::types::Header;
 use crate::core::types::HeaderID;
 use crate::core::types::Height;
 use crate::core::types::Timestamp;
@@ -43,6 +44,41 @@ impl<D> StampedData<D> {
             header_id: self.header_id.clone(),
             parent_id: self.parent_id.clone(),
             data,
+        }
+    }
+}
+
+#[cfg(feature = "test-utilities")]
+impl<D: Clone> StampedData<D> {
+    /// Creates a new stamped
+    pub fn wrap_as_child(&self, data: D) -> Self {
+        StampedData {
+            height: self.height + 1,
+            timestamp: self.timestamp + 120_000,
+            header_id: crate::core::types::testutils::random_digest32(),
+            parent_id: self.header_id.clone(),
+            data,
+        }
+    }
+
+    /// Returns copy with timestamp set to given `timestamp`.
+    pub fn timestamp(&self, timestamp: Timestamp) -> Self {
+        StampedData {
+            height: self.height,
+            timestamp: timestamp,
+            header_id: self.header_id.clone(),
+            parent_id: self.parent_id.clone(),
+            data: self.data.clone(),
+        }
+    }
+
+    /// Extracts a Header from StampedData
+    pub fn get_header(&self) -> Header {
+        Header {
+            height: self.height,
+            timestamp: self.timestamp,
+            header_id: self.header_id.clone(),
+            parent_id: self.parent_id.clone(),
         }
     }
 }

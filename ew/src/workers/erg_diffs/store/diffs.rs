@@ -3,10 +3,7 @@ use tokio_postgres::GenericClient;
 use tokio_postgres::Transaction;
 
 use super::super::types::DiffRecord;
-use crate::core::types::AddressID;
 use crate::core::types::Height;
-use crate::core::types::NanoERG;
-use crate::core::types::Timestamp;
 
 /// Insert collection of diff records.
 pub async fn insert_many(pgtx: &Transaction<'_>, records: &Vec<DiffRecord>) {
@@ -58,27 +55,5 @@ pub async fn select_at(client: &impl GenericClient, height: Height) -> Vec<DiffR
             tx_idx: r.get(2),
             nano: r.get(3),
         })
-        .collect()
-}
-
-/// Retrieve all balance diffs for given address.
-pub(super) async fn get_address_diffs(
-    client: &impl GenericClient,
-    address_id: AddressID,
-) -> Vec<(NanoERG, Timestamp)> {
-    tracing::trace!("get_address_diffs {address_id:?}");
-    let sql = "
-        select d.nano, t.timestamp
-        from erg.balance_diffs d
-        join erg.timestamps t on t.height = d.height
-        where d.address_id = $1
-        order by d.height, d.tx_idx;
-    ";
-    client
-        .query(sql, &[&address_id])
-        .await
-        .unwrap()
-        .into_iter()
-        .map(|row| (row.get(0), row.get(1)))
         .collect()
 }

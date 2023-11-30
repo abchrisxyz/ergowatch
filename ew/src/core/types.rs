@@ -300,6 +300,24 @@ impl AddressID {
     pub fn zero() -> Self {
         Self(0)
     }
+
+    #[cfg(feature = "test-utilities")]
+    /// Convenience function to create a p2pk AddressID from given sequence position `n`
+    pub fn p2pk(n: i64) -> Self {
+        Self(n * 10 + Self::P2PK)
+    }
+
+    #[cfg(feature = "test-utilities")]
+    /// Convenience function to create a miner AddressID from given sequence position `n`
+    pub fn miner(n: i64) -> Self {
+        Self(n * 10 + Self::MINER)
+    }
+
+    #[cfg(feature = "test-utilities")]
+    /// Convenience function to create an AddressID with type "other" from given sequence position `n`
+    pub fn other(n: i64) -> Self {
+        Self(n * 10 + Self::OTHER)
+    }
 }
 
 impl<'a> FromSql<'a> for AddressID {
@@ -419,7 +437,7 @@ pub mod testutils {
     use rand::distributions::Alphanumeric;
     use rand::distributions::DistString;
 
-    fn random_digest32() -> Digest32 {
+    pub fn random_digest32() -> Digest32 {
         Alphanumeric.sample_string(&mut rand::thread_rng(), 64)
     }
 

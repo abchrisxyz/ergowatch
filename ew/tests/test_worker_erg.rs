@@ -3,16 +3,16 @@ mod db_utils;
 use db_utils::TestDB;
 
 use ew::constants::GENESIS_TIMESTAMP;
+use ew::constants::ZERO_HEADER;
+use ew::framework::StampedData;
+use ew::workers::erg_diffs::types::DiffRecord;
 use tokio_postgres::Client;
 
 use ew::core::types::AddressID;
-use ew::core::types::Block;
-use ew::core::types::BoxData;
-use ew::core::types::CoreData;
 use ew::core::types::Timestamp;
-use ew::core::types::Transaction;
 use ew::framework::Workflow;
 use ew::workers::erg::ErgWorkFlow;
+use ew::workers::erg_diffs::types::DiffData;
 
 const TS_10K: Timestamp = 1563159993440; // timestamp of block 10000
 
@@ -34,93 +34,81 @@ async fn test_empty_blocks() {
     let test_db = TestDB::new("erg_empty_blocks").await;
 
     // Genesis
-    let dummy_genesis_boxes = vec![BoxData::dummy()
-        .creation_height(0)
-        .timestamp(GENESIS_TIMESTAMP)];
-    let genesis_block = Block::from_genesis_boxes(dummy_genesis_boxes);
+    let genesis_data = StampedData {
+        height: 0,
+        timestamp: GENESIS_TIMESTAMP,
+        header_id: ZERO_HEADER.to_owned(),
+        parent_id: "".to_owned(),
+        data: DiffData {
+            diff_records: vec![],
+        },
+    };
 
     // Next block
-    let block = Block::child_of(&genesis_block).timestamp(GENESIS_TIMESTAMP + 120_000);
+    let data_1 = genesis_data.wrap_as_child(DiffData {
+        diff_records: vec![],
+    });
 
     // Process blocks
     let mut workflow = ErgWorkFlow::new(&test_db.pgconf).await;
-    workflow
-        .include_block(
-            &CoreData {
-                block: genesis_block,
-            }
-            .into(),
-        )
-        .await;
-    workflow.include_block(&CoreData { block }.into()).await;
+    workflow.include_block(&genesis_data).await;
+    workflow.include_block(&data_1).await;
 }
 
 #[tokio::test]
 async fn test_rollback() {
     let _guard = set_tracing_subscriber(false);
-    let addr_a = AddressID::dummy(1001);
-    let addr_b = AddressID::dummy(1002);
-    let addr_c = AddressID::dummy(1003);
+    let addr_a = AddressID::p2pk(1001);
+    let addr_b = AddressID::miner(1002);
+    let addr_c = AddressID::other(1003);
     let test_db = TestDB::new("erg_rollback").await;
     test_db.init_core().await;
 
     // Genesis
-    // Keeping it empty this time to simplify test assertions.
-    let genesis_block = Block::from_genesis_boxes(vec![]);
+    let genesis_data = StampedData {
+        height: 0,
+        timestamp: GENESIS_TIMESTAMP,
+        header_id: ZERO_HEADER.to_owned(),
+        parent_id: "".to_owned(),
+        data: DiffData {
+            diff_records: vec![],
+        },
+    };
 
-    // Block X
-    let ts_x = TS_10K;
-    let block_x = Block::child_of(&genesis_block)
-        .timestamp(ts_x)
-        .add_tx(
-            // Create A out of thin air (otherwise A ends up with a negative balance)
-            Transaction::dummy()
-                .add_output(BoxData::dummy().address_id(addr_a).value(105_000_000_000)),
-        )
-        .add_tx(
-            // A sends 5 to B, creating B
-            Transaction::dummy()
-                .add_input(BoxData::dummy().address_id(addr_a).value(105_000_000_000))
-                .add_output(BoxData::dummy().address_id(addr_a).value(100_000_000_000))
-                .add_output(BoxData::dummy().address_id(addr_b).value(5_000_000_000)),
-        );
+    // Block 1
+    let data_1 = genesis_data
+        .wrap_as_child(DiffData {
+            diff_records: vec![
+                // Create A out of thin air
+                DiffRecord::new(addr_a, 1, 0, 105_000_000_000),
+                // A sends 5 to B, creating B
+                DiffRecord::new(addr_a, 1, 1, -5_000_000_000),
+                DiffRecord::new(addr_b, 1, 1, 5_000_000_000),
+            ],
+        })
+        .timestamp(TS_10K);
 
-    // Block Y
-    let ts_y = ts_x + 120_000;
-    let block_y = Block::child_of(&block_x)
-        .timestamp(ts_y)
-        .add_tx(
-            // B sends 5 to C, creating C and spending B
-            Transaction::dummy()
-                .add_input(BoxData::dummy().address_id(addr_b).value(5_000_000_000))
-                .add_output(BoxData::dummy().address_id(addr_c).value(5_000_000_000)),
-        )
-        .add_tx(
-            // C sends 1 to A, modifying A
-            Transaction::dummy()
-                .add_input(BoxData::dummy().address_id(addr_c).value(1_000_000_000))
-                .add_output(BoxData::dummy().address_id(addr_a).value(1_000_000_000)),
-        );
+    // Block 2
+    let data_2 = data_1
+        .wrap_as_child(DiffData {
+            diff_records: vec![
+                // B sends 5 to C, creating C and spending B
+                DiffRecord::new(addr_b, 2, 0, -5_000_000_000),
+                DiffRecord::new(addr_c, 2, 0, 5_000_000_000),
+                // C sends 1 to A, modifying A
+                DiffRecord::new(addr_c, 2, 1, -1_000_000_000),
+                DiffRecord::new(addr_a, 2, 1, 1_000_000_000),
+            ],
+        })
+        .timestamp(data_1.timestamp + 120_000);
 
     // Register core header for parent of rolled back blocks
-    test_db.insert_core_header(&(&block_x.header).into()).await;
+    test_db.insert_core_header(&data_1.get_header()).await;
 
     let mut workflow = ErgWorkFlow::new(&test_db.pgconf).await;
-    let height_y = block_y.header.height;
-    workflow
-        .include_block(
-            &CoreData {
-                block: genesis_block,
-            }
-            .into(),
-        )
-        .await;
-    workflow
-        .include_block(&CoreData { block: block_x }.into())
-        .await;
-    workflow
-        .include_block(&CoreData { block: block_y }.into())
-        .await;
+    workflow.include_block(&genesis_data).await;
+    workflow.include_block(&data_1).await;
+    workflow.include_block(&data_2).await;
 
     // Check db state before rollback
     let balances = get_balances(&test_db.client).await;
@@ -129,12 +117,12 @@ async fn test_rollback() {
     assert_eq!(balances[1], (addr_c, 4_000_000_000, TS_10K + 120_000));
 
     // Do the rollback
-    workflow.roll_back(height_y).await;
+    workflow.roll_back(data_2.height).await;
 
     // Check db state after rollback
     let balances = get_balances(&test_db.client).await;
     assert_eq!(balances.len(), 2);
-    assert_eq!(balances[0], (addr_a, 100_000_000_000, TS_10K - 1));
+    assert_eq!(balances[0], (addr_a, 100_000_000_000, TS_10K));
     assert_eq!(balances[1], (addr_b, 5_000_000_000, TS_10K));
 }
 

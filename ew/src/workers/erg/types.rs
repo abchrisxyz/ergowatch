@@ -6,7 +6,6 @@ use crate::core::types::NanoERG;
 use crate::core::types::Timestamp;
 
 pub struct Batch {
-    pub diff_records: Vec<DiffRecord>,
     pub balance_records: Vec<BalanceRecord>,
     /// Address id's who's balance became zero
     pub spent_addresses: Vec<AddressID>,
@@ -14,50 +13,6 @@ pub struct Batch {
     pub address_counts: AddressCounts,
     /// Supply composition (supply on different address types)
     pub supply_composition: CompositionRecord,
-}
-
-pub struct BalData {
-    pub diff_records: Vec<DiffRecord>,
-}
-
-impl From<Batch> for BalData {
-    fn from(batch: Batch) -> Self {
-        BalData {
-            diff_records: batch.diff_records,
-        }
-    }
-}
-
-// /// Data to be restored and/or modified after a roll back.
-// pub struct RollbackBatch {
-//     /// Height of the rolled back block.
-//     pub height: Height,
-//     /// Balances as they were prior to block inclusion.
-//     pub modified_balances: Vec<BalanceRecord>,
-//     /// Balances created by rolled back block - to be deleted.
-//     pub created_balances: Vec<BalanceRecord>,
-//     /// Balances spent by rolled back block - to be restored.
-//     pub spent_balances: Vec<BalanceRecord>,
-// }
-
-#[cfg_attr(feature = "test-utilities", derive(Debug))]
-pub struct DiffRecord {
-    pub address_id: AddressID,
-    pub height: Height,
-    pub tx_idx: i16,
-    pub nano: NanoERG,
-}
-
-#[cfg(test)]
-impl DiffRecord {
-    pub fn new(address_id: AddressID, height: Height, tx_idx: i16, nano: NanoERG) -> Self {
-        Self {
-            address_id,
-            height,
-            tx_idx,
-            nano,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
