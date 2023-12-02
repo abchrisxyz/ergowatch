@@ -33,7 +33,7 @@ impl Workflow for ErgWorkFlow {
     type D = BalData;
 
     async fn new(pgconf: &PostgresConfig) -> Self {
-        let store = Store::new(pgconf, &store::SCHEMA, &WORKER_ID).await;
+        let store = Store::new(pgconf, &store::SCHEMA).await;
         let cache = store::load_parser_cache(store.get_client()).await;
         let parser = Parser::new(cache);
         Self { parser, store }

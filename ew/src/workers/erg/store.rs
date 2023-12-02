@@ -11,8 +11,9 @@ use crate::core::types::NanoERG;
 use crate::core::types::Timestamp;
 use crate::framework::store::BatchStore;
 use crate::framework::store::PgStore;
-use crate::framework::store::Schema;
+use crate::framework::store::Revision;
 use crate::framework::store::SourcableStore;
+use crate::framework::store::StoreDef;
 use crate::framework::StampedData;
 
 use super::parsing::Bal;
@@ -20,6 +21,7 @@ use super::parsing::ParserCache;
 use super::types::BalData;
 use super::types::BalanceRecord;
 use super::Batch;
+use super::WORKER_ID;
 
 mod balances;
 mod composition;
@@ -27,9 +29,11 @@ mod counts;
 mod diffs;
 mod timestamps;
 
-pub(super) const SCHEMA: Schema = Schema {
-    name: "erg",
+pub(super) const SCHEMA: StoreDef = StoreDef {
+    schema_name: "erg",
+    worker_id: WORKER_ID,
     sql: include_str!("store/schema.sql"),
+    revision: &Revision { major: 1, minor: 0 },
 };
 
 pub(super) type Store = PgStore<SpecStore>;

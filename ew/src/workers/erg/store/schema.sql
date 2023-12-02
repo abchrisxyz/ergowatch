@@ -2,29 +2,6 @@ create schema erg;
 comment on schema erg is 'ERG balances, age and supply metrics';
 
 -------------------------------------------------------------------------------
--- Revision
--------------------------------------------------------------------------------
-create table erg._rev (
-	singleton int primary key default 1,
-	rev_major integer not null,
-	rev_minor integer not null,
-	check(singleton = 1)
-);
-insert into erg._rev (rev_major, rev_minor) values (1, 0);
-comment on table erg._rev is 'Current schema revision';
-
--------------------------------------------------------------------------------
--- Last processed header for each worker managing this schema
--------------------------------------------------------------------------------
-create table erg._header (
-    worker_id text primary key,
-    height integer not null,
-	timestamp bigint not null,
-    header_id text not null,
-    parent_id text not null
-);
-
--------------------------------------------------------------------------------
 -- Timestamps (for diffs)
 -------------------------------------------------------------------------------
 create table erg.timestamps (

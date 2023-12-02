@@ -5,22 +5,26 @@ use tokio_postgres::Transaction;
 use crate::core::types::Header;
 use crate::framework::store::BatchStore;
 use crate::framework::store::PgStore;
-use crate::framework::store::Schema;
+use crate::framework::store::Revision;
+use crate::framework::store::StoreDef;
 use crate::framework::StampedData;
 
 use super::parsing::ParserCache;
 use super::types::Action;
 use super::types::Batch;
 use super::types::TimestampRecord;
+use super::WORKER_ID;
 
 mod daily;
 mod hourly;
 mod timestamps;
 mod weekly;
 
-pub(super) const SCHEMA: Schema = Schema {
-    name: "timestamps",
+pub(super) const SCHEMA: StoreDef = StoreDef {
+    schema_name: WORKER_ID,
+    worker_id: WORKER_ID,
     sql: include_str!("store/schema.sql"),
+    revision: &Revision { major: 1, minor: 0 },
 };
 
 pub(super) struct SpecStore {}

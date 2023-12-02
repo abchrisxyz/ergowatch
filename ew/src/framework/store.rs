@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use std::fmt;
 use tokio_postgres::Client;
 use tokio_postgres::NoTls;
 use tokio_postgres::Transaction;
@@ -43,8 +44,8 @@ impl<B: BatchStore> PgStore<B> {
         &self.client
     }
 
-    pub async fn new(pgconf: &PostgresConfig, schema: &Schema, worker_id: &'static str) -> Self {
-        tracing::debug!("initializing store {}:{worker_id}", schema.name);
+    pub async fn new(pgconf: &PostgresConfig, store: &StoreDef) -> Self {
+        tracing::debug!("initializing store {store}");
 
         // init client
         let (mut client, connection) = tokio_postgres::connect(&pgconf.connection_uri, NoTls)
@@ -57,23 +58,17 @@ impl<B: BatchStore> PgStore<B> {
             }
         });
 
-        // Create schema if needed
-        schema.init(&mut client).await;
+        // Prepare store schema if needed
+        store.init(&mut client).await;
 
-        // Init header
-        let header = match headers::get(&client, schema.name, worker_id).await {
-            Some(header) => header,
-            None => {
-                headers::insert_initial(&client, schema.name, worker_id).await;
-                Header::initial()
-            }
-        };
-        tracing::debug!("store {}:{worker_id} is at {header:?}", schema.name);
+        // Retrieve header
+        let header = headers::get(&client, store.schema_name, store.worker_id).await;
+        tracing::debug!("store {store} is at {header:?}",);
 
         Self {
             client,
-            schema: schema.name,
-            worker_id,
+            schema: store.schema_name,
+            worker_id: store.worker_id,
             header,
             batch_store: B::new().await,
         }
@@ -149,78 +144,192 @@ impl<B: BatchStore + SourcableStore> PgStore<B> {
     }
 }
 
-mod headers {
-    use super::Header;
+pub struct StoreDef {
+    pub schema_name: &'static str,
+    pub worker_id: &'static str,
+    pub sql: &'static str,
+    pub revision: &'static Revision,
+}
+
+pub struct Revision {
+    pub major: i32,
+    pub minor: i32,
+}
+
+impl StoreDef {
+    /// Initialize (worker's part of) schema if not declared yet.
+    ///
+    /// Executes schema's sql and add initial header
+    pub async fn init(&self, client: &mut Client) {
+        tracing::trace!("initializing schema {self}");
+
+        // First off, check if ew schema is present.
+        if !schema_exists(client, "ew").await {
+            tracing::debug!("loading ew schema");
+            let tx = client.transaction().await.unwrap();
+            tx.batch_execute(include_str!("ew.sql")).await.unwrap();
+            tx.commit().await.unwrap();
+        }
+
+        if !self.is_initialized(client).await {
+            tracing::debug!("loading schema for {self}");
+            let mut pgtx = client.transaction().await.unwrap();
+            pgtx.batch_execute(self.sql).await.unwrap();
+            revisions::insert(&mut pgtx, &self).await;
+            headers::insert_initial(&mut pgtx, &self).await;
+            pgtx.commit().await.unwrap();
+        }
+        // Check revision
+        let rev = revisions::get(&client, &self).await;
+        if rev.major > 1 || rev.minor > 0 {
+            todo!("apply miggrations")
+        }
+    }
+
+    /// Checks if the store's relations have been initialized already.
+    ///
+    /// Checks for presence of schema/worker_id pair in the ew.revisions table.
+    async fn is_initialized(&self, client: &Client) -> bool {
+        tracing::trace!("checking store initialization for {self}",);
+        let qry = "
+            select exists(
+                select *
+                from ew.revisions
+                where schema_name = $1 and worker_id = $2
+        );";
+        client
+            .query_one(qry, &[&self.schema_name, &self.worker_id])
+            .await
+            .unwrap()
+            .get(0)
+    }
+}
+
+impl fmt::Display for StoreDef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.schema_name, self.worker_id)
+    }
+}
+
+/// Access ew.ervisions table
+mod revisions {
     use tokio_postgres::Client;
     use tokio_postgres::Transaction;
 
-    pub async fn get(client: &Client, schema: &str, worker_id: &str) -> Option<Header> {
+    use super::Revision;
+    use super::StoreDef;
+
+    pub(super) async fn get(client: &Client, store: &StoreDef) -> Revision {
+        let qry = "
+            select major, minor
+            from ew.revisions
+            where schema_name = $1 and worker_id = $2;
+        ";
+        // Revision is set during schema declaration, so guaranteed to be present.
+        let row = client
+            .query_one(qry, &[&store.schema_name, &store.worker_id])
+            .await
+            .unwrap();
+        Revision {
+            major: row.get(0),
+            minor: row.get(1),
+        }
+    }
+
+    pub(super) async fn insert(pgtx: &mut Transaction<'_>, schema: &StoreDef) {
+        tracing::trace!("insert for {schema}");
+        let sql = "
+            insert into ew.revisions (schema_name, worker_id, major, minor)
+            values ($1, $2, $3, $4);";
+        pgtx.execute(
+            sql,
+            &[
+                &schema.schema_name,
+                &schema.worker_id,
+                &schema.revision.major,
+                &schema.revision.minor,
+            ],
+        )
+        .await
+        .unwrap();
+    }
+}
+
+/// Access ew.headers table
+mod headers {
+    use super::Header;
+    use super::StoreDef;
+    use tokio_postgres::Client;
+    use tokio_postgres::Transaction;
+
+    /// Get header for given `schema` and `worker_id`.
+    pub(super) async fn get(client: &Client, schema: &str, worker_id: &str) -> Header {
         tracing::trace!("get {schema} {worker_id}");
-        let qry = format!(
-            "
+        let qry = "
             select height
                 , timestamp
                 , header_id
                 , parent_id
-            from {schema}._header
-            where worker_id = $1;",
-        );
-        client
-            .query_opt(&qry, &[&worker_id])
-            .await
-            .unwrap()
-            .map(|row| Header {
-                height: row.get(0),
-                timestamp: row.get(1),
-                header_id: row.get(2),
-                parent_id: row.get(3),
-            })
+            from ew.headers
+            where schema_name = $1 and worker_id = $2;";
+        let row = client.query_one(qry, &[&schema, &worker_id]).await.unwrap();
+        Header {
+            height: row.get(0),
+            timestamp: row.get(1),
+            header_id: row.get(2),
+            parent_id: row.get(3),
+        }
     }
 
     /// Insert initial header.
-    pub async fn insert_initial(client: &Client, schema: &str, worker_id: &str) {
-        tracing::trace!("insert initial {schema} {worker_id}");
+    pub(super) async fn insert_initial(pgtx: &Transaction<'_>, store: &StoreDef) {
+        tracing::trace!("insert initial for {store}");
         let h = Header::initial();
-        let sql = format!(
-            "
-            insert into {schema}._header (worker_id, height, timestamp, header_id, parent_id)
-            values ($1, $2, $3, $4, $5);"
-        );
-        client
-            .execute(
-                &sql,
-                &[
-                    &worker_id,
-                    &h.height,
-                    &h.timestamp,
-                    &h.header_id,
-                    &h.parent_id,
-                ],
-            )
-            .await
-            .unwrap();
+        let sql = "
+            insert into ew.headers (schema_name, worker_id, height, timestamp, header_id, parent_id)
+            values ($1, $2, $3, $4, $5, $6)
+            -- Workers that don't start at genesis will have set their header already
+            on conflict do nothing
+            ;";
+        pgtx.execute(
+            sql,
+            &[
+                &store.schema_name,
+                &store.worker_id,
+                &h.height,
+                &h.timestamp,
+                &h.header_id,
+                &h.parent_id,
+            ],
+        )
+        .await
+        .unwrap();
     }
 
-    /// Update `schema` header for given `worker_id`.
-    pub async fn update(pgtx: &Transaction<'_>, schema: &str, worker_id: &str, header: &Header) {
+    /// Update header for given `schema` and `worker_id`.
+    pub(super) async fn update(
+        pgtx: &Transaction<'_>,
+        schema: &str,
+        worker_id: &str,
+        header: &Header,
+    ) {
         tracing::trace!("update {schema} {worker_id} {header:?}");
-        let sql = format!(
-            "
-            update {schema}._header
+        let sql = "
+            update ew.headers
             set height = $1
                 , timestamp = $2
                 , header_id = $3
                 , parent_id = $4
-            where worker_id = $5;",
-        );
+            where schema_name = $5 and worker_id = $6;";
         let n_modified = pgtx
             .execute(
-                &sql,
+                sql,
                 &[
                     &header.height,
                     &header.timestamp,
                     &header.header_id,
                     &header.parent_id,
+                    &schema,
                     &worker_id,
                 ],
             )
@@ -271,59 +380,14 @@ mod core_headers {
     }
 }
 
-pub struct Schema {
-    pub name: &'static str,
-    pub sql: &'static str,
-}
-
-struct Revision {
-    pub major: i32,
-    pub minor: i32,
-}
-
-impl Schema {
-    pub fn new(name: &'static str, sql: &'static str) -> Self {
-        Self { name, sql }
-    }
-
-    pub async fn init(&self, client: &mut Client) {
-        tracing::trace!("initializing schema {}", &self.name);
-        if !self.schema_exists(client).await {
-            self.load_schema(client).await;
-        }
-        let rev = self.schema_revision(client).await;
-        if rev.major > 1 || rev.minor > 0 {
-            todo!("apply miggrations")
-        }
-    }
-
-    async fn schema_revision(&self, client: &Client) -> Revision {
-        tracing::trace!("reading current revision");
-        let qry = format!("select rev_major, rev_minor from {}._rev;", self.name);
-        match client.query_one(&qry, &[]).await {
-            Ok(row) => Revision {
-                major: row.get(0),
-                minor: row.get(1),
-            },
-            Err(err) => panic!("{:?}", err),
-        }
-    }
-
-    async fn schema_exists(&self, client: &Client) -> bool {
-        tracing::trace!("checking for existing {} schema", &self.name);
-        let qry = "
-        select exists(
-            select schema_name
-            from information_schema.schemata
-            where schema_name = $1
-        );";
-        client.query_one(qry, &[&self.name]).await.unwrap().get(0)
-    }
-
-    async fn load_schema(&self, client: &mut Client) {
-        tracing::debug!("loading schema {}", &self.name);
-        let tx = client.transaction().await.unwrap();
-        tx.batch_execute(self.sql).await.unwrap();
-        tx.commit().await.unwrap();
-    }
+/// Returns True if a schema with given `name` exists.
+async fn schema_exists(client: &Client, name: &str) -> bool {
+    tracing::trace!("checking for existing {} schema", &name);
+    let qry = "
+    select exists(
+        select schema_name
+        from information_schema.schemata
+        where schema_name = $1
+    );";
+    client.query_one(qry, &[&name]).await.unwrap().get(0)
 }

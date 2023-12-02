@@ -5,7 +5,8 @@ use tokio_postgres::Transaction;
 use crate::core::types::Header;
 use crate::framework::store::BatchStore;
 use crate::framework::store::PgStore;
-use crate::framework::store::Schema;
+use crate::framework::store::Revision;
+use crate::framework::store::StoreDef;
 use crate::framework::StampedData;
 
 use super::parsing::ParserCache;
@@ -18,9 +19,11 @@ mod ohlcs;
 mod oracle_postings;
 mod services;
 
-pub(super) const SCHEMA: Schema = Schema {
-    name: super::WORKER_ID,
+pub(super) const SCHEMA: StoreDef = StoreDef {
+    schema_name: super::WORKER_ID,
+    worker_id: super::WORKER_ID,
     sql: include_str!("store/schema.sql"),
+    revision: &Revision { major: 1, minor: 0 },
 };
 
 pub(super) struct SpecStore {}

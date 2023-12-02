@@ -1,22 +1,5 @@
 create schema sigmausd;
 
-create table sigmausd._rev (
-	singleton int primary key default 1,
-	rev_major integer not null,
-	rev_minor integer not null,
-	check(singleton = 1)
-);
-insert into sigmausd._rev (rev_major, rev_minor) values (1, 0);
-
--- Last processed header for each worker managing this schema
-create table sigmausd._header (
-    worker_id text primary key,
-    height integer not null,
-    timestamp bigint not null,
-    header_id text not null,
-    parent_id text not null
-);
-
 /*
     Tables `bank_transactions` and `oracle_postings` store contract and oracle changes.
     Both have records retrievable by height to enable rollbacks.
@@ -169,8 +152,9 @@ create table sigmausd._log_rc_ohlc_monthly (
 -----------------------------------------------------------------------------------------
 -- Initialize state
 -----------------------------------------------------------------------------------------
-insert into sigmausd._header (worker_id, height, timestamp, header_id, parent_id)
+insert into ew.headers (schema_name, worker_id, height, timestamp, header_id, parent_id)
 values (
+    'sigmausd', -- must match the schema name declared in sigmausd worker
     'sigmausd', -- must match the WORKER_ID const declared in sigmausd worker
     453064,
     1616706545437,
