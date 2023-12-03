@@ -282,9 +282,9 @@ fn extract_bank_tx(
 }
 
 fn extract_service_from_minting_tx_diffs(
-    erg_diffs: &HashMap<i64, i64>,
-    sc_diffs: &HashMap<i64, i64>,
-    rc_diffs: &HashMap<i64, i64>,
+    erg_diffs: &HashMap<AddressID, NanoERG>,
+    sc_diffs: &HashMap<AddressID, NanoERG>,
+    rc_diffs: &HashMap<AddressID, NanoERG>,
     tx_id: &Digest32,
 ) -> (NanoERG, Option<AddressID>) {
     // Assuming any address receiving erg only could be a service provider.
@@ -322,7 +322,7 @@ fn extract_service_from_minting_tx_diffs(
 }
 
 fn extract_service_from_redeeming_tx_diffs(
-    erg_diffs: &HashMap<i64, i64>,
+    erg_diffs: &HashMap<AddressID, i64>,
     tx: &Transaction,
 ) -> (NanoERG, Option<AddressID>) {
     // List unique output address id's
@@ -520,9 +520,11 @@ mod tests {
 
     #[test]
     fn test_extract_event_nothing() {
-        let input = BoxData::dummy().address_id(12).value(1000);
-        let output0 = BoxData::dummy().address_id(13).value(900);
-        let output1 = BoxData::dummy().address_id(5).value(100);
+        let input = BoxData::dummy()
+            .address_id(AddressID::dummy(12))
+            .value(1000);
+        let output0 = BoxData::dummy().address_id(AddressID::dummy(13)).value(900);
+        let output1 = BoxData::dummy().address_id(AddressID::dummy(5)).value(100);
 
         let tx = Transaction::dummy()
             .add_input(input)
@@ -539,9 +541,11 @@ mod tests {
 
     #[test]
     fn test_extract_event_contract_but_not_bank() {
-        let input = BoxData::dummy().address_id(12).value(1000);
+        let input = BoxData::dummy()
+            .address_id(AddressID::dummy(12))
+            .value(1000);
         let output0 = BoxData::dummy().address_id(CONTRACT_ADDRESS_ID).value(900);
-        let output1 = BoxData::dummy().address_id(5).value(100);
+        let output1 = BoxData::dummy().address_id(AddressID::dummy(5)).value(100);
 
         let tx = Transaction::dummy()
             .add_input(input)
@@ -559,7 +563,7 @@ mod tests {
     #[test]
     fn test_extract_event_sc_mint_direct() {
         // User mints 200 SigUSD for 100 nanoERG
-        let user: AddressID = 12345;
+        let user: AddressID = AddressID::dummy(12345);
         let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1000)
@@ -607,8 +611,8 @@ mod tests {
     #[test]
     fn test_extract_event_rc_mint_with_service() {
         // User mints 200 SigRSV for 100 nanoERG
-        let user: AddressID = 12345;
-        let service: AddressID = 6789;
+        let user: AddressID = AddressID::dummy(12345);
+        let service: AddressID = AddressID::dummy(6789);
         let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1000)
@@ -660,9 +664,9 @@ mod tests {
     fn test_extract_event_rc_mint_to_different_address_with_service() {
         // User mints 200 SigRSV for 100 nanoERG.
         // User input address can be different from user output address.
-        let user_send: AddressID = 123451;
-        let user_recv: AddressID = 123452;
-        let service: AddressID = 6789;
+        let user_send: AddressID = AddressID::dummy(123451);
+        let user_recv: AddressID = AddressID::dummy(123452);
+        let service: AddressID = AddressID::dummy(6789);
         let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1000)
@@ -713,7 +717,7 @@ mod tests {
     #[test]
     fn test_extract_event_sc_redeem_with_multiple_service_candidates() {
         // User redeems 200 SigUSD for 100 nanoERG
-        let user: AddressID = 12345;
+        let user: AddressID = AddressID::dummy(12345);
         let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1100)
@@ -729,8 +733,12 @@ mod tests {
             .value(5005)
             .add_asset(SC_ASSET_ID, 200);
         let user_output = BoxData::dummy().address_id(user).value(5100);
-        let other1_output = BoxData::dummy().address_id(30000).value(2);
-        let other2_output = BoxData::dummy().address_id(40000).value(3);
+        let other1_output = BoxData::dummy()
+            .address_id(AddressID::dummy(30000))
+            .value(2);
+        let other2_output = BoxData::dummy()
+            .address_id(AddressID::dummy(40000))
+            .value(3);
 
         let tx = Transaction::dummy()
             .add_input(bank_input)
@@ -764,7 +772,7 @@ mod tests {
     #[test]
     fn test_extract_event_rc_redeem_to_same_address_direct() {
         // User redeems 200 SigRSV for 100 nanoERG
-        let user: AddressID = 12345;
+        let user: AddressID = AddressID::dummy(12345);
         let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1100)
@@ -811,8 +819,8 @@ mod tests {
     #[test]
     fn test_extract_event_rc_redeem_to_different_address_direct() {
         // User redeems 200 SigRSV for 100 nanoERG
-        let user_send: AddressID = 123451;
-        let user_recv: AddressID = 123452;
+        let user_send: AddressID = AddressID::dummy(123451);
+        let user_recv: AddressID = AddressID::dummy(123452);
         let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1100)
@@ -859,9 +867,9 @@ mod tests {
     #[test]
     fn test_extract_event_rc_redeem_to_different_address_with_service() {
         // User redeems 200 SigRSV for 100 nanoERG
-        let user_send: AddressID = 123451;
-        let user_recv: AddressID = 123452;
-        let service: AddressID = 6789;
+        let user_send: AddressID = AddressID::dummy(123451);
+        let user_recv: AddressID = AddressID::dummy(123452);
+        let service: AddressID = AddressID::dummy(6789);
         let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1100)
@@ -912,7 +920,7 @@ mod tests {
     #[test]
     fn test_extract_event_rc_redeem_less_than_fee_to_same_address_direct() {
         // User redeems 1 SigRSV for 1 nanoERG with 9 nanoERG tx fee
-        let user: AddressID = 12345;
+        let user: AddressID = AddressID::dummy(12345);
         let bank_input = BoxData::dummy()
             .address_id(CONTRACT_ADDRESS_ID)
             .value(1001)
@@ -1132,7 +1140,7 @@ mod tests {
     fn test_parser_cache_with_event() {
         let cache = ParserCache::dummy();
         let mut parser = Parser::new(cache);
-        let user: AddressID = 12345;
+        let user: AddressID = AddressID::dummy(12345);
         let data = CoreData {
             block: Block::dummy()
                 .height(533_000)
@@ -1224,8 +1232,8 @@ mod tests {
 
     #[test]
     fn test_extract_service_diffs() {
-        let service_a: AddressID = 123451;
-        let service_b: AddressID = 123452;
+        let service_a: AddressID = AddressID::dummy(123451);
+        let service_b: AddressID = AddressID::dummy(123452);
         let events = vec![
             Event::BankTx(BankTransaction {
                 index: 1,

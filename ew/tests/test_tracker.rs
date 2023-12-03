@@ -2,6 +2,7 @@
 mod common;
 
 use ew::config::PostgresConfig;
+use ew::core::types::AddressID;
 use ew::core::types::Block;
 use ew::core::types::CoreData;
 use ew::core::types::Header;
@@ -344,9 +345,9 @@ async fn test_fork_handling_same_height() {
 
     // Check address id of third output (the extra one)
     // So far, we had 3 genesis boxes (including emission contract)
-    // and 3 miners (in blocks 1, 2 and 3), so next address id must be 7
-    assert_eq!(block3b.transactions[0].outputs[2].address_id, 7);
-    assert_eq!(block3.transactions[0].outputs[2].address_id, 7);
+    // and 3 miners (in blocks 1, 2 and 3), so next address id must be 7 (71 with encoded type)
+    assert_eq!(block3b.transactions[0].outputs[2].address_id, AddressID(71));
+    assert_eq!(block3.transactions[0].outputs[2].address_id, AddressID(71));
 
     // Check asset id in third output (the extra one)
     // It is the first token ever encountered, so asset id must be 1

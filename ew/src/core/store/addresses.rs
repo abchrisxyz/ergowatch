@@ -35,7 +35,7 @@ pub(super) async fn get_max_id(client: &impl GenericClient) -> AddressID {
     let qry = "select max(id) from core.addresses;";
     match client.query_one(qry, &[]).await.unwrap().get(0) {
         Some(id) => id,
-        None => 0,
+        None => AddressID::zero(),
     }
 }
 

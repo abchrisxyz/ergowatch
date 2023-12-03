@@ -64,9 +64,9 @@ mod tests {
     use rust_decimal::prelude::ToPrimitive;
     use rust_decimal::Decimal;
 
-    const ADDR_A: AddressID = 123;
-    const ADDR_B: AddressID = 456;
-    const ADDR_C: AddressID = 789;
+    const ADDR_A: AddressID = AddressID(123);
+    const ADDR_B: AddressID = AddressID(456);
+    const ADDR_C: AddressID = AddressID(789);
     const TS_10K: Timestamp = 1563159993440; // timestamp of block 10000
     const TS_20K: Timestamp = 1564413706977; // timestamp of block 20000
     const TS_30K: Timestamp = 1565532307779; // timestamp of block 30000

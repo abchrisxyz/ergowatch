@@ -33,7 +33,7 @@ fn parse_tx(tx: &Transaction, height: Height, tx_idx: i16) -> Vec<TypedDiff> {
             }
             Entry::Vacant(e) => {
                 e.insert(-input.value);
-                types.insert(input.address_id, input.address_type.clone());
+                types.insert(input.address_id, input.address_id.address_type());
             }
         }
     }
@@ -44,7 +44,7 @@ fn parse_tx(tx: &Transaction, height: Height, tx_idx: i16) -> Vec<TypedDiff> {
             }
             Entry::Vacant(e) => {
                 e.insert(output.value);
-                types.insert(output.address_id, output.address_type.clone());
+                types.insert(output.address_id, output.address_id.address_type());
             }
         }
     }
@@ -73,8 +73,8 @@ mod tests {
 
     #[test]
     fn test_simple_transfer() {
-        let addr_a = 123;
-        let addr_b = 456;
+        let addr_a = AddressID::dummy(1231);
+        let addr_b = AddressID::dummy(4561);
         let block = Block::dummy().height(123456).add_tx(
             Transaction::dummy()
                 .add_input(BoxData::dummy().address_id(addr_a).value(1000))
@@ -99,9 +99,9 @@ mod tests {
         // A sends 400 to B
         // C does nothing (might have been a token transfer)
         // B consolidates
-        let addr_a = 123;
-        let addr_b = 456;
-        let addr_c = 789;
+        let addr_a = AddressID::dummy(1231);
+        let addr_b = AddressID::dummy(4561);
+        let addr_c = AddressID::dummy(7891);
         let block = Block::dummy()
             .height(123456)
             .add_tx(

@@ -2,6 +2,7 @@ use postgres_types::FromSql;
 use postgres_types::ToSql;
 use serde::Serialize;
 use std::collections::HashSet;
+use tokio_postgres::types::private::BytesMut;
 
 use crate::constants::GENESIS_TIMESTAMP;
 use crate::constants::ZERO_HEADER;
@@ -10,7 +11,6 @@ use super::ergo;
 use super::node;
 
 pub type Address = String;
-pub type AddressID = i64;
 pub type AssetID = i64;
 pub type BoxID = Digest32;
 pub type Digest32 = String;
@@ -233,7 +233,7 @@ pub enum AddressType {
 /// Return the AddressType for a given `address`.
 impl AddressType {
     /// Derive the AddressType for a given `address`.
-    pub fn derive(address: &Address) -> Self {
+    pub fn derive(address: &str) -> Self {
         if address.starts_with('9') && address.len() == 51 {
             return Self::P2PK;
         } else if address.starts_with("88dhgzEuTX") {
@@ -250,20 +250,102 @@ impl AddressType {
     }
 }
 
-#[derive(Debug, Clone)]
-/// Convenience type bringing id and type together.
-pub struct AddressInfo {
-    pub id: AddressID,
-    pub typ: AddressType,
+/// Unique ID representing a single address.
+///
+/// First (i.e. least significant) digit represents address type:
+///
+/// * ID's ending in 1: P2PK
+/// * ID's ending in 2: mining contracts
+/// * ID's ending in 3: other
+///
+/// Other digits represent a continuous sequence across all ID's.
+/// This means there cannot be ID's differing with the last digit
+/// only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AddressID(pub i64);
+
+impl AddressID {
+    const P2PK: i64 = 1;
+    const MINER: i64 = 2;
+    const OTHER: i64 = 3;
+
+    /// New AddressID from sequence index and address.
+    ///
+    /// Derives the type from the provided `address`.
+    ///
+    /// * `n`: index of address in address sequence
+    /// * `address`: actual address
+    pub fn new(n: i64, address: &str) -> Self {
+        Self(match AddressType::derive(address) {
+            AddressType::P2PK => n * 10 + Self::P2PK,
+            AddressType::Miner => n * 10 + Self::MINER,
+            AddressType::Other => n * 10 + Self::OTHER,
+        })
+    }
+
+    pub fn address_type(&self) -> AddressType {
+        match self.0 % 10 {
+            1 => AddressType::P2PK,
+            2 => AddressType::Miner,
+            3 => AddressType::Other,
+            _ => panic!("Unknown address type encoded in address id"),
+        }
+    }
+
+    /// Returns the address sequence position.
+    pub fn sequence_position(&self) -> i64 {
+        self.0 / 10
+    }
+
+    pub fn zero() -> Self {
+        Self(0)
+    }
 }
 
-#[derive(Debug, Clone)]
+impl<'a> FromSql<'a> for AddressID {
+    fn from_sql(
+        ty: &postgres_types::Type,
+        raw: &'a [u8],
+    ) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+        match i64::from_sql(ty, raw) {
+            Ok(value) => Ok(AddressID(value)),
+            Err(err) => Err(err),
+        }
+    }
+
+    fn accepts(ty: &postgres_types::Type) -> bool {
+        <i64 as FromSql>::accepts(ty)
+    }
+}
+
+impl ToSql for AddressID {
+    fn to_sql(
+        &self,
+        ty: &postgres_types::Type,
+        out: &mut BytesMut,
+    ) -> Result<postgres_types::IsNull, Box<dyn std::error::Error + Sync + Send>>
+    where
+        Self: Sized,
+    {
+        ToSql::to_sql(&self.0, ty, out)
+    }
+
+    fn accepts(ty: &postgres_types::Type) -> bool
+    where
+        Self: Sized,
+    {
+        <i64 as ToSql>::accepts(ty)
+    }
+
+    postgres_types::to_sql_checked!();
+}
+
 /// In/Output agnostic box data.
+#[derive(Debug, Clone)]
 pub struct BoxData {
     pub box_id: BoxID,
     pub creation_height: Height,
     pub address_id: AddressID,
-    pub address_type: AddressType,
     pub value: i64,
     pub additional_registers: Registers,
     pub assets: Vec<Asset>,
@@ -472,8 +554,7 @@ pub mod testutils {
             Self {
                 box_id: Alphanumeric.sample_string(&mut rand::thread_rng(), 64),
                 creation_height: 0,
-                address_id: 0,
-                address_type: AddressType::P2PK,
+                address_id: AddressID(1),
                 value: 1000000000,
                 size: 100,
                 assets: vec![],
@@ -531,6 +612,12 @@ pub mod testutils {
             Self("{}".into())
         }
     }
+
+    impl AddressID {
+        pub fn dummy(id: i64) -> Self {
+            Self(id)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -540,13 +627,13 @@ mod tests {
     #[test]
     fn test_box_data_helpers() {
         let output = BoxData::dummy()
-            .address_id(123)
+            .address_id(AddressID::dummy(123))
             .creation_height(601)
             .timestamp(1683634123456)
             .value(12345)
             .add_asset(5, 420)
             .set_registers(r#"{"R4": "05baafd2a302"}"#);
-        assert_eq!(output.address_id, 123);
+        assert_eq!(output.address_id, AddressID::dummy(123));
         assert_eq!(output.creation_height, 601);
         assert_eq!(output.output_timestamp, 1683634123456);
         assert_eq!(output.value, 12345);
@@ -563,21 +650,33 @@ mod tests {
         let tx = Transaction::dummy();
         // inputs
         assert!(tx.inputs.is_empty());
-        let tx = tx.add_input(BoxData::dummy().address_id(123));
+        let tx = tx.add_input(BoxData::dummy().address_id(AddressID::dummy(123)));
         assert_eq!(tx.inputs.len(), 1);
-        assert_eq!(tx.inputs[0].address_id, 123);
+        assert_eq!(tx.inputs[0].address_id, AddressID::dummy(123));
 
         // data-inputs
         assert!(tx.data_inputs.is_empty());
-        let tx = tx.add_data_input(BoxData::dummy().address_id(234));
+        let tx = tx.add_data_input(BoxData::dummy().address_id(AddressID::dummy(234)));
         assert_eq!(tx.data_inputs.len(), 1);
-        assert_eq!(tx.data_inputs[0].address_id, 234);
+        assert_eq!(tx.data_inputs[0].address_id, AddressID::dummy(234));
 
         // outputs
         assert!(tx.outputs.is_empty());
-        let tx = tx.add_output(BoxData::dummy().address_id(456));
+        let tx = tx.add_output(BoxData::dummy().address_id(AddressID::dummy(456)));
         assert_eq!(tx.outputs.len(), 1);
-        assert_eq!(tx.outputs[0].address_id, 456);
+        assert_eq!(tx.outputs[0].address_id, AddressID::dummy(456));
+    }
+
+    #[test]
+    fn test_address_id_type() {
+        assert_eq!(AddressID(101).address_type(), AddressType::P2PK);
+        assert_eq!(AddressID(102).address_type(), AddressType::Miner);
+        assert_eq!(AddressID(103).address_type(), AddressType::Other);
+    }
+
+    #[test]
+    fn test_address_id_sequence_position() {
+        assert_eq!(AddressID(991).sequence_position(), 99);
     }
 
     #[test]
@@ -585,22 +684,22 @@ mod tests {
         let block = Block::dummy()
             .add_tx(
                 Transaction::dummy()
-                    .add_input(BoxData::dummy().address_id(123))
+                    .add_input(BoxData::dummy().address_id(AddressID::dummy(123)))
                     // Data inputs should be ignored
-                    .add_data_input(BoxData::dummy().address_id(100))
+                    .add_data_input(BoxData::dummy().address_id(AddressID::dummy(100)))
                     // but only if they're not present as input/output
-                    .add_data_input(BoxData::dummy().address_id(123))
-                    .add_output(BoxData::dummy().address_id(456)),
+                    .add_data_input(BoxData::dummy().address_id(AddressID::dummy(123)))
+                    .add_output(BoxData::dummy().address_id(AddressID::dummy(456))),
             )
             .add_tx(
                 Transaction::dummy()
-                    .add_input(BoxData::dummy().address_id(456))
-                    .add_output(BoxData::dummy().address_id(789)),
+                    .add_input(BoxData::dummy().address_id(AddressID::dummy(456)))
+                    .add_output(BoxData::dummy().address_id(AddressID::dummy(789))),
             );
         let address_ids = block.transacting_addresses();
         assert_eq!(address_ids.len(), 3);
-        assert!(address_ids.contains(&123));
-        assert!(address_ids.contains(&456));
-        assert!(address_ids.contains(&789));
+        assert!(address_ids.contains(&AddressID::dummy(123)));
+        assert!(address_ids.contains(&AddressID::dummy(456)));
+        assert!(address_ids.contains(&AddressID::dummy(789)));
     }
 }

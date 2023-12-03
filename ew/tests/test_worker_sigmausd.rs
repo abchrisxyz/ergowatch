@@ -75,7 +75,7 @@ async fn test_no_events() {
 async fn test_sc_minting() {
     let _guard = set_tracing_subscriber(false);
     let test_db = TestDB::new("sigmausd_sc_minting").await;
-    let user: AddressID = 12345;
+    let user = AddressID::dummy(12345);
     let block = Block::dummy()
         .height(CONTRACT_CREATION_HEIGHT + 1)
         .parent_id(CONTRACT_CREATION_HEADER_ID)
@@ -118,8 +118,8 @@ async fn test_rollback() {
     let _guard = set_tracing_subscriber(false);
     let test_db = TestDB::new("sigmausd_rollback").await;
     test_db.init_core().await;
-    let user: AddressID = 12345;
-    let service: AddressID = 6789;
+    let user = AddressID::dummy(12345);
+    let service = AddressID::dummy(6789);
 
     let block1 = Block::dummy()
         .height(CONTRACT_CREATION_HEIGHT + 1)

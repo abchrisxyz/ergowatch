@@ -11,8 +11,6 @@ use tokio_postgres::NoTls;
 use super::ergo;
 use super::node;
 use super::types::AddressID;
-use super::types::AddressInfo;
-use super::types::AddressType;
 use super::types::Asset;
 use super::types::AssetID;
 use super::types::Block;
@@ -39,15 +37,15 @@ pub(super) struct Store {
 /// Cached data to speed up ergo tree to address id conversion.
 struct AddressCache {
     /// Keep track of highest address id
-    pub last_id: i64,
+    pub address_count: i64,
     /// Maps ergo trees to an address id (global index)
-    pub lru: LruCache<String, AddressInfo>,
+    pub lru: LruCache<String, AddressID>,
 }
 
 impl AddressCache {
-    pub fn new(last_address_id: i64) -> Self {
+    pub fn new(last_address_id: AddressID) -> Self {
         Self {
-            last_id: last_address_id,
+            address_count: last_address_id.sequence_position(),
             lru: LruCache::new(std::num::NonZeroUsize::new(5000).unwrap()),
         }
     }
@@ -55,7 +53,7 @@ impl AddressCache {
     /// Resets the cache by clearing all entries and setting `last_id` to `last_address_id`.
     pub fn reset(&mut self, last_address_id: AddressID) {
         self.lru.clear();
-        self.last_id = last_address_id;
+        self.address_count = last_address_id.sequence_position();
     }
 }
 
@@ -137,14 +135,13 @@ impl Store {
         let node_boxes: Vec<node::models::Output> = serde_json::from_str(&boxes).unwrap();
         let mut box_records: Vec<boxes::BoxRecord> = vec![];
         for op in &node_boxes {
-            let address_info =
+            let address_id =
                 map_address_id(&pgtx, &op.ergo_tree, height, &mut self.address_cache).await;
             box_records.push(boxes::BoxRecord {
                 box_id: &op.box_id,
                 height,
                 creation_height: op.creation_height,
-                address_id: address_info.id,
-                address_type: address_info.typ,
+                address_id,
                 value: op.value,
                 size: ergo::boxes::calc_box_size(&op).unwrap(),
                 assets: map_asset_ids(&pgtx, &op.assets, height, &mut self.asset_cache).await,
@@ -383,7 +380,7 @@ async fn index_outputs(
     let mut box_records: Vec<boxes::BoxRecord> = vec![];
     for tx in &node_block.block_transactions.transactions {
         for op in &tx.outputs {
-            let address_info = map_address_id(pgtx, &op.ergo_tree, height, address_cache).await;
+            let address_id = map_address_id(pgtx, &op.ergo_tree, height, address_cache).await;
             let assets = map_asset_ids(pgtx, &op.assets, height, asset_cache).await;
             let size = match ergo::boxes::calc_box_size(&op) {
                 Some(s) => s,
@@ -398,8 +395,7 @@ async fn index_outputs(
                 box_id: &op.box_id,
                 height,
                 creation_height: op.creation_height,
-                address_id: address_info.id,
-                address_type: address_info.typ,
+                address_id,
                 value: op.value,
                 size,
                 assets,
@@ -417,7 +413,6 @@ async fn index_outputs(
             box_id: r.box_id.clone(),
             creation_height: r.creation_height,
             address_id: r.address_id,
-            address_type: r.address_type,
             value: r.value,
             additional_registers: Registers::new(r.registers.clone()),
             assets: match r.assets {
@@ -444,40 +439,33 @@ async fn map_address_id(
     ergo_tree: &String,
     spot_height: Height,
     cache: &mut AddressCache,
-) -> AddressInfo {
+) -> AddressID {
     // Try the cache first.
     match cache.lru.get(ergo_tree) {
         // Sweet, found it in the cache
-        Some(info) => info.clone(),
+        Some(id) => *id,
         // Not in the cache
         None => {
             // See if we can find it in the store.
             let address = ergo::ergo_tree::base16_to_address(ergo_tree);
-            let address_type = AddressType::derive(&address);
-            let uncached_info = match addresses::get_id_opt(&pgtx, &address).await {
+            let uncached_id = match addresses::get_id_opt(&pgtx, &address).await {
                 // Address was in store already
-                Some(id) => AddressInfo {
-                    id: id,
-                    typ: address_type,
-                },
+                Some(id) => id,
+                // This is a new address - assign new id and index
                 None => {
-                    // This is a new address - assign new id and index
-                    cache.last_id += 1;
-                    let info = AddressInfo {
-                        id: cache.last_id,
-                        typ: address_type,
-                    };
+                    cache.address_count += 1;
+                    let address_id = AddressID::new(cache.address_count, &address);
                     addresses::index_new(
                         &pgtx,
-                        &addresses::AddressRecord::new(info.id, spot_height, address),
+                        &addresses::AddressRecord::new(address_id, spot_height, address),
                     )
                     .await;
-                    info
+                    address_id
                 }
             };
             // Cache and return
-            cache.lru.put(ergo_tree.clone(), uncached_info.clone());
-            uncached_info
+            cache.lru.put(ergo_tree.clone(), uncached_id);
+            uncached_id
         }
     }
 }

@@ -33,7 +33,6 @@ create table core.boxes (
 	height integer not null,
 	creation_height integer not null,
 	address_id bigint not null,
-	address_type address_type not null,
 	value bigint not null,
 	size integer not null,
 	assets asset[], -- null when no assets

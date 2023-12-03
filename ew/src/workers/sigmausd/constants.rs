@@ -2,13 +2,13 @@ use crate::core::types::AddressID;
 use crate::core::types::AssetID;
 use crate::core::types::Height;
 
-pub const NETWORK_FEE_ADDRESS_ID: AddressID = 240;
+pub const NETWORK_FEE_ADDRESS_ID: AddressID = AddressID(240_3);
 
 /// SigmaUSD V2 contract was created at height 453064.
 pub const CONTRACT_CREATION_HEIGHT: Height = 453064;
 
 /// SigmaUSD V2 contract address id
-pub const CONTRACT_ADDRESS_ID: AddressID = 154228;
+pub const CONTRACT_ADDRESS_ID: AddressID = AddressID(154228_3);
 
 /// NFT tracking the bank box.
 ///
@@ -40,4 +40,4 @@ pub const DEFAULT_RSV_PRICE: i64 = 1000000; // 0.001 ERG
 pub const ORACLE_NFT: AssetID = 932;
 
 /// Oracle epoch preparation address id
-pub const ORACLE_EPOCH_PREP_ADDRESS_ID: AddressID = 153537;
+pub const ORACLE_EPOCH_PREP_ADDRESS_ID: AddressID = AddressID(153537_3);

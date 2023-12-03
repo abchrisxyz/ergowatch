@@ -66,7 +66,7 @@ pub(super) async fn get_address_diffs(
     client: &impl GenericClient,
     address_id: AddressID,
 ) -> Vec<(NanoERG, Timestamp)> {
-    tracing::trace!("get_address_diffs {address_id}");
+    tracing::trace!("get_address_diffs {address_id:?}");
     let sql = "
         select d.nano, t.timestamp
         from erg.balance_diffs d

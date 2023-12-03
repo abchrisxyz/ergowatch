@@ -145,6 +145,8 @@ fn index(nano: NanoERG) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use crate::core::types::AddressID;
+
     use super::super::Balance;
     use super::*;
     use pretty_assertions::assert_eq;
@@ -226,7 +228,7 @@ mod tests {
             ge_1m: 0,
         };
         let balance_changes = vec![BalanceChange {
-            address_id: 123,
+            address_id: AddressID::dummy(123),
             address_type: AddressType::P2PK,
             old: Bal::Spent,
             new: Bal::Unspent(Balance::new(1000 * ERG, 0)),
@@ -267,7 +269,7 @@ mod tests {
             ge_1m: 0,
         };
         let balance_changes = vec![BalanceChange {
-            address_id: 123,
+            address_id: AddressID::dummy(123),
             address_type: AddressType::P2PK,
             old: Bal::Unspent(Balance::new(1000 * ERG, 0)),
             new: Bal::Spent,
@@ -308,7 +310,7 @@ mod tests {
             ge_1m: 0,
         };
         let balance_changes = vec![BalanceChange {
-            address_id: 123,
+            address_id: AddressID::dummy(123),
             address_type: AddressType::P2PK,
             old: Bal::Unspent(Balance::new(9 * ERG, 0)),
             new: Bal::Unspent(Balance::new(99_999 * ERG, 0)),
@@ -349,7 +351,7 @@ mod tests {
             ge_1m: 0,
         };
         let balance_changes = vec![BalanceChange {
-            address_id: 123,
+            address_id: AddressID::dummy(123),
             address_type: AddressType::P2PK,
             old: Bal::Unspent(Balance::new(99_999 * ERG, 0)),
             new: Bal::Unspent(Balance::new(999_999, 0)), // 0.00099999 ERG (less than 0.001 ERG)

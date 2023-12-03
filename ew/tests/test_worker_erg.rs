@@ -58,9 +58,9 @@ async fn test_empty_blocks() {
 #[tokio::test]
 async fn test_rollback() {
     let _guard = set_tracing_subscriber(false);
-    let addr_a: AddressID = 1001;
-    let addr_b: AddressID = 1002;
-    let addr_c: AddressID = 1003;
+    let addr_a = AddressID::dummy(1001);
+    let addr_b = AddressID::dummy(1002);
+    let addr_c = AddressID::dummy(1003);
     let test_db = TestDB::new("erg_rollback").await;
     test_db.init_core().await;
 
@@ -138,7 +138,7 @@ async fn test_rollback() {
     assert_eq!(balances[1], (addr_b, 5_000_000_000, TS_10K));
 }
 
-async fn get_balances(client: &Client) -> Vec<(i64, i64, i64)> {
+async fn get_balances(client: &Client) -> Vec<(AddressID, i64, i64)> {
     client
         .query(
             "select address_id
@@ -153,7 +153,7 @@ async fn get_balances(client: &Client) -> Vec<(i64, i64, i64)> {
         .iter()
         .map(|r| {
             (
-                r.get::<usize, i64>(0),
+                r.get::<usize, AddressID>(0),
                 r.get::<usize, i64>(1),
                 r.get::<usize, i64>(2),
             )
