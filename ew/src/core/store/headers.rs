@@ -61,9 +61,9 @@ pub async fn exists_and_is_main_chain(client: &Client, header: &Header) -> bool 
     let sql = "
     select exists (
         select height
-            , id
+            , header_id
         from core.headers
-        where height = $1 and id = $2 and main_chain
+        where height = $1 and header_id = $2 and main_chain
     );";
     client
         .query_one(sql, &[&header.height, &header.header_id])
