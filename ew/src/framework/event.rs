@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::core::types::CoreData;
 use crate::core::types::Header;
 use crate::core::types::HeaderID;
 use crate::core::types::Height;
@@ -93,8 +92,8 @@ impl<D: Clone> StampedData<D> {
 }
 
 #[cfg(feature = "test-utilities")]
-impl From<CoreData> for StampedData<CoreData> {
-    fn from(value: CoreData) -> Self {
+impl From<crate::core::types::CoreData> for StampedData<crate::core::types::CoreData> {
+    fn from(value: crate::core::types::CoreData) -> Self {
         Self {
             height: value.block.header.height,
             timestamp: value.block.header.timestamp,
