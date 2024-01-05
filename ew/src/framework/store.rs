@@ -134,13 +134,9 @@ impl<B: BatchStore + SourcableStore> PgStore<B> {
     }
 
     pub async fn get_at(&self, height: Height) -> StampedData<<B as SourcableStore>::S> {
-        StampedData {
-            height: self.header.height,
-            timestamp: self.header.timestamp,
-            header_id: self.header.header_id.clone(),
-            parent_id: self.header.parent_id.clone(),
-            data: self.batch_store.get_at(&self.client, height).await,
-        }
+        let header = core_headers::get_at(&self.client, height).await;
+        let data = self.batch_store.get_at(&self.client, height).await;
+        StampedData::new(header, data)
     }
 }
 
@@ -353,6 +349,7 @@ mod headers {
 // TODO: move to core::store::headers
 mod core_headers {
     use super::Header;
+    use super::Height;
     use tokio_postgres::Client;
 
     pub async fn get(client: &Client, header_id: &str) -> Option<Header> {
@@ -376,6 +373,27 @@ mod core_headers {
                 header_id: row.get(2),
                 parent_id: row.get(3),
             })
+    }
+
+    /// Get main chain header for given `height`
+    pub async fn get_at(client: &Client, height: Height) -> Header {
+        tracing::trace!("get_at {height}");
+        let qry = "
+            select height
+                , timestamp
+                , header_id
+                , parent_id
+            from core.headers
+            where height = $1
+                and main_chain;
+        ";
+        let row = client.query_one(qry, &[&height]).await.unwrap();
+        Header {
+            height: row.get(0),
+            timestamp: row.get(1),
+            header_id: row.get(2),
+            parent_id: row.get(3),
+        }
     }
 
     pub async fn is_main_chain(client: &Client, header: &Header) -> bool {

@@ -44,6 +44,17 @@ pub struct StampedData<D> {
 }
 
 impl<D> StampedData<D> {
+    /// Create a new `StampedData` from given `header` and `data`
+    pub fn new(header: Header, data: D) -> Self {
+        Self {
+            height: header.height,
+            timestamp: header.timestamp,
+            header_id: header.header_id,
+            parent_id: header.parent_id,
+            data,
+        }
+    }
+
     /// Creates a new instance wrapping given `data`.
     pub fn wrap<T>(&self, data: T) -> StampedData<T> {
         StampedData {
