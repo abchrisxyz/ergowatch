@@ -6,6 +6,7 @@ mod query_emission;
 mod query_handling;
 mod source;
 pub mod store;
+pub mod utils;
 mod worker;
 
 /// Max number of events held by a channel between two workers.
@@ -22,6 +23,7 @@ pub use query_emission::QueryWrapper;
 pub use query_emission::Querying;
 pub use query_handling::QueryHandling;
 pub use source::Source;
+pub use utils::BlockRange;
 pub use worker::LeafWorker;
 pub use worker::QueryableSourceWorker;
 pub use worker::SourceWorker;

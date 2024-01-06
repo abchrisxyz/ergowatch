@@ -10,6 +10,7 @@ use crate::config::PostgresConfig;
 use crate::core::types::CoreData;
 use crate::core::types::Header;
 use crate::core::types::Height;
+use crate::framework::BlockRange;
 use crate::framework::EventEmission;
 use crate::framework::EventHandling;
 use crate::framework::QueryHandling;
@@ -67,11 +68,11 @@ impl EventEmission for ErgDiffsWorkFlow {
         header.is_initial() || self.store.is_main_chain(header).await
     }
 
-    /// Get data for given `head`.
+    /// Get data for given height range.
     ///
     /// Used by lagging cursors to retrieve data.
-    async fn get_at(&self, height: Height) -> StampedData<Self::S> {
-        self.store.get_at(height).await
+    async fn get_slice(&self, block_range: &BlockRange) -> Vec<StampedData<Self::S>> {
+        self.store.get_slice(block_range).await
     }
 }
 

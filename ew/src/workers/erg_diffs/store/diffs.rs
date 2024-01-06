@@ -37,8 +37,12 @@ pub async fn delete_at(pgtx: &Transaction<'_>, height: Height) {
 }
 
 /// Get diff records for given `height`.
-pub async fn select_at(client: &impl GenericClient, height: Height) -> Vec<DiffRecord> {
-    tracing::trace!("select_at {height}");
+pub async fn select_slice(
+    client: &impl GenericClient,
+    ge_height: Height,
+    le_height: Height,
+) -> Vec<DiffRecord> {
+    tracing::trace!("select_slice {ge_height} {le_height}");
     let rows = client
         .query(
             "select address_id
@@ -46,8 +50,8 @@ pub async fn select_at(client: &impl GenericClient, height: Height) -> Vec<DiffR
             , tx_idx
             , nano
         from erg.balance_diffs
-        where height = $1;",
-            &[&height],
+        where height >= $1 and height <= $2;",
+            &[&ge_height, &le_height],
         )
         .await
         .unwrap();

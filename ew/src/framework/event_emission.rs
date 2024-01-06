@@ -5,9 +5,9 @@ use super::event::Event;
 use super::event::HandledEvent;
 use super::event::StampedData;
 use super::event_handling::EventHandling;
+use super::utils::BlockRange;
 use super::Cursor;
 use crate::core::types::Header;
-use crate::core::types::Height;
 use crate::monitor::MonitorMessage;
 
 #[async_trait]
@@ -17,10 +17,10 @@ pub trait EventEmission {
     /// Returns true if data for `header` has been included.
     async fn contains_header(&self, header: &Header) -> bool;
 
-    /// Get data for given `head`.
+    /// Get data for given height range.
     ///
     /// Used by lagging cursors to retrieve data.
-    async fn get_at(&self, height: Height) -> StampedData<Self::S>;
+    async fn get_slice(&self, blcok_range: &BlockRange) -> Vec<StampedData<Self::S>>;
 }
 
 pub(super) struct EventEmitter<W: EventHandling + EventEmission> {
@@ -78,9 +78,12 @@ impl<W: EventHandling + EventEmission> EventEmitter<W> {
 
         for cursor in &mut self.lagging_cursors {
             let steps = std::cmp::min(n, max_height - cursor.header.height);
-            for _ in 0..steps {
-                let height = cursor.header.height + 1;
-                let data = workflow.get_at(height).await;
+            let first_height = cursor.header.height + 1;
+            let last_height = cursor.header.height + steps;
+
+            let block_range = BlockRange::new(first_height, last_height);
+            let slice = workflow.get_slice(&block_range).await;
+            for data in slice {
                 cursor.include(data).await;
             }
         }

@@ -4,6 +4,7 @@ use tokio_postgres::Client;
 use tokio_postgres::NoTls;
 use tokio_postgres::Transaction;
 
+use super::utils::BlockRange;
 use super::StampedData;
 use crate::config::PostgresConfig;
 use crate::core::types::Header;
@@ -121,10 +122,10 @@ impl<B: BatchStore> PgStore<B> {
 pub trait SourcableStore {
     type S;
 
-    /// Get data for given `head`.
+    /// Get data for given height range.
     ///
     /// Used by lagging cursors to retrieve data.
-    async fn get_at(&self, client: &Client, height: Height) -> Self::S;
+    async fn get_slice(&self, client: &Client, block_range: &BlockRange) -> Vec<Self::S>;
 }
 
 impl<B: BatchStore + SourcableStore> PgStore<B> {
@@ -133,10 +134,17 @@ impl<B: BatchStore + SourcableStore> PgStore<B> {
         core_headers::is_main_chain(&self.client, &header).await
     }
 
-    pub async fn get_at(&self, height: Height) -> StampedData<<B as SourcableStore>::S> {
-        let header = core_headers::get_at(&self.client, height).await;
-        let data = self.batch_store.get_at(&self.client, height).await;
-        StampedData::new(header, data)
+    pub async fn get_slice(
+        &self,
+        block_range: &BlockRange,
+    ) -> Vec<StampedData<<B as SourcableStore>::S>> {
+        let headers = core_headers::get_slice(&self.client, block_range).await;
+        let datas = self.batch_store.get_slice(&self.client, block_range).await;
+        headers
+            .into_iter()
+            .zip(datas.into_iter())
+            .map(|(h, d)| StampedData::new(h, d))
+            .collect()
     }
 }
 
@@ -348,8 +356,8 @@ mod headers {
 
 // TODO: move to core::store::headers
 mod core_headers {
+    use super::BlockRange;
     use super::Header;
-    use super::Height;
     use tokio_postgres::Client;
 
     pub async fn get(client: &Client, header_id: &str) -> Option<Header> {
@@ -376,24 +384,30 @@ mod core_headers {
     }
 
     /// Get main chain header for given `height`
-    pub async fn get_at(client: &Client, height: Height) -> Header {
-        tracing::trace!("get_at {height}");
+    pub async fn get_slice(client: &Client, block_range: &BlockRange) -> Vec<Header> {
+        tracing::trace!("get_at {block_range:?}");
         let qry = "
             select height
                 , timestamp
                 , header_id
                 , parent_id
             from core.headers
-            where height = $1
+            where height >= $1
+                and height <= $2
                 and main_chain;
         ";
-        let row = client.query_one(qry, &[&height]).await.unwrap();
-        Header {
-            height: row.get(0),
-            timestamp: row.get(1),
-            header_id: row.get(2),
-            parent_id: row.get(3),
-        }
+        client
+            .query(qry, &[&block_range.first_height, &block_range.last_height])
+            .await
+            .unwrap()
+            .iter()
+            .map(|row| Header {
+                height: row.get(0),
+                timestamp: row.get(1),
+                header_id: row.get(2),
+                parent_id: row.get(3),
+            })
+            .collect()
     }
 
     pub async fn is_main_chain(client: &Client, header: &Header) -> bool {
