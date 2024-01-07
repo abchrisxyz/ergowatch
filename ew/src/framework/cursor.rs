@@ -52,7 +52,7 @@ impl<D> Cursor<D> {
     /// Sends data for inclusion to all listening channels.
     pub async fn include(&mut self, data: StampedData<D>) {
         tracing::info!(
-            "[{}] including data for block {} {}",
+            "[{}] including block {} {}",
             self.id,
             data.height,
             data.header_id

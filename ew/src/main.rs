@@ -18,15 +18,13 @@ async fn sleep_some() {
 #[tokio::main]
 async fn main() -> Result<(), &'static str> {
     // Configure tracing subscriber
-    let level = match env::var("EW_LOG_DEBUG") {
-        Ok(_) => tracing::Level::DEBUG,
-        _ => tracing::Level::INFO,
-    };
-
+    let filter = env::var("EW_LOG").unwrap_or(String::from("ew=info"));
     let subscriber = tracing_subscriber::fmt()
         .compact()
-        .with_max_level(level)
+        .with_max_level(tracing::Level::INFO)
+        .with_env_filter(filter)
         .finish();
+
     let _guard = tracing::subscriber::set_global_default(subscriber);
 
     tracing::info!("starting ew v{VERSION}");

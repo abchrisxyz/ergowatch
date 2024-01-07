@@ -123,6 +123,7 @@ impl<W: EventHandling> EventHandler<W> {
     }
 
     async fn handle_include(&mut self, payload: &StampedData<W::U>) -> W::D {
+        tracing::debug!("handling new block {}", payload.height);
         // Check next block is indeed child of last included one
         let head = self.workflow.header();
         assert_eq!(payload.height, head.height + 1);

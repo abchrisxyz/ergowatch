@@ -72,6 +72,7 @@ impl<W: EventHandling + EventEmission> EventEmitter<W> {
     }
 
     /// Step lagging cursors by n blocks
+    #[tracing::instrument(skip_all)]
     pub(super) async fn progress_lagging_cursors(&mut self, workflow: &W, n: i32) {
         // In any case, do not go past current source position
         let max_height = workflow.header().height;

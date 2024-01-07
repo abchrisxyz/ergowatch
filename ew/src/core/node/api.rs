@@ -105,7 +105,6 @@ impl NodeAPI {
 impl NodeAPI {
     /// Send a GET request
     async fn get(&self, url: &str) -> Result<reqwest::Response, NodeError> {
-        // tracing::event!(tracing::Level::INFO, url);
         tracing::trace!(url);
         let response = reqwest::get(url)
             .await

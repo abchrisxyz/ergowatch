@@ -31,7 +31,7 @@ impl<Q: std::fmt::Debug, R: std::fmt::Debug> QuerySender<Q, R> {
     /// Sends query to query handler and returns a oneshot receiver
     /// through wich the query response can be received.
     pub async fn send(&self, query: Q) -> oneshot::Receiver<R> {
-        // self.tx.send(query).await.unwrap();
+        tracing::debug!("sending query {query:?}");
         let (response_tx, response_rx) = oneshot::channel();
         let qw = QueryWrapper { query, response_tx };
         self.tx.send(qw).await.unwrap();

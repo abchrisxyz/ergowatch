@@ -41,7 +41,9 @@ impl<W: EventHandling> LeafWorker<W> {
         Self { id, event_handler }
     }
 
+    #[tracing::instrument(name="worker", skip(self), fields(worker=self.id))]
     pub async fn start(&mut self) {
+        tracing::info!("starting");
         loop {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
@@ -94,7 +96,9 @@ impl<W: EventHandling + EventEmission<S = W::D>> SourceWorker<W> {
         }
     }
 
+    #[tracing::instrument(name="worker", skip(self), fields(worker=self.id))]
     pub async fn start(&mut self) {
+        tracing::info!("starting");
         // Progress lagging cursors while waiting for new blocks
         let n = 10;
         while self.event_emitter.has_lagging_cursors() {
@@ -196,21 +200,25 @@ impl<W: EventHandling + EventEmission<S = W::D> + QueryHandling> QueryableSource
         QuerySender::new(self.query_handler.connect())
     }
 
+    #[tracing::instrument(name="worker", skip(self), fields(worker=self.id))]
     pub async fn start(&mut self) {
+        tracing::info!("starting {} worker", self.id);
+
         // Progress lagging cursors while waiting for new blocks
-        let n = 10;
-
-        self.query_handler
-            .handle_pending(self.event_handler.workflow())
-            .await;
-
         while self.event_emitter.has_lagging_cursors() {
+            // Handle any pending queries
+            self.query_handler
+                .handle_pending(self.event_handler.workflow())
+                .await;
+
             // Handle up to `n` upstream events
+            let n = 10;
             for _ in 0..n {
                 match self.event_handler.try_next().await {
                     Ok(handled_event) => self.event_emitter.forward(handled_event).await,
                     Err(TryRecvError::Empty) => {
                         // No events from upstream, move on.
+                        tracing::debug!("[{}] no more upstream events", self.id);
                         break;
                     }
                     Err(TryRecvError::Disconnected) => {

@@ -57,8 +57,9 @@ impl Tracker {
     //     head.is_initial() || self.store.contains_head(head).await
     // }
 
+    #[tracing::instrument(name = "tracker", skip_all)]
     pub async fn start(&mut self) {
-        tracing::info!("Starting tracker");
+        tracing::info!("starting");
         // Before starting, reorder cursors by decreasing position.
         self.cursors.sort_by_key(|c| -c.header.height);
         // Rename first cursor to `main` as any other will be merged into it.
@@ -69,6 +70,12 @@ impl Tracker {
             cur.ensure_genesis_boxes(&mut self.store).await;
         }
 
+        tracing::debug!(
+            "current number of cursors: {} ({:?})",
+            self.cursors.len(),
+            self.cursors.iter().map(|c| &c.id).collect::<Vec<&String>>()
+        );
+
         if self.cursors.len() > 1 {
             self.join_cursors().await;
         }
@@ -76,9 +83,11 @@ impl Tracker {
     }
 
     /// Progresses multiple cursors until they're all at the same position.
+    #[tracing::instrument(skip_all)]
     async fn join_cursors(&mut self) {
         loop {
             for cur in &mut self.cursors {
+                tracing::debug!("stepping cursor {}", cur.id);
                 cur.step(&self.node, &mut self.store).await;
             }
             self.merge_cursors().await;

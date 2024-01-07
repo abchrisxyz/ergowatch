@@ -50,6 +50,7 @@ impl EventHandling for CexWorkFlow {
         }
     }
 
+    #[tracing::instrument(skip(self, data), fields(height = data.height))]
     async fn include_block(&mut self, data: &StampedData<DiffData>) -> Self::D {
         // Obtain deposit address spottings.
         // Supply on new deposit addresses must be added retroactively to total deposit supply.
@@ -80,11 +81,17 @@ impl EventHandling for CexWorkFlow {
         // Wait for queries to be processed
         let pos_diffs = match pos_rx {
             None => vec![],
-            Some(rx) => rx.await.unwrap(),
+            Some(rx) => {
+                tracing::debug!("waiting for pos query response");
+                rx.await.unwrap()
+            }
         };
         let neg_diffs = match neg_rx {
             None => vec![],
-            Some(rx) => rx.await.unwrap(),
+            Some(rx) => {
+                tracing::debug!("waiting for neg query response");
+                rx.await.unwrap()
+            }
         };
 
         // Proceed with 2nd stage of parsing
@@ -148,6 +155,7 @@ impl Querying for CexWorkFlow {
     type R = DiffsQueryResponse;
 
     fn set_query_sender(&mut self, query_sender: QuerySender<Self::Q, Self::R>) {
+        tracing::debug!("setting query sender");
         self.query_sender = query_sender;
     }
 }

@@ -44,13 +44,16 @@ impl<W: QueryHandling> QueryHandler<W> {
         self.query_rx.recv().await
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn handle_qw(&mut self, qw: QueryWrapper<W::Q, W::R>, workflow: &W) {
         let response = workflow.execute(qw.query).await;
+        tracing::debug!("sending response {response:?}");
         qw.response_tx.send(response).unwrap();
     }
 
     /// Handle any pending queries
     pub async fn handle_pending(&mut self, workflow: &W) {
+        tracing::debug!("[{}] handling pending queries", self.id);
         loop {
             match self.query_rx.try_recv() {
                 Ok(qw) => {
@@ -59,7 +62,7 @@ impl<W: QueryHandling> QueryHandler<W> {
                 }
                 Err(TryRecvError::Empty) => {
                     // No pending queries, move on.
-                    tracing::trace!("No pending queries");
+                    tracing::debug!("no more pending queries");
                     break;
                 }
                 Err(TryRecvError::Disconnected) => {

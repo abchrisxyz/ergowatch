@@ -71,6 +71,7 @@ impl EventEmission for ErgDiffsWorkFlow {
     /// Get data for given height range.
     ///
     /// Used by lagging cursors to retrieve data.
+    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self))]
     async fn get_slice(&self, block_range: &BlockRange) -> Vec<StampedData<Self::S>> {
         self.store.get_slice(block_range).await
     }
@@ -82,6 +83,7 @@ impl QueryHandling for ErgDiffsWorkFlow {
     type R = queries::DiffsQueryResponse;
 
     async fn execute(&self, query: Self::Q) -> Self::R {
+        tracing::debug!("executing query");
         self.store.query_balance_diffs(query).await
     }
 }
