@@ -1,4 +1,4 @@
-use tokio_postgres::types::Type;
+use itertools::Itertools;
 use tokio_postgres::GenericClient;
 use tokio_postgres::Transaction;
 
@@ -41,7 +41,7 @@ pub(super) async fn delete_at(pgtx: &Transaction<'_>, height: Height) {
 
 /*
    Haven't found a simple way to apply patch in one go.
-   This
+   This naive approach doesn't work:
 
        ```
        drop schema if exists dev cascade;
@@ -57,32 +57,53 @@ pub(super) async fn delete_at(pgtx: &Transaction<'_>, height: Height) {
 
        select * from dev.supply;
        ```
-   yields:
+    yields:
 
        "h"	"v"
        1	10
        2	25
        3	35 -- should be 36 !!
 
-    Update seems to apply first joined value only.
-    For now, applying each diff separately.
+    Patch must be accumulated at each height first:
+
+        ```
+        create schema dev;
+
+        create table dev.supply (h int, v int);
+        insert into dev.supply(h, v) values (1, 10), (2, 20), (3, 30), (4, 40);
+
+        update dev.supply s
+        set v = s.v + p.v
+        from (
+            select s as h
+                , sum(p.v) over (order by s rows between unbounded preceding and current row) as v
+            from generate_series(2, 4) as s
+            left join (values (2, 5), (4, 1)) as p(h, v) on p.h = s
+        ) p
+        where s.h = p.h;
+
+        select * from dev.supply;
+        ```
 */
 /// Patch deposits supply with given balance diffs series.
 pub(super) async fn patch_deposits(pgtx: &Transaction<'_>, patch: &Vec<SupplyDiff>) {
     tracing::trace!("patch_deposits {patch:?}");
-    let sql = "
-        update exchanges.supply
-        set deposits = deposits + $1
-        where height >= $2;
-        ;
-    ";
-    let stmt = pgtx
-        .prepare_typed(sql, &[Type::INT8, Type::INT4])
-        .await
-        .unwrap();
-    for diff in patch {
-        pgtx.execute(&stmt, &[&diff.nano, &diff.height])
-            .await
-            .unwrap();
-    }
+
+    let min_height = patch.iter().min_by_key(|sd| sd.height).unwrap().height;
+    let string_patch: String = patch
+        .iter()
+        .map(|sd| format!("({}, {})", sd.height, sd.nano))
+        .join(",");
+
+    let sql = format!("
+        update exchanges.supply s
+        set deposits = deposits + p.value
+        from (
+            select series_h as height
+                , sum(p.v) over (order by series_h rows between unbounded preceding and current row) as value
+            from generate_series($1, (select max(height) from exchanges.supply)) as series_h
+            left join (values {}) as p(h, v) on p.h = series_h
+        ) p
+        where s.height = p.height;", &string_patch);
+    pgtx.execute(&sql, &[&min_height]).await.unwrap();
 }
