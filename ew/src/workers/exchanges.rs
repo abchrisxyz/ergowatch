@@ -62,7 +62,10 @@ impl EventHandling for CexWorkFlow {
         let pos_rx = match spottings.new_deposits.is_empty() {
             true => None,
             false => {
-                let query = DiffsQuery::new(spottings.new_deposits.keys().map(|k| *k).collect());
+                let query = DiffsQuery::new(
+                    spottings.new_deposits.keys().map(|k| *k).collect(),
+                    data.height,
+                );
                 let rx = self.query_sender.send(query).await;
                 Some(rx)
             }
@@ -72,7 +75,10 @@ impl EventHandling for CexWorkFlow {
         let neg_rx = match spottings.inter_conflicts.is_empty() {
             true => None,
             false => {
-                let query = DiffsQuery::new(spottings.inter_conflicts.keys().map(|a| *a).collect());
+                let query = DiffsQuery::new(
+                    spottings.inter_conflicts.keys().map(|a| *a).collect(),
+                    data.height,
+                );
                 let rx = self.query_sender.send(query).await;
                 Some(rx)
             }
@@ -114,12 +120,16 @@ impl EventHandling for CexWorkFlow {
                     .iter()
                     .map(|r| r.address_id)
                     .collect(),
+                height,
             )
             .await;
 
         // Query balance changes for deposit addresses to be rolled back (negative supply changes)
         let neg_rx = self
-            .query_balance_diffs(self.store.get_deposit_addresses_spotted_at(height).await)
+            .query_balance_diffs(
+                self.store.get_deposit_addresses_spotted_at(height).await,
+                height,
+            )
             .await;
 
         // Wait for queries to be processed
@@ -164,10 +174,15 @@ impl CexWorkFlow {
     async fn query_balance_diffs(
         &self,
         address_ids: Vec<AddressID>,
+        max_height: Height,
     ) -> Option<oneshot::Receiver<Vec<SupplyDiff>>> {
         if address_ids.is_empty() {
             return None;
         }
-        Some(self.query_sender.send(DiffsQuery::new(address_ids)).await)
+        Some(
+            self.query_sender
+                .send(DiffsQuery::new(address_ids, max_height))
+                .await,
+        )
     }
 }

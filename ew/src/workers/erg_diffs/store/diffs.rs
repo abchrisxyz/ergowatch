@@ -65,21 +65,23 @@ pub async fn select_slice(
         .collect()
 }
 
-/// Get aggregate series of balance diffs for given addresses.
+/// Get aggregate series of balance diffs for given addresses,
+/// up to and including `max_height`.
 pub async fn select_aggregate_series(
     client: &Client,
     address_ids: &Vec<AddressID>,
+    max_height: Height,
 ) -> Vec<SupplyDiff> {
     let sql = "
         select height
             , sum(nano)::bigint
         from erg.balance_diffs
-        where address_id = any ($1)
+        where address_id = any ($1) and height <= $2
         group by 1
         order by 1;
     ";
     client
-        .query(sql, &[&address_ids])
+        .query(sql, &[&address_ids, &max_height])
         .await
         .unwrap()
         .iter()

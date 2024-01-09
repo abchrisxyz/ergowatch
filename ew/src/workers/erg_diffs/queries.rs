@@ -1,5 +1,6 @@
 use super::types::SupplyDiff;
 use crate::core::types::AddressID;
+use crate::core::types::Height;
 
 /// A balance diffs series query.
 ///
@@ -7,11 +8,15 @@ use crate::core::types::AddressID;
 #[derive(Debug)]
 pub struct DiffsQuery {
     pub(super) address_ids: Vec<AddressID>,
+    pub(super) max_height: Height,
 }
 
 impl DiffsQuery {
-    pub fn new(address_ids: Vec<AddressID>) -> Self {
-        Self { address_ids }
+    pub fn new(address_ids: Vec<AddressID>, max_height: Height) -> Self {
+        Self {
+            address_ids,
+            max_height,
+        }
     }
 }
 

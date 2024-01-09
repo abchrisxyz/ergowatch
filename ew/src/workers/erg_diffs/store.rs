@@ -89,7 +89,7 @@ impl QueryStore {
         &self,
         query: queries::DiffsQuery,
     ) -> queries::DiffsQueryResponse {
-        diffs::select_aggregate_series(&self.client, &query.address_ids).await
+        diffs::select_aggregate_series(&self.client, &query.address_ids, query.max_height).await
     }
 }
 
