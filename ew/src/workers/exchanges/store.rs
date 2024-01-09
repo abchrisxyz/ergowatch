@@ -54,7 +54,9 @@ impl BatchStore for SpecStore {
         // Insert new record *before* applying patch
         supply::insert(pgtx, &batch.supply).await;
         // Apply patch *after* inserting new record
-        supply::patch_deposits(pgtx, &batch.supply_patch).await;
+        if !batch.supply_patch.is_empty() {
+            supply::patch_deposits(pgtx, &batch.supply_patch).await;
+        }
 
         // New deposit addresses
         deposit_addresses::insert_many(pgtx, &batch.deposit_addresses).await;
