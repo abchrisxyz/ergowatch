@@ -47,13 +47,3 @@ pub trait Querying {
 
     fn set_query_sender(&mut self, query_sender: QuerySender<Self::Q, Self::R>);
 }
-
-// /// Query emitting workers
-// #[async_trait]
-// pub trait QueryingWorker {
-//     type W: QueryableSourceWorker; // Queried worker type
-
-//     fn connect_to_query_handler(&mut self, target: &Self::W) {
-//         let query_sender = target.connect();
-//     }
-// }

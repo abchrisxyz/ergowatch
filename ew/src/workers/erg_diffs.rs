@@ -4,7 +4,11 @@ mod store;
 pub mod types;
 
 use async_trait::async_trait;
+use tokio::sync::mpsc;
 
+use self::queries::DiffsQuery;
+use self::queries::DiffsQueryResponse;
+use self::store::QueryStore;
 use self::types::DiffData;
 use crate::config::PostgresConfig;
 use crate::core::types::CoreData;
@@ -13,15 +17,17 @@ use crate::core::types::Height;
 use crate::framework::BlockRange;
 use crate::framework::EventEmission;
 use crate::framework::EventHandling;
-use crate::framework::QueryHandling;
-use crate::framework::QueryableSourceWorker;
+use crate::framework::QueryHandler;
+use crate::framework::QuerySender;
+use crate::framework::QueryWrapper;
+use crate::framework::SourceWorker;
 use crate::framework::StampedData;
 use parsing::Parser;
 use store::Store;
 
 const WORKER_ID: &'static str = "erg_diffs";
 
-pub type Worker = QueryableSourceWorker<ErgDiffsWorkFlow>;
+pub type Worker = SourceWorker<ErgDiffsWorkFlow>;
 
 pub struct ErgDiffsWorkFlow {
     parser: Parser,
@@ -77,13 +83,41 @@ impl EventEmission for ErgDiffsWorkFlow {
     }
 }
 
-#[async_trait]
-impl QueryHandling for ErgDiffsWorkFlow {
-    type Q = queries::DiffsQuery;
-    type R = queries::DiffsQueryResponse;
+pub struct QueryWorker {
+    store: store::QueryStore,
+    query_tx: mpsc::Sender<QueryWrapper<DiffsQuery, DiffsQueryResponse>>,
+    query_rx: mpsc::Receiver<QueryWrapper<DiffsQuery, DiffsQueryResponse>>,
+}
 
-    async fn execute(&self, query: Self::Q) -> Self::R {
-        tracing::debug!("executing query");
-        self.store.query_balance_diffs(query).await
+impl QueryWorker {
+    pub async fn new(pgconf: &PostgresConfig) -> Self {
+        let (query_tx, query_rx) = mpsc::channel(8);
+
+        Self {
+            store: QueryStore::new(pgconf).await,
+            query_tx,
+            query_rx,
+        }
+    }
+
+    #[tracing::instrument(name = "erg_diffs query handler", skip_all, level=tracing::Level::DEBUG)]
+    pub async fn start(&mut self) {
+        tracing::debug!("starting");
+        loop {
+            tracing::debug!("waiting for next query");
+            let qw = self.query_rx.recv().await.unwrap();
+            let response = self.store.query_balance_diffs(qw.query).await;
+            tracing::debug!("sending response");
+            qw.response_tx.send(response).unwrap();
+        }
+    }
+}
+
+impl QueryHandler for QueryWorker {
+    type Q = DiffsQuery;
+    type R = DiffsQueryResponse;
+
+    fn connect(&self) -> QuerySender<Self::Q, Self::R> {
+        QuerySender::new(self.query_tx.clone())
     }
 }

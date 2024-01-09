@@ -72,7 +72,7 @@ pub async fn select_aggregate_series(
 ) -> Vec<SupplyDiff> {
     let sql = "
         select height
-            , sum(nano)
+            , sum(nano)::bigint
         from erg.balance_diffs
         where address_id = any ($1)
         group by 1

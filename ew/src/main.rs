@@ -55,12 +55,13 @@ async fn main() -> Result<(), &'static str> {
 
     let mut erg_diffs =
         workers::erg_diffs::Worker::new("erg_diffs", &pgconf, &mut tracker, monitor.sender()).await;
+    let mut erg_diffs_query_handler = workers::erg_diffs::QueryWorker::new(&pgconf).await;
 
     let mut erg = workers::erg::Worker::new("erg", &pgconf, &mut erg_diffs, monitor.sender()).await;
 
     let mut cex =
         workers::exchanges::Worker::new("cex", &pgconf, &mut erg_diffs, monitor.sender()).await;
-    cex.connect_query_sender(&erg_diffs);
+    cex.connect_query_sender(&erg_diffs_query_handler);
 
     let mut sigmausd =
         workers::sigmausd::Worker::new("sigmausd", &pgconf, &mut tracker, monitor.sender()).await;
@@ -74,15 +75,15 @@ async fn main() -> Result<(), &'static str> {
     // Start tracker
     tokio::spawn(async move {
         sleep_some().await;
-        tracker
-            .start()
-            // .instrument(tracing::info_span!("tracker"))
-            .await;
+        tracker.start().await;
     });
 
     // Start workers
     tokio::spawn(async move {
         timestamps.start().await;
+    });
+    tokio::spawn(async move {
+        erg_diffs_query_handler.start().await;
     });
     tokio::spawn(async move {
         erg_diffs.start().await;

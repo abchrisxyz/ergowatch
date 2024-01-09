@@ -3,9 +3,11 @@ mod diffs;
 use async_trait::async_trait;
 
 use tokio_postgres::Client;
+use tokio_postgres::NoTls;
 use tokio_postgres::Transaction;
 
 use super::types::DiffRecord;
+use crate::config::PostgresConfig;
 use crate::core::types::Header;
 use crate::framework::store::BatchStore;
 use crate::framework::store::PgStore;
@@ -60,12 +62,34 @@ impl SourcableStore for InnerStore {
     }
 }
 
-impl Store {
+pub(super) struct QueryStore {
+    client: Client,
+}
+
+impl QueryStore {
+    pub async fn new(pgconf: &PostgresConfig) -> Self {
+        tracing::debug!("initializing query store");
+
+        // init client
+        let (client, connection) = tokio_postgres::connect(&pgconf.connection_uri, NoTls)
+            .await
+            .unwrap();
+
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                eprintln!("connection error: {}", e);
+            }
+        });
+
+        Self { client }
+    }
+
+    #[tracing::instrument(skip(self), level=tracing::Level::DEBUG)]
     pub(super) async fn query_balance_diffs(
         &self,
         query: queries::DiffsQuery,
     ) -> queries::DiffsQueryResponse {
-        diffs::select_aggregate_series(&self.get_client(), &query.address_ids).await
+        diffs::select_aggregate_series(&self.client, &query.address_ids).await
     }
 }
 

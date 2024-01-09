@@ -60,7 +60,7 @@ impl MockQueryHandler {
         qw.response_tx.send(response).unwrap();
     }
 }
-#[ignore = "temp"]
+
 #[tokio::test]
 async fn test_empty_blocks() {
     let _guard = set_tracing_subscriber(false);
