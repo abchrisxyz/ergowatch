@@ -66,6 +66,9 @@ async fn main() -> Result<(), &'static str> {
     let mut sigmausd =
         workers::sigmausd::Worker::new("sigmausd", &pgconf, &mut tracker, monitor.sender()).await;
 
+    let mut coingecko =
+        workers::coingecko::Worker::new(&pgconf, &mut tracker, monitor.sender(), None).await;
+
     // Start monitor
     tokio::spawn(async move {
         monitor.start().await;
@@ -96,6 +99,9 @@ async fn main() -> Result<(), &'static str> {
     });
     tokio::spawn(async move {
         sigmausd.start().await;
+    });
+    tokio::spawn(async move {
+        coingecko.start().await;
     });
 
     // Wait for ctrl-c

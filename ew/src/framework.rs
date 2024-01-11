@@ -17,6 +17,7 @@ pub use event::Event;
 pub use event::Stamp;
 pub use event::StampedData;
 pub use event_emission::EventEmission;
+pub use event_handling::EventHandler;
 pub use event_handling::EventHandling;
 pub use query_emission::QuerySender;
 pub use query_emission::QueryWrapper;

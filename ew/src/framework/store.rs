@@ -45,6 +45,10 @@ impl<B: BatchStore> PgStore<B> {
         &self.client
     }
 
+    pub fn get_mut_client(&mut self) -> &mut Client {
+        &mut self.client
+    }
+
     pub async fn new(pgconf: &PostgresConfig, store: &StoreDef) -> Self {
         tracing::debug!("initializing store {store}");
 

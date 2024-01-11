@@ -1,3 +1,4 @@
+pub mod coingecko;
 pub mod erg;
 pub mod erg_diffs;
 pub mod exchanges;

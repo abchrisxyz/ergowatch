@@ -34,7 +34,7 @@ pub trait EventHandling {
     fn header<'a>(&'a self) -> &'a Header;
 }
 
-pub(super) struct EventHandler<W: EventHandling> {
+pub struct EventHandler<W: EventHandling> {
     id: &'static str,
     workflow: W,
     rx: Receiver<Event<W::U>>,
@@ -54,27 +54,28 @@ impl<W: EventHandling> EventHandler<W> {
         source: &mut impl Source<S = W::U>,
         monitor_tx: Sender<MonitorMessage>,
     ) -> Self {
-        let mut workflow = W::new(pgconf).await;
+        let workflow = W::new(pgconf).await;
+        Self::new_with(id, workflow, source, monitor_tx).await
+    }
 
-        // Ensure the workflow head is on the main chain.
-        // A worker could crash on a rollback while the tracker gets passed it.
-        // In such a case, the workflow's head wouldn't be on the main chain anymore.
-        // Here, we check for such cases and roll back the workflow until back
-        // on the main chain again.
-        // Skip this is if the workflow is ahead of the tracker.
-        if workflow.header().height <= source.header().height {
-            // Rolling back any blocks past the split.
-            while !source.contains_header(workflow.header()).await {
-                tracing::info!(
-                    "workflow `{}` is not on main chain - rolling back {:?}",
-                    &id,
-                    workflow.header(),
-                );
-                workflow.roll_back(workflow.header().height).await;
-            }
-        }
-
-        // let rx = tracker.add_cursor(id.to_owned(), workflow.head().clone(), &monitor_tx);
+    /// Create a new EventHandler with given `workflow`.
+    ///
+    /// * `id` - name of the worker
+    /// * `workflow` - the workflow to be driven by new event handler
+    /// * `source` - the upstream source to track
+    /// * `monitor_tx` - a monitor channel
+    ///
+    /// TODO: Consider replacing usage of new by new_with (more flexible) and
+    /// then remove W::new from the Workflow trait.
+    pub async fn new_with(
+        id: &'static str,
+        mut workflow: W,
+        source: &mut impl Source<S = W::U>,
+        monitor_tx: Sender<MonitorMessage>,
+    ) -> Self {
+        // Ensure workflow is on main chain
+        Self::ensure_main_chain(id, &mut workflow, source).await;
+        // Subscribe to source from current position
         let rx = source.subscribe(workflow.header().clone(), id).await;
 
         Self {
@@ -106,7 +107,7 @@ impl<W: EventHandling> EventHandler<W> {
         self.rx.try_recv()
     }
 
-    async fn process_upstream_event(&mut self, event: &Event<W::U>) {
+    pub async fn process_upstream_event(&mut self, event: &Event<W::U>) {
         match event {
             Event::Include(stamped_data) => {
                 // Capped cursor may dispatch events prior to workflow's head. Ignore them.
@@ -120,6 +121,30 @@ impl<W: EventHandling> EventHandler<W> {
             }
         };
         self.report_status().await;
+    }
+
+    /// Ensure the workflow head is on the main chain.
+    async fn ensure_main_chain(
+        id: &'static str,
+        workflow: &mut W,
+        source: &mut impl Source<S = W::U>,
+    ) {
+        // A worker could crash on a rollback while the tracker gets passed it.
+        // In such a case, the workflow's head wouldn't be on the main chain anymore.
+        // Here, we check for such cases and roll back the workflow until back
+        // on the main chain again.
+        // Skip this is if the workflow is ahead of the tracker.
+        if workflow.header().height <= source.header().height {
+            // Rolling back any blocks past the split.
+            while !source.contains_header(workflow.header()).await {
+                tracing::info!(
+                    "workflow `{}` is not on main chain - rolling back {:?}",
+                    &id,
+                    workflow.header(),
+                );
+                workflow.roll_back(workflow.header().height).await;
+            }
+        }
     }
 
     async fn handle_include(&mut self, payload: &StampedData<W::U>) -> W::D {
