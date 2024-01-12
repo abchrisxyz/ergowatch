@@ -111,7 +111,11 @@ impl PatchableStore for SpecStore {
     type P = Vec<SupplyDiff>;
 
     fn stage_rollback_patch(&mut self, patch: Self::P) {
-        self.rollback_patch = Some(patch);
+        if patch.is_empty() {
+            self.rollback_patch = None;
+        } else {
+            self.rollback_patch = Some(patch);
+        }
     }
 }
 
