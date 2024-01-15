@@ -103,6 +103,31 @@ pub struct Cache {
     pub provisional_records: Vec<ProvisionalBlockRecord>,
 }
 
+impl Cache {
+    /// Removes unneeded hourly records.
+    ///
+    /// Only keeps hourly records needed to interpolate provisional records.
+    /// This is achieved by deleting all hourly records prior to the first
+    /// provisional record, except for the most recent one of them.
+    pub fn trim_hourly_records(&mut self) {
+        // Determine timestamp of first hourly record to keep.
+        let since = match self.provisional_records.first() {
+            Some(first_provisional_record) => self
+                .recent_hourly_records
+                .iter()
+                .filter(|hr| hr.timestamp <= first_provisional_record.timestamp)
+                .map(|hr| hr.timestamp)
+                .max()
+                // Keep all hourly records if none are prior to first provisional one.
+                .unwrap_or(0),
+            // Keep all hourly records if there are no provisional records yet.
+            None => 0,
+        };
+        self.recent_hourly_records
+            .retain(|hr| hr.timestamp >= since);
+    }
+}
+
 pub struct Workflow {
     // Header the store is currently at.
     // Purely to be able to implement the EventHandling trait which has
@@ -137,6 +162,7 @@ impl EventHandling for Workflow {
         if let Some(ref pr) = stamped_batch.data.provisional_block_record {
             cache.provisional_records.push(pr.clone());
         }
+        cache.trim_hourly_records();
 
         // Update header
         self.header = self.store.lock().await.get_header().clone();
@@ -289,20 +315,8 @@ impl Tracker {
             .retain(|pr| pr.height > last_interpolated_height);
         // Append new hourly records
         cache.recent_hourly_records.extend(hourly_records);
-        // Remove unneeded hourly records but always keep at least last
-        let since = match cache.provisional_records.first() {
-            Some(first_provisional_record) => cache
-                .recent_hourly_records
-                .iter()
-                .filter(|hr| hr.timestamp <= first_provisional_record.timestamp)
-                .map(|hr| hr.timestamp)
-                .max()
-                .unwrap_or(0),
-            None => 0,
-        };
-        cache
-            .recent_hourly_records
-            .retain(|hr| hr.timestamp >= since);
+        // Remove unneeded hourly records
+        cache.trim_hourly_records();
     }
 
     /// Sleeps untill new data is expected to be available
@@ -393,5 +407,94 @@ mod tests {
         assert_eq!(h1.timestamp - h0.timestamp, 3_600_000);
         let usd = interpolate(t, &h0, &h1);
         assert_eq!(usd, h1.usd);
+    }
+
+    #[test]
+    fn cache_trim_hourlies_no_change_when_no_provisionals() {
+        let mut cache = Cache {
+            recent_hourly_records: vec![
+                HourlyRecord::new(1000, 1.0),
+                HourlyRecord::new(2000, 2.0),
+                HourlyRecord::new(3000, 3.0),
+            ],
+            provisional_records: vec![],
+        };
+        cache.trim_hourly_records();
+        assert_eq!(cache.recent_hourly_records.len(), 3);
+    }
+
+    #[test]
+    fn cache_trim_hourlies_keeps_all_but_last_prior_to_first_provisionals() {
+        let mut cache = Cache {
+            recent_hourly_records: vec![
+                HourlyRecord::new(1000, 1.0),
+                HourlyRecord::new(2000, 2.0),
+                HourlyRecord::new(3000, 3.0),
+                HourlyRecord::new(4000, 4.0),
+            ],
+            provisional_records: vec![
+                ProvisionalBlockRecord {
+                    timestamp: 3500,
+                    height: 100,
+                },
+                ProvisionalBlockRecord {
+                    timestamp: 4500,
+                    height: 101,
+                },
+            ],
+        };
+        cache.trim_hourly_records();
+        assert_eq!(
+            cache.recent_hourly_records,
+            vec![HourlyRecord::new(3000, 3.0), HourlyRecord::new(4000, 4.0),]
+        );
+    }
+
+    #[test]
+    fn cache_trim_hourlies_keeps_all_from_one_on_first_provisionals() {
+        let mut cache = Cache {
+            recent_hourly_records: vec![
+                HourlyRecord::new(1000, 1.0),
+                HourlyRecord::new(2000, 2.0),
+                HourlyRecord::new(3000, 3.0),
+                HourlyRecord::new(4000, 4.0),
+            ],
+            provisional_records: vec![
+                ProvisionalBlockRecord {
+                    timestamp: 3000,
+                    height: 100,
+                },
+                ProvisionalBlockRecord {
+                    timestamp: 4500,
+                    height: 101,
+                },
+            ],
+        };
+        cache.trim_hourly_records();
+        assert_eq!(
+            cache.recent_hourly_records,
+            vec![HourlyRecord::new(3000, 3.0), HourlyRecord::new(4000, 4.0),]
+        );
+    }
+
+    #[test]
+    fn cache_trim_hourlies_keeps_last_when_all_prior_to_provisionals() {
+        let mut cache = Cache {
+            recent_hourly_records: vec![
+                HourlyRecord::new(1000, 1.0),
+                HourlyRecord::new(2000, 2.0),
+                HourlyRecord::new(3000, 3.0),
+                HourlyRecord::new(4000, 4.0),
+            ],
+            provisional_records: vec![ProvisionalBlockRecord {
+                timestamp: 5000,
+                height: 100,
+            }],
+        };
+        cache.trim_hourly_records();
+        assert_eq!(
+            cache.recent_hourly_records,
+            vec![HourlyRecord::new(4000, 4.0),]
+        );
     }
 }
