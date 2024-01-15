@@ -71,8 +71,8 @@ impl Worker {
         loop {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
-                    tracing::info!("[{}] got a ctrl-c message", WORKER_ID);
-                    todo!("Handle propagate ctrl-c");
+                    tracing::info!("got a ctrl-c message");
+                    return;
                 },
                 _ = tokio::time::sleep(TEN_SECONDS), if throttle => {
                     tracing::trace!("throttling off");

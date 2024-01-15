@@ -45,8 +45,8 @@ impl<W: EventHandling> LeafWorker<W> {
         loop {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
-                    tracing::info!("[{}] got a ctrl-c message", self.id);
-                    todo!("Handle propagate ctrl-c");
+                    tracing::info!("got a ctrl-c message");
+                    return;
                 },
                 _ = self.event_handler.recv_and_handle() => {}
             }
@@ -120,8 +120,8 @@ impl<W: EventHandling + EventEmission<S = W::D>> SourceWorker<W> {
         loop {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
-                    tracing::info!("[{}] got a ctrl-c message", self.id);
-                    break;
+                    tracing::info!("got a ctrl-c message");
+                    return;
                 },
                 msg = self.event_handler.recv() => {
                     let event = msg.unwrap();

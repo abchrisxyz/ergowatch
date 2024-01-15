@@ -106,7 +106,10 @@ async fn main() -> Result<(), &'static str> {
 
     // Wait for ctrl-c
     _ = tokio::signal::ctrl_c().await;
+    for i in [3, 2, 1] {
+        tracing::info!("stopping in {i}");
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+    }
     tracing::info!("exiting");
-    todo!("clean shutdown");
-    // Ok(())
+    Ok(())
 }
