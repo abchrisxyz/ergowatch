@@ -89,6 +89,7 @@ impl Tracker {
             for cur in &mut self.cursors {
                 tracing::debug!("stepping cursor {}", cur.id);
                 cur.step(&self.node, &mut self.store).await;
+                // TODO: drop cursors having no more downtstream receivers (e.g. they all panicked).
             }
             self.merge_cursors().await;
             if self.cursors.len() == 1 {
