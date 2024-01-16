@@ -268,7 +268,7 @@ impl Tracker {
     /// Process new hourly datapoints.
     ///
     /// Saves hourly records to db and interpolates block records.
-    #[tracing::instrument(skip_all, level=tracing::Level::TRACE)]
+    #[tracing::instrument(skip_all, level=tracing::Level::INFO)]
     async fn handle(&self, hourly_records: Vec<HourlyRecord>) {
         let mut cache = self.cache.write().await;
 
