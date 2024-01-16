@@ -272,8 +272,14 @@ impl Tracker {
     async fn handle(&self, hourly_records: Vec<HourlyRecord>) {
         let mut cache = self.cache.write().await;
 
+        // Append new hourly records to cache
+        cache.recent_hourly_records.extend(hourly_records.clone());
+
         // Latest available hourly timestamp
-        let last_hourly_timestamp = hourly_records.last().unwrap().timestamp;
+        let last_hourly_timestamp = cache.recent_hourly_records.last().unwrap().timestamp;
+
+        // Prepare an iterable over pairs of hourly records
+        let mut hourly_windows = cache.recent_hourly_records.windows(2);
 
         // Prepare an iteratable over updateable block records (the ones prior to or on latest hourly datapoint)
         let mut updatable_block_records = cache
@@ -283,21 +289,23 @@ impl Tracker {
 
         // Progress through updateable records and containing hourly datapoints
         let mut updates: Vec<BlockRecord> = vec![];
-        // Loop through pairs of hourly records
-        for w in hourly_records.windows(2) {
-            match updatable_block_records.next() {
-                Some(pr) => {
-                    if pr.timestamp > w[1].timestamp {
-                        // Current block is outside of current hourly window, move on to next window
-                        continue;
-                    }
-                    updates.push(BlockRecord::new(
-                        pr.height,
-                        interpolate(pr.timestamp, &w[0], &w[1]),
-                    ));
-                }
-                None => break,
+        let mut next_window = hourly_windows.next();
+        let mut next_provisional = updatable_block_records.next();
+        loop {
+            if next_window.is_none() || next_provisional.is_none() {
+                break;
             }
+            let window = next_window.unwrap();
+            let provisional = next_provisional.unwrap();
+            if provisional.timestamp > window[1].timestamp {
+                next_window = hourly_windows.next();
+                continue;
+            }
+            updates.push(BlockRecord::new(
+                provisional.height,
+                interpolate(provisional.timestamp, &window[0], &window[1]),
+            ));
+            next_provisional = updatable_block_records.next();
         }
 
         // Apply changes to store
@@ -307,15 +315,13 @@ impl Tracker {
             .persist_tracker_data(&hourly_records, &updates)
             .await;
 
-        // Update cache
         // Remove interpolated block records from provisional cache
         let last_interpolated_height = updates.last().and_then(|tbr| Some(tbr.height)).unwrap_or(0);
         cache
             .provisional_records
             .retain(|pr| pr.height > last_interpolated_height);
-        // Append new hourly records
-        cache.recent_hourly_records.extend(hourly_records);
-        // Remove unneeded hourly records
+
+        // Remove unneeded hourly records from cache
         cache.trim_hourly_records();
     }
 
