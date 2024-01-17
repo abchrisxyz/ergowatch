@@ -2,6 +2,7 @@ mod db_utils;
 
 use db_utils::TestDB;
 
+use ew::framework::QueryHandler;
 use tokio::sync::mpsc;
 use tokio_postgres::Client;
 
@@ -237,6 +238,215 @@ async fn test_rollback() {
     assert_eq!(deposit_conflicts, vec![]);
 }
 
+#[tokio::test]
+async fn test_reproduce_negative_deposits_bug() {
+    let _guard = set_tracing_subscriber(false);
+    let addr_a = AddressID(8581);
+    let addr_b = AddressID(8711);
+    let addr_c = AddressID(8861);
+    let addr_d = AddressID(9051);
+    let test_db = TestDB::new("exchanges_neg_deps_bug").await;
+    test_db.init_core().await;
+
+    // Init dummy workflow to initialize test db so we can fill in mock data
+    let _ = CexWorkFlow::new(&test_db.pgconf).await;
+
+    // Define a fake CEX's in the test db
+    let cex1_address = AddressID(9101);
+    let cex1_id: i32 = 10000;
+    insert_exchange(&test_db.client, cex1_id, "Exchange 1", "cex_1").await;
+    insert_main_address(&test_db.client, cex1_id, &cex1_address).await;
+
+    // Genesis
+    let genesis_data = StampedData {
+        height: 0,
+        timestamp: GENESIS_TIMESTAMP,
+        header_id: ZERO_HEADER.to_owned(),
+        parent_id: "".to_owned(),
+        data: DiffData {
+            diff_records: vec![],
+        },
+    };
+
+    // Block 1
+    let data_1 = genesis_data.wrap_as_child(DiffData {
+        diff_records: vec![],
+    });
+
+    // Block 2
+    let data_2 = data_1.wrap_as_child(DiffData {
+        diff_records: vec![DiffRecord::new(addr_a, 2, 0, 2487000000)],
+    });
+
+    let data_3 = data_2.wrap_as_child(DiffData {
+        diff_records: vec![DiffRecord::new(addr_b, 3, 0, 10000000000)],
+    });
+    let data_4 = data_3.wrap_as_child(DiffData {
+        diff_records: vec![DiffRecord::new(addr_b, 4, 0, 18590000000000)],
+    });
+    let data_5 = data_4.wrap_as_child(DiffData {
+        diff_records: vec![
+            DiffRecord::new(addr_a, 5, 0, -2487000000),
+            DiffRecord::new(addr_b, 5, 0, -18600000000000),
+            DiffRecord::new(cex1_address, 5, 0, 18602487000000),
+        ],
+    });
+    let data_6 = data_5.wrap_as_child(DiffData {
+        diff_records: vec![DiffRecord::new(addr_c, 6, 0, 100000000000)],
+    });
+    let data_7 = data_6.wrap_as_child(DiffData {
+        diff_records: vec![DiffRecord::new(addr_c, 7, 0, 3882005962830)],
+    });
+    let data_8 = data_7.wrap_as_child(DiffData {
+        diff_records: vec![
+            DiffRecord::new(addr_c, 8, 0, -3982005962830),
+            DiffRecord::new(cex1_address, 8, 0, 3982005962830),
+        ],
+    });
+    let data_9 = data_8.wrap_as_child(DiffData {
+        diff_records: vec![DiffRecord::new(addr_d, 9, 0, 1000000000000)],
+    });
+    let data_10 = data_9.wrap_as_child(DiffData {
+        diff_records: vec![
+            DiffRecord::new(addr_d, 10, 0, -1000000000000),
+            DiffRecord::new(cex1_address, 10, 0, 1000000000000),
+        ],
+    });
+
+    // Prepare erg.balance_diffs table
+    test_db
+        .init_schema(include_str!("../src/workers/erg_diffs/store/schema.sql"))
+        .await;
+    insert_balance_diffs(&test_db.client, &data_1.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_2.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_3.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_4.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_5.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_6.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_7.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_8.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_9.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_10.data.diff_records).await;
+
+    // Configure workflow
+    let mut workflow = CexWorkFlow::new(&test_db.pgconf).await;
+    let mut query_handler = ew::workers::erg_diffs::QueryWorker::new(&test_db.pgconf).await;
+    workflow.set_query_sender(query_handler.connect());
+
+    // Spawn query handler.
+
+    tokio::spawn(async move {
+        query_handler.start().await;
+    });
+
+    // Process blocks
+    workflow.include_block(&genesis_data).await;
+    workflow.include_block(&data_1).await;
+    workflow.include_block(&data_2).await;
+    workflow.include_block(&data_3).await;
+    workflow.include_block(&data_4).await;
+    workflow.include_block(&data_5).await;
+    workflow.include_block(&data_6).await;
+    workflow.include_block(&data_7).await;
+    workflow.include_block(&data_8).await;
+    workflow.include_block(&data_9).await;
+    workflow.include_block(&data_10).await;
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+    // Check db state
+    let supply_records = get_supply_records(&test_db.client).await;
+    assert_eq!(supply_records.len(), 11);
+    assert_eq!(
+        supply_records[0],
+        SupplyRecord {
+            height: 0,
+            main: 0,
+            deposits: 0
+        }
+    );
+    assert_eq!(
+        supply_records[1],
+        SupplyRecord {
+            height: 1,
+            main: 0,
+            deposits: 0,
+        }
+    );
+    assert_eq!(
+        supply_records[2],
+        SupplyRecord {
+            height: 2,
+            main: 0,
+            deposits: 2487000000,
+        }
+    );
+    assert_eq!(
+        supply_records[3],
+        SupplyRecord {
+            height: 3,
+            main: 0,
+            deposits: 12487000000,
+        }
+    );
+    assert_eq!(
+        supply_records[4],
+        SupplyRecord {
+            height: 4,
+            main: 0,
+            deposits: 18602487000000,
+        }
+    );
+    assert_eq!(
+        supply_records[5],
+        SupplyRecord {
+            height: 5,
+            main: 18602487000000,
+            deposits: 0,
+        }
+    );
+    assert_eq!(
+        supply_records[6],
+        SupplyRecord {
+            height: 6,
+            main: 18602487000000,
+            deposits: 100000000000,
+        }
+    );
+    assert_eq!(
+        supply_records[7],
+        SupplyRecord {
+            height: 7,
+            main: 18602487000000,
+            deposits: 3982005962830
+        }
+    );
+    assert_eq!(
+        supply_records[8],
+        SupplyRecord {
+            height: 8,
+            main: 22584492962830,
+            deposits: 0,
+        }
+    );
+    assert_eq!(
+        supply_records[9],
+        SupplyRecord {
+            height: 9,
+            main: 22584492962830,
+            deposits: 1000000000000,
+        }
+    );
+    assert_eq!(
+        supply_records[10],
+        SupplyRecord {
+            height: 10,
+            main: 23584492962830,
+            deposits: 0
+        }
+    );
+}
+
 async fn insert_exchange(client: &Client, id: i32, name: &str, text_id: &str) {
     let stmt = "
         insert into exchanges.exchanges (id, name, text_id)
@@ -305,4 +515,17 @@ async fn get_supply_records(client: &Client) -> Vec<SupplyRecord> {
             deposits: r.get(2),
         })
         .collect()
+}
+
+async fn insert_balance_diffs(client: &Client, diff_records: &Vec<DiffRecord>) {
+    let sql = "
+        insert into erg.balance_diffs (address_id, height, tx_idx, nano)
+        values ($1, $2, $3, $4);
+    ";
+    for r in diff_records {
+        client
+            .execute(sql, &[&r.address_id, &r.height, &r.tx_idx, &r.nano])
+            .await
+            .unwrap();
+    }
 }

@@ -104,25 +104,14 @@ impl Parser {
 
         // As it is, the supply record only accounts for changes from deposits
         // spotted in earlier blocks, not this one.
-        // Here, we check if the supply patch series contains a record for this block
-        // and apply the change to the supply record to be cached.
-        let patched_supply_record = match supply_patch.last() {
-            Some(supply_diff) => {
-                if supply_diff.height == unpatched_supply_record.height {
-                    SupplyRecord {
-                        height: unpatched_supply_record.height,
-                        main: unpatched_supply_record.main,
-                        deposits: unpatched_supply_record.deposits + supply_diff.nano,
-                    }
-                } else {
-                    unpatched_supply_record.clone()
-                }
-            }
-            None => {
-                // No supply diff at current height, patched is same as unpatched
-                unpatched_supply_record.clone()
-            }
+        // Here, we apply the patch to the current supply record.
+        let diff: NanoERG = supply_patch.iter().map(|sd| sd.nano).sum();
+        let patched_supply_record = SupplyRecord {
+            height: unpatched_supply_record.height,
+            main: unpatched_supply_record.main,
+            deposits: unpatched_supply_record.deposits + diff,
         };
+        tracing::trace!("patched supply record: {patched_supply_record:?}");
 
         // Update cache
         self.cache.supply = patched_supply_record.clone();

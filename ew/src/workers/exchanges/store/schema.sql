@@ -53,7 +53,9 @@ create table exchanges.supply (
 	-- Supply on main addresses
 	main bigint not null,
 	-- Supply on deposit addresses
-	deposits bigint not null
+	deposits bigint not null,
+	check(main >= 0),
+	check(deposits >= 0)
 );
 
 -----------------------------------------------------------------------------------------

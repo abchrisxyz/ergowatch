@@ -54,6 +54,12 @@ impl TestDB {
             .unwrap();
     }
 
+    #[allow(dead_code)] // not used by all tests
+    /// Initialize given schema.
+    pub async fn init_schema(&self, sql: &str) {
+        self.client.batch_execute(sql).await.unwrap();
+    }
+
     /// Insert main chain header into core.headers.
     ///
     /// Needed for rollbacks.
