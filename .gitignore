@@ -10,3 +10,6 @@ explorer-backend/[0-9]*
 
 # Local test db connection settings
 **/local.py
+
+# Ignore local top-level docker-compose.yml
+/docker-compose.yml
