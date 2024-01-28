@@ -1,15 +1,18 @@
 .env
 *.secret
 .DS_Store
-*.sublime*
 explorer-backend/[0-9]*
 **/__pycache__/*
 **/.pytest_cache/*
 .stignore
-*.code-workspace
 
 # Local test db connection settings
 **/local.py
 
 # Ignore local top-level docker-compose.yml
 /docker-compose.yml
+
+# Editor settings
+.vscode
+*.code-workspace
+*.sublime*
