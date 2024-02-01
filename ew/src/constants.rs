@@ -1,7 +1,11 @@
+use crate::core::types::Height;
 use crate::core::types::Timestamp;
 
 pub const GENESIS_TIMESTAMP: Timestamp = 1561978800000;
 pub const ZERO_HEADER: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+
+/// Number of blocks in a voting epoch
+pub const VOTING_EPOCH_LENGTH: Height = 1024;
 
 pub mod address_ids {
     use crate::core::types::AddressID;

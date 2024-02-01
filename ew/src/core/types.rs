@@ -1,6 +1,8 @@
 use postgres_types::FromSql;
 use postgres_types::ToSql;
 use serde::Serialize;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use tokio_postgres::types::private::BytesMut;
 
@@ -67,7 +69,7 @@ impl Block {
         Self {
             header: BlockHeader {
                 extension_id: "".to_owned(),
-                difficulty: "".to_owned(),
+                difficulty: "1199990374400".to_owned(),
                 votes: [0, 0, 0],
                 timestamp: crate::constants::GENESIS_TIMESTAMP,
                 size: 0,
@@ -214,6 +216,35 @@ pub struct Transaction {
     pub data_inputs: Vec<BoxData>,
 }
 
+impl Transaction {
+    /// Return non-zero balance diffs by AddressID
+    pub fn non_zero_diffs(&self) -> HashMap<AddressID, NanoERG> {
+        let mut map = HashMap::new();
+        for input in &self.inputs {
+            match map.entry(input.address_id) {
+                Entry::Occupied(mut e) => {
+                    *e.get_mut() -= input.value;
+                }
+                Entry::Vacant(e) => {
+                    e.insert(-input.value);
+                }
+            }
+        }
+        for output in &self.outputs {
+            match map.entry(output.address_id) {
+                Entry::Occupied(mut e) => {
+                    *e.get_mut() += output.value;
+                }
+                Entry::Vacant(e) => {
+                    e.insert(output.value);
+                }
+            }
+        }
+        map.retain(|_, v| v != &0);
+        map
+    }
+}
+
 /// Mutually exclusive address attributes
 ///
 /// P2PK: pay to private key addresses
@@ -299,6 +330,10 @@ impl AddressID {
 
     pub fn zero() -> Self {
         Self(0)
+    }
+
+    pub fn is_miner(&self) -> bool {
+        self.address_type() == AddressType::Miner
     }
 
     #[cfg(feature = "test-utilities")]
@@ -433,6 +468,7 @@ fn decode_register(value: &serde_json::Value, id: i16) -> Option<Register> {
 pub mod testutils {
     pub use super::*;
     use crate::core::node::models::Extension;
+    use crate::core::node::models::ExtensionField;
     use crate::core::node::models::POWSolutions;
     use rand::distributions::Alphanumeric;
     use rand::distributions::DistString;
@@ -493,10 +529,27 @@ pub mod testutils {
             block
         }
 
+        /// (test-util) Returns block with modified header votes.
+        pub fn votes(&self, votes: [i8; 3]) -> Self {
+            let mut block = self.clone();
+            block.header.votes = votes;
+            block
+        }
+
         /// (test-util) Returns block with appended transaction.
         pub fn add_tx(&self, tx: Transaction) -> Self {
             let mut block = self.clone();
             block.transactions.push(tx);
+            block
+        }
+
+        /// (test-util) Returns block with appended extension field.
+        pub fn add_extension_field(&self, key: &str, value: &str) -> Self {
+            let mut block = self.clone();
+            block.extension.fields.push(ExtensionField {
+                key: key.to_owned(),
+                value: value.to_owned(),
+            });
             block
         }
     }
@@ -719,5 +772,24 @@ mod tests {
         assert!(address_ids.contains(&AddressID::dummy(123)));
         assert!(address_ids.contains(&AddressID::dummy(456)));
         assert!(address_ids.contains(&AddressID::dummy(789)));
+    }
+
+    #[test]
+    fn test_transaction_non_zero_diffs() {
+        let addr_a = AddressID(5);
+        let addr_b = AddressID(6);
+        let addr_c = AddressID(7);
+        let tx = Transaction::dummy()
+            .add_input(BoxData::dummy().address_id(addr_a).value(1000))
+            .add_input(BoxData::dummy().address_id(addr_b).value(2000))
+            .add_input(BoxData::dummy().address_id(addr_c).value(3000))
+            .add_input(BoxData::dummy().address_id(addr_a).value(4000))
+            .add_output(BoxData::dummy().address_id(addr_a).value(7000))
+            .add_output(BoxData::dummy().address_id(addr_c).value(1500))
+            .add_output(BoxData::dummy().address_id(addr_c).value(1500));
+        let diffs = tx.non_zero_diffs();
+        assert_eq!(diffs.len(), 2);
+        assert_eq!(diffs[&addr_a], 2000);
+        assert_eq!(diffs[&addr_b], -2000);
     }
 }
