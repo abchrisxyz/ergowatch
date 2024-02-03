@@ -63,6 +63,9 @@ async fn main() -> Result<(), &'static str> {
         workers::exchanges::Worker::new("cex", &pgconf, &mut erg_diffs, monitor.sender()).await;
     cex.connect_query_sender(&erg_diffs_query_handler);
 
+    let mut tokens =
+        workers::tokens::Worker::new("tokens", &pgconf, &mut tracker, monitor.sender()).await;
+
     let mut sigmausd =
         workers::sigmausd::Worker::new("sigmausd", &pgconf, &mut tracker, monitor.sender()).await;
 
@@ -96,6 +99,9 @@ async fn main() -> Result<(), &'static str> {
     });
     tokio::spawn(async move {
         cex.start().await;
+    });
+    tokio::spawn(async move {
+        tokens.start().await;
     });
     tokio::spawn(async move {
         sigmausd.start().await;
