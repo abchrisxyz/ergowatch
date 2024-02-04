@@ -57,11 +57,6 @@ impl From<Option<&BalanceRecord>> for Bal {
 }
 
 impl Bal {
-    // /// Returns true if balance is spent entirely
-    // pub fn is_spent(&self) -> bool {
-    //     matches!(self, Self::Spent)
-    // }
-
     /// Returns true if balance is non zero
     pub fn is_unspent(&self) -> bool {
         matches!(self, Self::Unspent(_))

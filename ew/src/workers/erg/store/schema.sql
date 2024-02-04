@@ -2,14 +2,6 @@ create schema if not exists erg;
 comment on schema erg is 'ERG balances, age and supply metrics';
 
 -------------------------------------------------------------------------------
--- Timestamps (for diffs)
--------------------------------------------------------------------------------
--- create table erg.timestamps (
---     height integer primary key,
---     timestamp bigint not null
--- );
-
--------------------------------------------------------------------------------
 -- Balances
 -------------------------------------------------------------------------------
 create table erg.balances (
