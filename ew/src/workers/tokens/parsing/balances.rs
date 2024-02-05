@@ -8,7 +8,6 @@ use super::super::types::DiffRecord;
 use super::BalanceChange;
 use crate::core::types::AddressID;
 use crate::core::types::AssetID;
-use crate::core::types::Timestamp;
 
 /// Returns balance changes, ignoring addresses created and spent in same block.
 ///
@@ -19,7 +18,6 @@ use crate::core::types::Timestamp;
 pub(super) fn extract_balance_changes(
     balances: &HashMap<(AddressID, AssetID), BalanceRecord>,
     diffs: &Vec<DiffRecord>,
-    timestamp: Timestamp,
 ) -> Vec<BalanceChange> {
     // Rewrite this using Parsing::Bal
 
@@ -36,14 +34,14 @@ pub(super) fn extract_balance_changes(
                 entry.insert(BalanceChange {
                     address_id: diff.address_id,
                     asset_id: diff.asset_id,
-                    new: old_bal.accrue(diff.value, timestamp),
+                    new: old_bal.accrue(diff.value),
                     old: old_bal,
                 });
             }
             // We've seen this address before, apply diff
             Entry::Occupied(mut entry) => {
                 let bc = entry.get_mut();
-                bc.new = bc.new.accrue(diff.value, timestamp);
+                bc.new = bc.new.accrue(diff.value);
             }
         }
     }
@@ -56,38 +54,29 @@ pub(super) fn extract_balance_changes(
 
 #[cfg(test)]
 mod tests {
-    use super::super::Balance;
     use super::*;
     use crate::core::types::Value;
-    use rust_decimal::prelude::FromPrimitive;
-    use rust_decimal::prelude::ToPrimitive;
-    use rust_decimal::Decimal;
 
     const ADDR_A: AddressID = AddressID(123_1);
     const ADDR_B: AddressID = AddressID(456_1);
     const ADDR_C: AddressID = AddressID(789_1);
     const ASSET_X: AssetID = 11;
-    const TS_10K: Timestamp = 1563159993440; // timestamp of block 10000
-    const TS_20K: Timestamp = 1564413706977; // timestamp of block 20000
-    const TS_30K: Timestamp = 1565532307779; // timestamp of block 30000
 
     #[test]
     fn test_full_transfer() {
-        let balances: HashMap<(AddressID, AssetID), BalanceRecord> = HashMap::from([(
-            (ADDR_A, ASSET_X),
-            BalanceRecord::new(ADDR_A, ASSET_X, 2000, TS_10K),
-        )]);
+        let balances: HashMap<(AddressID, AssetID), BalanceRecord> =
+            HashMap::from([((ADDR_A, ASSET_X), BalanceRecord::new(ADDR_A, ASSET_X, 2000))]);
         let diffs = vec![
             DiffRecord::new(ADDR_A, ASSET_X, 30000, 0, -2000),
             DiffRecord::new(ADDR_B, ASSET_X, 30000, 0, 2000),
         ];
-        let changes = extract_balance_changes(&balances, &diffs, TS_30K);
+        let changes = extract_balance_changes(&balances, &diffs);
         assert_eq!(changes.len(), 2);
         // A got spent entirely
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_A,
             asset_id: ASSET_X,
-            old: Bal::Unspent(Balance::new(2000, TS_10K)),
+            old: Bal::Unspent(2000),
             new: Bal::Spent
         }));
         // B got a fresh new balance with timestamp of current block
@@ -95,21 +84,19 @@ mod tests {
             address_id: ADDR_B,
             asset_id: ASSET_X,
             old: Bal::Spent,
-            new: Bal::Unspent(Balance::new(2000, TS_30K)),
+            new: Bal::Unspent(2000),
         }));
     }
 
     #[test]
     fn test_partial_spend() {
-        let balances: HashMap<(AddressID, AssetID), BalanceRecord> = HashMap::from([(
-            (ADDR_A, ASSET_X),
-            BalanceRecord::new(ADDR_A, ASSET_X, 2000, TS_10K),
-        )]);
+        let balances: HashMap<(AddressID, AssetID), BalanceRecord> =
+            HashMap::from([((ADDR_A, ASSET_X), BalanceRecord::new(ADDR_A, ASSET_X, 2000))]);
         let diffs = vec![
             DiffRecord::new(ADDR_A, ASSET_X, 30000, 0, -500),
             DiffRecord::new(ADDR_B, ASSET_X, 30000, 0, 500),
         ];
-        let changes = extract_balance_changes(&balances, &diffs, TS_30K);
+        let changes = extract_balance_changes(&balances, &diffs);
         assert_eq!(changes.len(), 2);
         println!("{:?}", changes[0]);
         println!("{:?}", changes[1]);
@@ -117,51 +104,41 @@ mod tests {
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_A,
             asset_id: ASSET_X,
-            old: Bal::Unspent(Balance::new(2000, TS_10K)),
-            new: Bal::Unspent(Balance::new(1500, TS_10K)),
+            old: Bal::Unspent(2000),
+            new: Bal::Unspent(1500),
         }));
-        // B got a fresh new balance with timestamp of current block
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_B,
             asset_id: ASSET_X,
             old: Bal::Spent,
-            new: Bal::Unspent(Balance::new(500, TS_30K)),
+            new: Bal::Unspent(500),
         }));
     }
 
     #[test]
     fn test_partial_credit() {
         let balances: HashMap<(AddressID, AssetID), BalanceRecord> = HashMap::from([
-            (
-                (ADDR_A, ASSET_X),
-                BalanceRecord::new(ADDR_A, ASSET_X, 2000, TS_10K),
-            ),
-            (
-                (ADDR_B, ASSET_X),
-                BalanceRecord::new(ADDR_B, ASSET_X, 1500, TS_20K),
-            ),
+            ((ADDR_A, ASSET_X), BalanceRecord::new(ADDR_A, ASSET_X, 2000)),
+            ((ADDR_B, ASSET_X), BalanceRecord::new(ADDR_B, ASSET_X, 1500)),
         ]);
         let diffs = vec![
             DiffRecord::new(ADDR_A, ASSET_X, 30000, 0, -500),
             DiffRecord::new(ADDR_B, ASSET_X, 30000, 0, 500),
         ];
-        let changes = extract_balance_changes(&balances, &diffs, TS_30K);
+        let changes = extract_balance_changes(&balances, &diffs);
         assert_eq!(changes.len(), 2);
         // A got a lower balance with unchanged timestamp
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_A,
             asset_id: ASSET_X,
-            old: Bal::Unspent(Balance::new(2000, TS_10K)),
-            new: Bal::Unspent(Balance::new(1500, TS_10K)),
+            old: Bal::Unspent(2000),
+            new: Bal::Unspent(1500),
         }));
-        // B got a higher balance with more recent timestamp
-        let ts_b = Decimal::from_f32(0.75).unwrap() * Decimal::from_i64(TS_20K).unwrap()
-            + Decimal::from_f32(0.25).unwrap() * Decimal::from_i64(TS_30K).unwrap();
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_B,
             asset_id: ASSET_X,
-            old: Bal::Unspent(Balance::new(1500, TS_20K)),
-            new: Bal::Unspent(Balance::new(2000, ts_b.to_i64().unwrap())),
+            old: Bal::Unspent(1500),
+            new: Bal::Unspent(2000),
         }));
     }
 
@@ -169,37 +146,27 @@ mod tests {
     fn test_partial_credit_fractional() {
         // Variant with fractional age calculation
         let balances: HashMap<(AddressID, AssetID), BalanceRecord> = HashMap::from([
-            (
-                (ADDR_A, ASSET_X),
-                BalanceRecord::new(ADDR_A, ASSET_X, 2000, TS_10K),
-            ),
-            (
-                (ADDR_B, ASSET_X),
-                BalanceRecord::new(ADDR_B, ASSET_X, 1000, TS_20K),
-            ),
+            ((ADDR_A, ASSET_X), BalanceRecord::new(ADDR_A, ASSET_X, 2000)),
+            ((ADDR_B, ASSET_X), BalanceRecord::new(ADDR_B, ASSET_X, 1000)),
         ]);
         let diffs = vec![
             DiffRecord::new(ADDR_A, ASSET_X, 30000, 0, -2000),
             DiffRecord::new(ADDR_B, ASSET_X, 30000, 0, 2000),
         ];
-        let changes = extract_balance_changes(&balances, &diffs, TS_30K);
+        let changes = extract_balance_changes(&balances, &diffs);
         assert_eq!(changes.len(), 2);
         // A got spent
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_A,
             asset_id: ASSET_X,
-            old: Bal::Unspent(Balance::new(2000, TS_10K)),
+            old: Bal::Unspent(2000),
             new: Bal::Spent,
         }));
-        // B got a higher balance with more recent timestamp
-        let ts_b = (Decimal::from_i64(1).unwrap() * Decimal::from_i64(TS_20K).unwrap()
-            + Decimal::from_i64(2).unwrap() * Decimal::from_i64(TS_30K).unwrap())
-            / Decimal::from_i64(3).unwrap();
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_B,
             asset_id: ASSET_X,
-            old: Bal::Unspent(Balance::new(1000, TS_20K)),
-            new: Bal::Unspent(Balance::new(3000, ts_b.to_i64().unwrap())),
+            old: Bal::Unspent(1000),
+            new: Bal::Unspent(3000),
         }));
     }
 
@@ -207,14 +174,8 @@ mod tests {
     fn test_spend_then_credit() {
         // Case where an address gets spent then credited again in same block.
         let balances: HashMap<(AddressID, AssetID), BalanceRecord> = HashMap::from([
-            (
-                (ADDR_A, ASSET_X),
-                BalanceRecord::new(ADDR_A, ASSET_X, 2000, TS_10K),
-            ),
-            (
-                (ADDR_C, ASSET_X),
-                BalanceRecord::new(ADDR_C, ASSET_X, 3000, TS_20K),
-            ),
+            ((ADDR_A, ASSET_X), BalanceRecord::new(ADDR_A, ASSET_X, 2000)),
+            ((ADDR_C, ASSET_X), BalanceRecord::new(ADDR_C, ASSET_X, 3000)),
         ]);
         let diffs = vec![
             // Send A to B, spending A entirely
@@ -224,27 +185,27 @@ mod tests {
             DiffRecord::new(ADDR_C, ASSET_X, 30000, 1, -3000),
             DiffRecord::new(ADDR_A, ASSET_X, 30000, 1, 3000),
         ];
-        let changes = extract_balance_changes(&balances, &diffs, TS_30K);
+        let changes = extract_balance_changes(&balances, &diffs);
         assert_eq!(changes.len(), 3);
         // A got a new balance
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_A,
             asset_id: ASSET_X,
-            old: Bal::Unspent(Balance::new(2000, TS_10K)),
-            new: Bal::Unspent(Balance::new(3000, TS_30K)),
+            old: Bal::Unspent(2000),
+            new: Bal::Unspent(3000),
         }));
         // B got a new balance
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_B,
             asset_id: ASSET_X,
             old: Bal::Spent,
-            new: Bal::Unspent(Balance::new(2000, TS_30K)),
+            new: Bal::Unspent(2000),
         }));
         // C got spent entirely
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_C,
             asset_id: ASSET_X,
-            old: Bal::Unspent(Balance::new(3000, TS_20K)),
+            old: Bal::Unspent(3000),
             new: Bal::Spent,
         }));
     }
@@ -252,10 +213,8 @@ mod tests {
     #[test]
     fn test_credit_then_spend() {
         // Ensure an address created and spent in same block appears nowhere
-        let balances: HashMap<(AddressID, AssetID), BalanceRecord> = HashMap::from([(
-            (ADDR_A, ASSET_X),
-            BalanceRecord::new(ADDR_A, ASSET_X, 2000, TS_10K),
-        )]);
+        let balances: HashMap<(AddressID, AssetID), BalanceRecord> =
+            HashMap::from([((ADDR_A, ASSET_X), BalanceRecord::new(ADDR_A, ASSET_X, 2000))]);
         let diffs = vec![
             // Send A to B
             DiffRecord::new(ADDR_A, ASSET_X, 30000, 0, -2000),
@@ -264,7 +223,7 @@ mod tests {
             DiffRecord::new(ADDR_B, ASSET_X, 30000, 1, -2000),
             DiffRecord::new(ADDR_A, ASSET_X, 30000, 1, 2000),
         ];
-        let changes = extract_balance_changes(&balances, &diffs, TS_30K);
+        let changes = extract_balance_changes(&balances, &diffs);
         // Check there are no changes for address B
         assert_eq!(changes.len(), 1);
         assert_eq!(changes[0].address_id, ADDR_A);
@@ -277,34 +236,31 @@ mod tests {
         let balances: HashMap<(AddressID, AssetID), BalanceRecord> = HashMap::from([
             (
                 (ADDR_A, ASSET_X),
-                BalanceRecord::new(ADDR_A, ASSET_X, 20 * million, TS_10K),
+                BalanceRecord::new(ADDR_A, ASSET_X, 20 * million),
             ),
             (
                 (ADDR_B, ASSET_X),
-                BalanceRecord::new(ADDR_B, ASSET_X, 3 * million, TS_20K),
+                BalanceRecord::new(ADDR_B, ASSET_X, 3 * million),
             ),
         ]);
         let diffs = vec![
             DiffRecord::new(ADDR_A, ASSET_X, 30000, 0, -1 * million),
             DiffRecord::new(ADDR_B, ASSET_X, 30000, 0, 1 * million),
         ];
-        let changes = extract_balance_changes(&balances, &diffs, TS_30K);
+        let changes = extract_balance_changes(&balances, &diffs);
         assert_eq!(changes.len(), 2);
         // A got a lower balance with unchanged timestamp
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_A,
             asset_id: ASSET_X,
-            old: Bal::Unspent(Balance::new(20 * million, TS_10K)),
-            new: Bal::Unspent(Balance::new(19 * million, TS_10K)),
+            old: Bal::Unspent(20 * million),
+            new: Bal::Unspent(19 * million),
         }));
-        // B got a higher balance with more recent timestamp
-        let ts_b = Decimal::from_f32(0.75).unwrap() * Decimal::from_i64(TS_20K).unwrap()
-            + Decimal::from_f32(0.25).unwrap() * Decimal::from_i64(TS_30K).unwrap();
         assert!(changes.contains(&BalanceChange {
             address_id: ADDR_B,
             asset_id: ASSET_X,
-            old: Bal::Unspent(Balance::new(3 * million, TS_20K)),
-            new: Bal::Unspent(Balance::new(4 * million, ts_b.to_i64().unwrap())),
+            old: Bal::Unspent(3 * million),
+            new: Bal::Unspent(4 * million),
         }));
     }
 }

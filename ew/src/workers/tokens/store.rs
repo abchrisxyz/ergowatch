@@ -8,7 +8,6 @@ use tokio_postgres::Transaction;
 
 use super::types::AddressAsset;
 use super::types::BalanceRecord;
-use crate::constants::settings::ROLLBACK_HORIZON;
 use crate::core::types::AddressID;
 use crate::core::types::AssetID;
 use crate::core::types::Header;
@@ -42,46 +41,55 @@ impl BatchStore for InnerStore {
     async fn persist(&mut self, pgtx: &Transaction<'_>, stamped_batch: &StampedData<Self::B>) {
         let batch = &stamped_batch.data;
 
-        // Before modifying any balances, log current state to allow rollbacks.
-        let height = stamped_batch.height;
-        let new_address_assets = batch
-            .balance_records
-            .iter()
-            .filter(|r| r.mean_age_timestamp == stamped_batch.timestamp)
-            .map(|r| AddressAsset::new(r.address_id, r.asset_id))
-            .collect();
-        let modified_addresses = batch
-            .balance_records
-            .iter()
-            .filter(|r| r.mean_age_timestamp != stamped_batch.timestamp)
-            .map(|r| AddressAsset::new(r.address_id, r.asset_id))
-            .collect();
-        // Log addresses that will get created
-        balances::logs::log_new_balances(pgtx, height, &new_address_assets).await;
-        // Log current balance of addresses that will get modified
-        balances::logs::log_existing_balances(pgtx, height, &modified_addresses).await;
-        // Log current balance of addresses that will get spent
-        balances::logs::log_existing_balances(pgtx, height, &batch.spent_addresses).await;
-        // Delete old logs
-        balances::logs::delete_logs_prior_to(pgtx, height - ROLLBACK_HORIZON).await;
+        // Collect diffed Address/Assets
 
+        // Delete at
         diffs::insert_many(&pgtx, &batch.diff_records).await;
         balances::upsert_many(&pgtx, &batch.balance_records).await;
         balances::delete_many(&pgtx, &batch.spent_addresses).await;
+
+        // Collect diffs of diffed address/assets
+
+        // Calculate balances from diffs
+
+        // Restore non-zero balances
     }
 
     async fn roll_back(&mut self, pgtx: &Transaction<'_>, header: &Header) {
         tracing::debug!("rolling back block {}", header.height);
 
         let height = header.height;
+
+        // Collect diffed Address/Assets
+        let diffed: Vec<AddressAsset> = diffs::get_many_at(pgtx, height)
+            .await
+            .iter()
+            .map(|dr| AddressAsset::new(dr.address_id, dr.asset_id))
+            .collect();
+
+        // Delete at
         diffs::delete_at(&pgtx, height).await;
-        balances::upsert_many(&pgtx, &balances::logs::get_balances_at(pgtx, height).await).await;
+
+        // Get previous balances for diffed address/assets
+        let diffed_bals = diffs::get_balances_for(pgtx, &diffed).await;
+
+        // Delete balances that were zero
         balances::delete_many(
             &pgtx,
-            &balances::logs::get_address_assets_created_at(pgtx, height).await,
+            &diffed_bals
+                .iter()
+                .filter(|br| br.value == 0)
+                .map(|br| AddressAsset(br.address_id, br.asset_id))
+                .collect(),
         )
         .await;
-        balances::logs::delete_logs_at(pgtx, height).await;
+
+        // Upsert non-zero balances
+        balances::upsert_many(
+            &pgtx,
+            &diffed_bals.into_iter().filter(|br| br.value != 0).collect(),
+        )
+        .await;
     }
 }
 

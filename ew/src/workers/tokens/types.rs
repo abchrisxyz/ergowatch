@@ -1,7 +1,6 @@
 use crate::core::types::AddressID;
 use crate::core::types::AssetID;
 use crate::core::types::Height;
-use crate::core::types::Timestamp;
 use crate::core::types::Value;
 
 pub struct Batch {
@@ -54,21 +53,14 @@ pub struct BalanceRecord {
     pub address_id: AddressID,
     pub asset_id: AssetID,
     pub value: Value,
-    pub mean_age_timestamp: Timestamp,
 }
 
 impl BalanceRecord {
-    pub fn new(
-        address_id: AddressID,
-        asset_id: AssetID,
-        value: Value,
-        mean_age_timestamp: Timestamp,
-    ) -> Self {
+    pub fn new(address_id: AddressID, asset_id: AssetID, value: Value) -> Self {
         Self {
             address_id,
             asset_id,
             value,
-            mean_age_timestamp,
         }
     }
 }

@@ -1,8 +1,5 @@
 mod balances;
 
-use rust_decimal::prelude::FromPrimitive;
-use rust_decimal::prelude::ToPrimitive;
-use rust_decimal::Decimal;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -16,7 +13,6 @@ use crate::core::types::AssetID;
 use crate::core::types::Block;
 use crate::core::types::CoreData;
 use crate::core::types::Height;
-use crate::core::types::Timestamp;
 use crate::core::types::Transaction;
 use crate::core::types::Value;
 use crate::framework::StampedData;
@@ -32,12 +28,12 @@ struct BalanceChange {
 #[derive(Debug, PartialEq)]
 pub(super) enum Bal {
     Spent,
-    Unspent(Balance),
+    Unspent(Value),
 }
 
 impl From<&BalanceRecord> for Bal {
     fn from(br: &BalanceRecord) -> Self {
-        Bal::Unspent(Balance::new(br.value, br.mean_age_timestamp))
+        Bal::Unspent(br.value)
     }
 }
 
@@ -45,7 +41,7 @@ impl From<Option<&BalanceRecord>> for Bal {
     fn from(value: Option<&BalanceRecord>) -> Self {
         match value {
             None => Self::Spent,
-            Some(br) => Bal::Unspent(Balance::new(br.value, br.mean_age_timestamp)),
+            Some(br) => Bal::Unspent(br.value),
         }
     }
 }
@@ -56,49 +52,21 @@ impl Bal {
         matches!(self, Self::Unspent(_))
     }
 
-    /// Return new `Bal` with accrued value and timestamp.
-    pub fn accrue(&self, amount: Value, timestamp: Timestamp) -> Self {
+    /// Return new `Bal` with accrued value.
+    pub fn accrue(&self, amount: Value) -> Self {
         match self {
             // No existing balance so diff becomes new balance
-            Bal::Spent => Bal::Unspent(Balance::new(amount, timestamp)),
+            Bal::Spent => Bal::Unspent(amount),
             // Update existing balance
-            Bal::Unspent(balance) => {
-                let new_value = balance.value + amount;
+            Bal::Unspent(current_value) => {
+                let new_value = current_value + amount;
                 if new_value == 0 {
                     // Balance got spent entirely
-                    return Bal::Spent;
-                }
-                let new_mat = if amount > 0 {
-                    // Credit refreshes balance age
-                    ((Decimal::from_i64(balance.mean_age_timestamp).unwrap()
-                        * Decimal::from_i64(balance.value).unwrap()
-                        + Decimal::from_i64(timestamp).unwrap()
-                            * Decimal::from_i64(amount).unwrap())
-                        / Decimal::from_i64(new_value).unwrap())
-                    .to_i64()
-                    .unwrap()
+                    Bal::Spent
                 } else {
-                    // Partial spend does not change balance age
-                    balance.mean_age_timestamp
-                };
-                Bal::Unspent(Balance::new(new_value, new_mat))
+                    Bal::Unspent(new_value)
+                }
             }
-        }
-    }
-}
-
-/// Balance value and timestamp.
-#[derive(Debug, PartialEq)]
-pub(super) struct Balance {
-    pub value: Value,
-    pub mean_age_timestamp: Timestamp,
-}
-
-impl Balance {
-    pub fn new(value: Value, mean_age_timestamp: Timestamp) -> Self {
-        Self {
-            value,
-            mean_age_timestamp,
         }
     }
 }
@@ -120,8 +88,7 @@ impl Parser {
         diff_records: Vec<DiffRecord>,
         balances: HashMap<(AddressID, AssetID), BalanceRecord>,
     ) -> StampedData<Batch> {
-        let balance_changes =
-            balances::extract_balance_changes(&balances, &diff_records, stamped_data.timestamp);
+        let balance_changes = balances::extract_balance_changes(&balances, &diff_records);
         let batch = Batch {
             diff_records,
             // Extract balance records from balance changes
@@ -129,12 +96,9 @@ impl Parser {
                 .into_iter()
                 .filter_map(|bc| match bc.new {
                     Bal::Spent => None,
-                    Bal::Unspent(bal) => Some(BalanceRecord::new(
-                        bc.address_id,
-                        bc.asset_id,
-                        bal.value,
-                        bal.mean_age_timestamp,
-                    )),
+                    Bal::Unspent(value) => {
+                        Some(BalanceRecord::new(bc.address_id, bc.asset_id, value))
+                    }
                 })
                 .collect(),
             spent_addresses: vec![],
