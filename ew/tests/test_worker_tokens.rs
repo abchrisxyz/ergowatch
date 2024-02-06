@@ -171,6 +171,15 @@ async fn test_rollback() {
             (addr_c, asset_x, 2, 1, -1_000_000_000),
         ]
     );
+    let balances = get_balances(&test_db.client).await;
+    assert_eq!(balances.len(), 2);
+    assert_eq!(
+        balances,
+        vec![
+            (addr_a, asset_x, 101_000_000_000),
+            (addr_c, asset_x, 4_000_000_000),
+        ]
+    );
 
     // Do the rollback
     workflow.roll_back(height_y).await;
@@ -186,6 +195,165 @@ async fn test_rollback() {
             (addr_b, asset_x, 1, 1, 5_000_000_000),
         ]
     );
+    let balances = get_balances(&test_db.client).await;
+    assert_eq!(balances.len(), 2);
+    assert_eq!(
+        balances,
+        vec![
+            (addr_a, asset_x, 100_000_000_000),
+            (addr_b, asset_x, 5_000_000_000),
+        ]
+    );
+}
+
+/// Alternative rollback scenario, where an address (B) ends up
+/// spent after a rollback, while still having diffs in previous
+/// blocks.
+#[tokio::test]
+async fn test_rollback_alt() {
+    let _guard = set_tracing_subscriber(false);
+    let addr_a = AddressID::dummy(1001);
+    let addr_b = AddressID::dummy(1002);
+    let addr_c = AddressID::dummy(1003);
+    let asset_x: AssetID = 11;
+    let test_db = TestDB::new("tokens_rollback_alt").await;
+    test_db.init_core().await;
+
+    // Genesis
+    // Keeping it empty this time to simplify test assertions.
+    let genesis_block = Block::from_genesis_boxes(vec![]);
+
+    // Block X
+    let ts_x = TS_10K;
+    let block_x = Block::child_of(&genesis_block)
+        .timestamp(ts_x)
+        .add_tx(
+            // Create A and B out of thin air (otherwise ending up with a negative balances)
+            Transaction::dummy()
+                .add_output(
+                    BoxData::dummy()
+                        .address_id(addr_a)
+                        .add_asset(asset_x, 105_000_000_000),
+                )
+                .add_output(
+                    BoxData::dummy()
+                        .address_id(addr_b)
+                        .add_asset(asset_x, 5_000_000_000),
+                ),
+        )
+        .add_tx(
+            // B sends 5 to A, spending B
+            Transaction::dummy()
+                .add_input(
+                    BoxData::dummy()
+                        .address_id(addr_b)
+                        .add_asset(asset_x, 5_000_000_000),
+                )
+                .add_output(
+                    BoxData::dummy()
+                        .address_id(addr_a)
+                        .add_asset(asset_x, 5_000_000_000),
+                ),
+        );
+
+    // Block Y
+    let ts_y = ts_x + 120_000;
+    let block_y = Block::child_of(&block_x)
+        .timestamp(ts_y)
+        .add_tx(
+            // A sends 5 to C, creating C
+            Transaction::dummy()
+                .add_input(
+                    BoxData::dummy()
+                        .address_id(addr_a)
+                        .add_asset(asset_x, 5_000_000_000),
+                )
+                .add_output(
+                    BoxData::dummy()
+                        .address_id(addr_c)
+                        .add_asset(asset_x, 5_000_000_000),
+                ),
+        )
+        .add_tx(
+            // C sends 1 to B, recreating B
+            Transaction::dummy()
+                .add_input(
+                    BoxData::dummy()
+                        .address_id(addr_c)
+                        .add_asset(asset_x, 1_000_000_000),
+                )
+                .add_output(
+                    BoxData::dummy()
+                        .address_id(addr_b)
+                        .add_asset(asset_x, 1_000_000_000),
+                ),
+        );
+
+    // Register core header for parent of rolled back blocks
+    test_db.insert_core_header(&(&block_x.header).into()).await;
+
+    let mut workflow = TokensWorkFlow::new(&test_db.pgconf).await;
+    let height_y = block_y.header.height;
+    workflow
+        .include_block(
+            &CoreData {
+                block: genesis_block,
+            }
+            .into(),
+        )
+        .await;
+    workflow
+        .include_block(&CoreData { block: block_x }.into())
+        .await;
+    workflow
+        .include_block(&CoreData { block: block_y }.into())
+        .await;
+
+    // Check db state before rollback
+    let diffs = get_diffs(&test_db.client).await;
+    assert_eq!(diffs.len(), 8);
+    assert_eq!(
+        diffs,
+        vec![
+            (addr_a, asset_x, 1, 0, 105_000_000_000),
+            (addr_b, asset_x, 1, 0, 5_000_000_000),
+            (addr_a, asset_x, 1, 1, 5_000_000_000),
+            (addr_b, asset_x, 1, 1, -5_000_000_000),
+            (addr_a, asset_x, 2, 0, -5_000_000_000),
+            (addr_c, asset_x, 2, 0, 5_000_000_000),
+            (addr_b, asset_x, 2, 1, 1_000_000_000),
+            (addr_c, asset_x, 2, 1, -1_000_000_000),
+        ]
+    );
+    let balances = get_balances(&test_db.client).await;
+    assert_eq!(balances.len(), 3);
+    assert_eq!(
+        balances,
+        vec![
+            (addr_a, asset_x, 105_000_000_000),
+            (addr_b, asset_x, 1_000_000_000),
+            (addr_c, asset_x, 4_000_000_000),
+        ]
+    );
+
+    // Do the rollback
+    workflow.roll_back(height_y).await;
+
+    // Check db state after rollback
+    let diffs = get_diffs(&test_db.client).await;
+    assert_eq!(diffs.len(), 4);
+    assert_eq!(
+        diffs,
+        vec![
+            (addr_a, asset_x, 1, 0, 105_000_000_000),
+            (addr_b, asset_x, 1, 0, 5_000_000_000),
+            (addr_a, asset_x, 1, 1, 5_000_000_000),
+            (addr_b, asset_x, 1, 1, -5_000_000_000),
+        ]
+    );
+    let balances = get_balances(&test_db.client).await;
+    assert_eq!(balances.len(), 1);
+    assert_eq!(balances, vec![(addr_a, asset_x, 110_000_000_000),]);
 }
 
 async fn get_diffs(client: &Client) -> Vec<(AddressID, AssetID, Height, i16, Value)> {
@@ -210,6 +378,29 @@ async fn get_diffs(client: &Client) -> Vec<(AddressID, AssetID, Height, i16, Val
                 r.get::<usize, Height>(2),
                 r.get::<usize, i16>(3),
                 r.get::<usize, Value>(4),
+            )
+        })
+        .collect()
+}
+
+async fn get_balances(client: &Client) -> Vec<(AddressID, AssetID, Value)> {
+    client
+        .query(
+            "select address_id
+                , asset_id
+                , value
+            from tokens.balances
+            order by address_id, asset_id;",
+            &[],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|r| {
+            (
+                r.get::<usize, AddressID>(0),
+                r.get::<usize, AssetID>(1),
+                r.get::<usize, Value>(2),
             )
         })
         .collect()

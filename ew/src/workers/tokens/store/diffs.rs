@@ -66,7 +66,7 @@ pub async fn get_many_at(pgtx: &Transaction<'_>, height: Height) -> Vec<DiffReco
 }
 
 /// Calculate balances from diffs for given address/asset pairs.
-pub async fn get_balances_for(
+pub async fn get_non_zero_balances_for(
     pgtx: &Transaction<'_>,
     address_assets: &[AddressAsset],
 ) -> Vec<BalanceRecord> {
@@ -81,7 +81,7 @@ pub async fn get_balances_for(
             , sum(value)::bigint
         from tokens.balance_diffs
         where (address_id, asset_id) = any(values {})
-        group by 1, 2
+        group by 1, 2 having sum(value) <> 0
         ;",
         address_assets
             .iter()

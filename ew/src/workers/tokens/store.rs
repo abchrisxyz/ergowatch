@@ -62,25 +62,15 @@ impl BatchStore for InnerStore {
         diffs::delete_at(&pgtx, height).await;
 
         // Get previous balances for diffed address/assets
-        let diffed_bals = diffs::get_balances_for(pgtx, &diffed).await;
+        let diffed_bals = diffs::get_non_zero_balances_for(pgtx, &diffed).await;
 
-        // Delete balances that were zero
-        balances::delete_many(
-            &pgtx,
-            &diffed_bals
-                .iter()
-                .filter(|br| br.value == 0)
-                .map(|br| AddressAsset(br.address_id, br.asset_id))
-                .collect(),
-        )
-        .await;
+        // Delete all diffed address assets.
+        // Alternative would be to delete only those that have no match in recalculated
+        // balances (diffed_bals). This is simpler, even if less efficient.
+        balances::delete_many(&pgtx, &diffed).await;
 
-        // Upsert non-zero balances
-        balances::upsert_many(
-            &pgtx,
-            &diffed_bals.into_iter().filter(|br| br.value != 0).collect(),
-        )
-        .await;
+        // Re-insert non-zero balances
+        balances::upsert_many(&pgtx, &diffed_bals).await;
     }
 }
 
