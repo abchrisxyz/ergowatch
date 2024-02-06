@@ -19,8 +19,6 @@ pub(super) fn extract_balance_changes(
     balances: &HashMap<(AddressID, AssetID), BalanceRecord>,
     diffs: &Vec<DiffRecord>,
 ) -> Vec<BalanceChange> {
-    // Rewrite this using Parsing::Bal
-
     let mut balance_changes: HashMap<(AddressID, AssetID), BalanceChange> = HashMap::new();
     // Apply diffs to balances
     for diff in diffs {

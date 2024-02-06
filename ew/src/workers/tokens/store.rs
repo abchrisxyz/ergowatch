@@ -41,18 +41,9 @@ impl BatchStore for InnerStore {
     async fn persist(&mut self, pgtx: &Transaction<'_>, stamped_batch: &StampedData<Self::B>) {
         let batch = &stamped_batch.data;
 
-        // Collect diffed Address/Assets
-
-        // Delete at
         diffs::insert_many(&pgtx, &batch.diff_records).await;
         balances::upsert_many(&pgtx, &batch.balance_records).await;
         balances::delete_many(&pgtx, &batch.spent_addresses).await;
-
-        // Collect diffs of diffed address/assets
-
-        // Calculate balances from diffs
-
-        // Restore non-zero balances
     }
 
     async fn roll_back(&mut self, pgtx: &Transaction<'_>, header: &Header) {
