@@ -89,8 +89,15 @@ impl Parser {
         balances: HashMap<(AddressID, AssetID), BalanceRecord>,
     ) -> StampedData<Batch> {
         let balance_changes = balances::extract_balance_changes(&balances, &diff_records);
+
         let batch = Batch {
             diff_records,
+            // Extract spent addresses assets from balance changes
+            spent_addresses: balance_changes
+                .iter()
+                .filter(|aa| matches!(aa.new, Bal::Spent))
+                .map(|aa| AddressAsset(aa.address_id, aa.asset_id))
+                .collect(),
             // Extract balance records from balance changes
             balance_records: balance_changes
                 .into_iter()
@@ -101,7 +108,6 @@ impl Parser {
                     }
                 })
                 .collect(),
-            spent_addresses: vec![],
         };
         stamped_data.wrap(batch)
     }
