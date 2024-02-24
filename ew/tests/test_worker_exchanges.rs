@@ -447,6 +447,149 @@ async fn test_reproduce_negative_deposits_bug() {
     );
 }
 
+#[tokio::test]
+async fn test_ignored_deposit_addresses() {
+    let _guard = set_tracing_subscriber(false);
+    let addr_a = AddressID(8581);
+    let addr_b = AddressID(8711);
+    let addr_i = AddressID(9051);
+    let test_db = TestDB::new("exchanges_ignored_deps").await;
+    test_db.init_core().await;
+
+    // Init dummy workflow to initialize test db so we can fill in mock data
+    let _ = CexWorkFlow::new(&test_db.pgconf).await;
+
+    // Define a fake CEX in the test db
+    let cex1_address = AddressID(9101);
+    let cex1_id: i32 = 10000;
+    insert_exchange(&test_db.client, cex1_id, "Exchange 1", "cex_1").await;
+    insert_main_address(&test_db.client, cex1_id, &cex1_address).await;
+    insert_ignored_address(&test_db.client, &addr_i).await;
+
+    // Genesis
+    let genesis_data = StampedData {
+        height: 0,
+        timestamp: GENESIS_TIMESTAMP,
+        header_id: ZERO_HEADER.to_owned(),
+        parent_id: "".to_owned(),
+        data: DiffData {
+            diff_records: vec![],
+        },
+    };
+
+    // Block 1
+    let data_1 = genesis_data.wrap_as_child(DiffData {
+        diff_records: vec![],
+    });
+
+    // Block 2
+    let data_2 = data_1.wrap_as_child(DiffData {
+        diff_records: vec![DiffRecord::new(addr_a, 2, 0, 2487000000)],
+    });
+
+    let data_3 = data_2.wrap_as_child(DiffData {
+        diff_records: vec![DiffRecord::new(addr_b, 3, 0, 10000000000)],
+    });
+
+    // Block 4 - a sends to i
+    let data_4 = data_3.wrap_as_child(DiffData {
+        diff_records: vec![
+            DiffRecord::new(addr_a, 4, 0, -2487000000),
+            DiffRecord::new(addr_i, 4, 0, 2487000000),
+        ],
+    });
+
+    // Block 5 - i sends to cex but should not be flagged as deposit because on ignore list
+    let data_5 = data_4.wrap_as_child(DiffData {
+        diff_records: vec![
+            DiffRecord::new(addr_i, 5, 0, -2487000000),
+            DiffRecord::new(cex1_address, 5, 0, 2487000000),
+        ],
+    });
+
+    // Prepare erg.balance_diffs table
+    test_db
+        .init_schema(include_str!("../src/workers/erg_diffs/store/schema.sql"))
+        .await;
+    insert_balance_diffs(&test_db.client, &data_1.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_2.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_3.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_4.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_5.data.diff_records).await;
+
+    // Configure workflow
+    let mut workflow = CexWorkFlow::new(&test_db.pgconf).await;
+    let mut query_handler = ew::workers::erg_diffs::QueryWorker::new(&test_db.pgconf).await;
+    workflow.set_query_sender(query_handler.connect());
+
+    // Spawn query handler.
+    tokio::spawn(async move {
+        query_handler.start().await;
+    });
+
+    // Process blocks
+    workflow.include_block(&genesis_data).await;
+    workflow.include_block(&data_1).await;
+    workflow.include_block(&data_2).await;
+    workflow.include_block(&data_3).await;
+    workflow.include_block(&data_4).await;
+    workflow.include_block(&data_5).await;
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+    // Check db state
+    let supply_records = get_supply_records(&test_db.client).await;
+    assert_eq!(supply_records.len(), 6);
+    assert_eq!(
+        supply_records[0],
+        SupplyRecord {
+            height: 0,
+            main: 0,
+            deposits: 0
+        }
+    );
+    assert_eq!(
+        supply_records[1],
+        SupplyRecord {
+            height: 1,
+            main: 0,
+            deposits: 0,
+        }
+    );
+    assert_eq!(
+        supply_records[2],
+        SupplyRecord {
+            height: 2,
+            main: 0,
+            deposits: 0,
+        }
+    );
+    assert_eq!(
+        supply_records[3],
+        SupplyRecord {
+            height: 3,
+            main: 0,
+            deposits: 0,
+        }
+    );
+    assert_eq!(
+        supply_records[4],
+        SupplyRecord {
+            height: 4,
+            main: 0,
+            deposits: 0, // ignored deposit
+        }
+    );
+    assert_eq!(
+        supply_records[5],
+        SupplyRecord {
+            height: 5,
+            main: 2487000000,
+            deposits: 0,
+        }
+    );
+}
+
 async fn insert_exchange(client: &Client, id: i32, name: &str, text_id: &str) {
     let stmt = "
         insert into exchanges.exchanges (id, name, text_id)
@@ -461,6 +604,14 @@ async fn insert_main_address(client: &Client, cex_id: i32, address_id: &AddressI
         values ($1, $2, 'dymmy-address');
     ";
     client.execute(stmt, &[&cex_id, &address_id]).await.unwrap();
+}
+
+async fn insert_ignored_address(client: &Client, address_id: &AddressID) {
+    let stmt = "
+        insert into exchanges.deposit_addresses_ignored (address_id)
+        values ($1);
+    ";
+    client.execute(stmt, &[&address_id]).await.unwrap();
 }
 
 async fn get_deposit_addresses(client: &Client) -> Vec<AddressID> {

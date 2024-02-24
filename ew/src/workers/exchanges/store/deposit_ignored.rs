@@ -7,7 +7,7 @@ pub(super) async fn get_all(client: &impl GenericClient) -> HashSet<AddressID> {
     tracing::trace!("get_all");
     let qry = "
         select address_id
-        from exchanges.deposit_addresses_excluded;
+        from exchanges.deposit_addresses_ignored;
     ";
     HashSet::from_iter(
         client
