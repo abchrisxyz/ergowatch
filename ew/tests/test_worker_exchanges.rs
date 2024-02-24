@@ -251,7 +251,7 @@ async fn test_reproduce_negative_deposits_bug() {
     // Init dummy workflow to initialize test db so we can fill in mock data
     let _ = CexWorkFlow::new(&test_db.pgconf).await;
 
-    // Define a fake CEX's in the test db
+    // Define a fake CEX in the test db
     let cex1_address = AddressID(9101);
     let cex1_id: i32 = 10000;
     insert_exchange(&test_db.client, cex1_id, "Exchange 1", "cex_1").await;
