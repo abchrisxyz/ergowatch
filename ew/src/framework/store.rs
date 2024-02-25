@@ -66,6 +66,12 @@ impl<B: BatchStore> PgStore<B> {
         // Prepare store schema if needed
         store.init(&mut client).await;
 
+        // Check revision
+        let rev = revisions::get(&client, &store).await;
+        if &rev != store.revision {
+            panic!("Store revision is lagging. Ensure all migrations have been applied.")
+        }
+
         // Retrieve header
         let header = headers::get(&client, store.schema_name, store.worker_id).await;
         tracing::debug!("store {store} is at {header:?}",);
@@ -170,9 +176,16 @@ pub struct StoreDef {
     pub revision: &'static Revision,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Revision {
     pub major: i32,
     pub minor: i32,
+}
+
+impl Revision {
+    pub fn new(major: i32, minor: i32) -> Self {
+        Self { major, minor }
+    }
 }
 
 impl StoreDef {
@@ -197,11 +210,6 @@ impl StoreDef {
             revisions::insert(&mut pgtx, &self).await;
             headers::insert_initial(&mut pgtx, &self).await;
             pgtx.commit().await.unwrap();
-        }
-        // Check revision
-        let rev = revisions::get(&client, &self).await;
-        if rev.major > 1 || rev.minor > 0 {
-            todo!("apply miggrations")
         }
     }
 
@@ -271,6 +279,25 @@ mod revisions {
         )
         .await
         .unwrap();
+    }
+
+    pub(super) async fn update(
+        pgtx: &Transaction<'_>,
+        schema_name: &str,
+        worker_id: &str,
+        rev: &Revision,
+    ) {
+        tracing::trace!("update {schema_name} to {rev:?}");
+        let sql = "
+            update ew.revisions
+            set major = $1, minor = $2
+            where schema_name = $3 and worker_id = $4;";
+        assert_eq!(
+            pgtx.execute(sql, &[&rev.major, &rev.minor, &schema_name, &worker_id])
+                .await
+                .unwrap(),
+            1
+        );
     }
 }
 
@@ -362,8 +389,11 @@ mod headers {
 mod core_headers {
     use super::BlockRange;
     use super::Header;
+    use super::Height;
     use tokio_postgres::Client;
+    use tokio_postgres::Transaction;
 
+    /// Get header with given `header_id`
     pub async fn get(client: &Client, header_id: &str) -> Option<Header> {
         tracing::trace!("get {header_id}");
         let qry = "
@@ -388,6 +418,28 @@ mod core_headers {
     }
 
     /// Get main chain header for given `height`
+    pub async fn get_main_at(pgtx: &Transaction<'_>, height: Height) -> Option<Header> {
+        tracing::trace!("get_main_at {height}");
+        let qry = "
+            select height
+                , timestamp
+                , header_id
+                , parent_id
+            from core.headers
+            where height = $1
+                and main_chain;";
+        pgtx.query_opt(qry, &[&height])
+            .await
+            .unwrap()
+            .map(|row| Header {
+                height: row.get(0),
+                timestamp: row.get(1),
+                header_id: row.get(2),
+                parent_id: row.get(3),
+            })
+    }
+
+    /// Get main chain headers for given `block_range`
     pub async fn get_slice(client: &Client, block_range: &BlockRange) -> Vec<Header> {
         tracing::trace!("get_at {block_range:?}");
         let qry = "
@@ -437,4 +489,112 @@ async fn schema_exists(client: &Client, name: &str) -> bool {
         where schema_name = $1
     );";
     client.query_one(qry, &[&name]).await.unwrap().get(0)
+}
+
+#[async_trait]
+pub trait Migration: std::fmt::Debug {
+    fn description(&self) -> &'static str;
+
+    fn revision(&self) -> Revision;
+
+    async fn run(&self, pgtx: &Transaction<'_>) -> MigrationEffect;
+}
+
+pub enum MigrationEffect {
+    /// No content changes.
+    None,
+    /// Store got rolled back to height.
+    Trimmed(Height),
+    /// Store got emptied and needs to sync from scratch.
+    Reset,
+}
+
+/// Applies migrations to a PgStore.
+pub struct PgMigrator {
+    client: Client,
+    schema: &'static str,
+    worker_id: &'static str,
+    revision: Revision,
+}
+
+impl PgMigrator {
+    pub async fn new(pgconf: &PostgresConfig, store: &StoreDef) -> Self {
+        tracing::debug!("initializing migrator {store}");
+
+        // init client
+        let (mut client, connection) = tokio_postgres::connect(&pgconf.connection_uri, NoTls)
+            .await
+            .unwrap();
+
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                eprintln!("connection error: {}", e);
+            }
+        });
+
+        // Prepare store schema if needed
+        store.init(&mut client).await;
+
+        // Retrieve header
+        let revision = revisions::get(&client, store).await;
+        tracing::debug!("store {store} has revision {revision:?}");
+
+        Self {
+            client,
+            schema: store.schema_name,
+            worker_id: store.worker_id,
+            revision,
+        }
+    }
+
+    /// Execute migration in a single transaction
+    #[tracing::instrument(name = "migration", skip(self))]
+    pub async fn apply(&mut self, mig: &impl Migration) {
+        tracing::trace!("evaluating migration {:?}", mig.revision());
+        // Major migrations not supported yet
+        assert_eq!(mig.revision().major, self.revision.major);
+
+        // Skip if migration already applied
+        if mig.revision().minor <= self.revision.minor {
+            tracing::trace!("skipping migration {:?}", mig.revision());
+            return;
+        }
+
+        // Check migration to be applied is next in line.
+        assert_eq!(mig.revision().minor, self.revision.minor + 1);
+        tracing::info!(
+            "applying {} migration {:?} - {}",
+            self.worker_id,
+            mig.revision(),
+            mig.description(),
+        );
+
+        // Starting db transaction
+        let pgtx = self.client.transaction().await.unwrap();
+
+        // Apply migration
+        let effect = mig.run(&pgtx).await;
+
+        // Reflect migration in store's header
+        match effect {
+            MigrationEffect::None => {
+                // Nothing to do
+            }
+            MigrationEffect::Trimmed(height) => {
+                let header = core_headers::get_main_at(&pgtx, height).await.unwrap();
+                headers::update(&pgtx, self.schema, self.worker_id, &header).await;
+            }
+            MigrationEffect::Reset => {
+                // reset
+                todo!()
+            }
+        };
+
+        // Update store's revision
+        self.revision = mig.revision();
+        revisions::update(&pgtx, self.schema, self.worker_id, &self.revision).await;
+
+        // Commit db transaction
+        pgtx.commit().await.unwrap();
+    }
 }
