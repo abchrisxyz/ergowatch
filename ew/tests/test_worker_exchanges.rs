@@ -2,6 +2,8 @@ mod db_utils;
 
 use db_utils::TestDB;
 
+use ew::framework::store::PgMigrator;
+use ew::framework::store::Revision;
 use ew::framework::QueryHandler;
 use tokio::sync::mpsc;
 use tokio_postgres::Client;
@@ -588,6 +590,59 @@ async fn test_ignored_deposit_addresses() {
             deposits: 0,
         }
     );
+}
+
+#[tokio::test]
+async fn test_migrations() {
+    let _guard = set_tracing_subscriber(false);
+    // Actual first xeggex address
+    let addr_x = AddressID(9336381);
+    let test_db = TestDB::new("exchanges_migrations").await;
+    test_db.init_core().await;
+
+    // Load initial schema to trigger migrations when store is initialized
+    test_db
+        .init_schema(include_str!(
+            "../src/workers/exchanges/store/schema.1.0.sql"
+        ))
+        .await;
+    // Register schema revision
+    test_db.init_ew().await;
+    test_db
+        .set_revision("exchanges", "exchanges", &Revision::new(1, 0))
+        .await;
+
+    // Prepare erg.balance_diffs table
+    test_db
+        .init_schema(include_str!("../src/workers/erg_diffs/store/schema.sql"))
+        .await;
+    // Include a diff for xeggex address. Just so we have an existing address for one of the migrations.
+    insert_balance_diffs(
+        &test_db.client,
+        &vec![DiffRecord::new(addr_x, 3, 0, 10000000000)],
+    )
+    .await;
+
+    // Run migrations
+    let mut migrator =
+        PgMigrator::new(&test_db.pgconf, &ew::workers::exchanges::testing::SCHEMA).await;
+    migrator
+        .apply(&ew::workers::exchanges::testing::Mig1_1 {})
+        .await;
+    migrator
+        .apply(&ew::workers::exchanges::testing::Mig1_2 {})
+        .await;
+    migrator
+        .apply(&ew::workers::exchanges::testing::Mig1_3 {})
+        .await;
+
+    // Check revision
+    let rev = test_db
+        .get_revision("exchanges", "exchanges")
+        .await
+        .expect("revsion should be set");
+    assert_eq!(rev.major, 1);
+    assert_eq!(rev.minor, 3);
 }
 
 async fn insert_exchange(client: &Client, id: i32, name: &str, text_id: &str) {

@@ -75,3 +75,27 @@ impl From<DepositAddressConflictRecord> for DepositAddressRecord {
         }
     }
 }
+
+#[derive(Debug)]
+pub struct ExchangeRecord {
+    pub id: ExchangeID,
+    pub text_id: String,
+    pub name: String,
+}
+
+#[derive(Debug)]
+pub struct MainAddressRecord {
+    pub address_id: AddressID,
+    pub cex_id: ExchangeID,
+    pub address: String,
+}
+
+impl MainAddressRecord {
+    pub fn new(address_id: AddressID, cex_id: ExchangeID, address: &str) -> Self {
+        Self {
+            address_id,
+            cex_id,
+            address: address.to_owned(),
+        }
+    }
+}

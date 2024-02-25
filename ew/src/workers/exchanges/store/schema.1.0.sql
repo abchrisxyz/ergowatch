@@ -15,8 +15,7 @@ insert into exchanges.exchanges (id, name, text_id) values
 	(3, 'KuCoin', 'kucoin'),
 	(4, 'ProBit', 'probit'),
 	(5, 'TradeOgre', 'tradeogre'),
-	(6, 'Huobi', 'huobi'),
-	(7, 'Xeggex', 'xeggex');
+	(6, 'Huobi', 'huobi');
 
 -- Known main addresses for each CEX
 -- New Coinex main: 9i51m3reWk99iw8WF6PgxbUT6ZFKhzJ1PmD11vEuGu125hRaKAH
@@ -67,14 +66,6 @@ insert into exchanges.main_addresses (cex_id, address_id, address) values
 	(1, 2857451, '9fowPvQ2GXdmhD2bN54EL9dRnio3kBQGyrD3fkbHwuTXD6z1wBU'),
 	(1,  712861, '9fPiW45mZwoTxSwTLLXaZcdekqi72emebENmScyTGsjryzrntUe'),
 	(1, 8980751, '9i51m3reWk99iw8WF6PgxbUT6ZFKhzJ1PmD11vEuGu125hRaKAH'),
-	(1, 9075411, '9fNqgokdacnYykMZmtqjTnCbBJG9mhkifghV6Pmn6taBihUoG33'),
-	(1, 9081471, '9f3iGnXcebxzv4avYCUTt6dekgPMV1t5hpHdcJ4mAfX94yAiGFv'),
-	(1, 9081481, '9gPwnhhzc2tEkZHpcUeQ9J9wQWKzoLjCRbNx4qAsm2dK2RvVvib'),
-	(1, 9081701, '9gLxihuwAPkkgTpctawTRz82XVm46z6o8q3vMXVeZtyq6qtruWk'),
-	(1, 9081711, '9f65ghY8F5k7uKMACX7o2GfaV4EzWpsNW3gBTc23pAqTon8n7pE'),
-	(1, 9120481, '9iL1tEz6ENBLtaiMaEppnsrj9HjvnRaLdRyqiBPeCW6SyUtEaxM'),
-	(1, 9186521, '9h4WD9zRk7efQYM9jUYy3hrReJmYMYGen4yVeEw1SWGTuM6XNXv'),
-	(1, 9213581, '9fTyfkM1NWdBJvpM3rAq2SNdJ9yfvUqjM3MBStNS2Aq5fGE9Jgg'),
 			
 	-- Gate - confirmed
 	(2, 872431, '9iKFBBrryPhBYVGDKHuZQW7SuLfuTdUJtTPzecbQ5pQQzD4VykC'),
@@ -111,8 +102,6 @@ insert into exchanges.main_addresses (cex_id, address_id, address) values
 	(3, 3752261, '9guZaxPoe4jecHi6ZxtMotKUL4AzpomFf3xqXsFSuTyZoLbmUBr'),
 	(3, 2406961, '9iNt6wfxSc3DSaBVp22E7g993dwKUCvbGdHoEjxF8SRqj35oXvT'),
 	(3, 8408121, '9fs7HkPGY9fhN6WsHd7V7LMcuMqsgseXzNahyToxJKwHCc1zc1c'),
-	(3, 8834201, '9how9k2dp67jXDnCM6TeRPKtQrToCs5MYL2JoSgyGHLXm1eHxWs'),
-	(3, 8834481, '9fpUtN7d22jS3cMWeZxBbzkdnHCB46YRJ8qiiaVo2wRCkaBar1Z'),
 	
 	-- ProBit https://discord.com/channels/668903786361651200/896711052736233482/964541753162096680
 	(4, 8771, '9eg2Rz3tGogzLaVZhG1ycPj1dJtN4Jn8ySa2mnVLJyVJryb13QB'),
@@ -121,10 +110,7 @@ insert into exchanges.main_addresses (cex_id, address_id, address) values
 	(5, 1410341, '9fs99SejQxDjnjwrZ13YMZZ3fwMEVXFewpWWj63nMhZ6zDf2gif'),
 
 	-- Huobi
-	(6, 6621141, '9feMGM1qwNG8NnNuk3pz4yeCGm59s2RbjFnS7DxwUxCbzUrNnJw'),
-
-	-- Xeggex
-	(7, 9336381, '9hphYTmicjazd45pz2ovoHVPz5LTq9EvXoEK9JMGsfWuMtX6eDu');
+	(6, 6621141, '9feMGM1qwNG8NnNuk3pz4yeCGm59s2RbjFnS7DxwUxCbzUrNnJw');
 
 
 insert into exchanges.deposit_addresses_ignored (address_id) values

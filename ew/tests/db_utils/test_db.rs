@@ -1,4 +1,5 @@
 use ew::config::PostgresConfig;
+use ew::framework::store::Revision;
 use tokio_postgres::Client;
 use tokio_postgres::NoTls;
 
@@ -55,6 +56,15 @@ impl TestDB {
     }
 
     #[allow(dead_code)] // not used by all tests
+    /// Initialize ew schema.
+    pub async fn init_ew(&self) {
+        self.client
+            .batch_execute(include_str!("../../src/framework/ew.sql"))
+            .await
+            .unwrap();
+    }
+
+    #[allow(dead_code)] // not used by all tests
     /// Initialize given schema.
     pub async fn init_schema(&self, sql: &str) {
         self.client.batch_execute(sql).await.unwrap();
@@ -77,6 +87,31 @@ impl TestDB {
                     &header.header_id,
                     &header.parent_id,
                 ],
+            )
+            .await
+            .unwrap();
+    }
+
+    pub async fn get_revision(&self, schema_name: &str, worker_id: &str) -> Option<Revision> {
+        let sql =
+            "select major, minor from ew.revisions where schema_name = $1 and worker_id = $2;";
+        self.client
+            .query_opt(sql, &[&schema_name, &worker_id])
+            .await
+            .unwrap()
+            .map(|row| Revision::new(row.get(0), row.get(1)))
+    }
+
+    /// Set revision for given schema.
+    /// Assumes no revision is set already.
+    pub async fn set_revision(&self, schema_name: &str, worker_id: &str, revision: &Revision) {
+        let sql = "
+            insert into ew.revisions (schema_name, worker_id, major, minor)
+            values ($1, $2, $3, $4)";
+        self.client
+            .execute(
+                sql,
+                &[&schema_name, &worker_id, &revision.major, &revision.minor],
             )
             .await
             .unwrap();

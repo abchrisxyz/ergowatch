@@ -2,6 +2,15 @@ mod parsing;
 mod store;
 mod types;
 
+/// Makes migrations available for testing
+pub mod testing {
+    use super::store;
+    pub use store::migrations::Mig1_1;
+    pub use store::migrations::Mig1_2;
+    pub use store::migrations::Mig1_3;
+    pub use store::SCHEMA;
+}
+
 use async_trait::async_trait;
 use tokio::sync::oneshot;
 
@@ -9,6 +18,7 @@ use crate::config::PostgresConfig;
 use crate::core::types::AddressID;
 use crate::core::types::Header;
 use crate::core::types::Height;
+use crate::framework::store::PgMigrator;
 use crate::framework::EventHandling;
 use crate::framework::QuerySender;
 use crate::framework::Querying;
@@ -40,6 +50,13 @@ impl EventHandling for CexWorkFlow {
     type D = ();
 
     async fn new(pgconf: &PostgresConfig) -> Self {
+        // Ensure migrations are applied
+        let mut migrator = PgMigrator::new(pgconf, &store::SCHEMA).await;
+        migrator.apply(&store::migrations::Mig1_1 {}).await;
+        migrator.apply(&store::migrations::Mig1_2 {}).await;
+        migrator.apply(&store::migrations::Mig1_3 {}).await;
+
+        // Create store
         let store = Store::new(pgconf, &store::SCHEMA).await;
         let cache = store::load_parser_cache(store.get_client()).await;
         let parser = Parser::new(cache);

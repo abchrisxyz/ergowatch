@@ -39,6 +39,13 @@ pub(super) async fn delete_at(pgtx: &Transaction<'_>, height: Height) {
     pgtx.execute(sql, &[&height]).await.unwrap();
 }
 
+/// Deletes all records at or avove goven `height`
+pub(super) async fn delete_from(pgtx: &Transaction<'_>, height: Height) {
+    tracing::trace!("delete_from {height}");
+    let sql = "delete from exchanges.supply where height >= $1;";
+    pgtx.execute(sql, &[&height]).await.unwrap();
+}
+
 /*
    Haven't found a simple way to apply patch in one go.
    This naive approach doesn't work:
