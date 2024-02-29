@@ -31,6 +31,8 @@ async fn test_simple() {
 
     // Prepare test db
     let test_db = TestDB::new("network_normal").await;
+    // Init core schema, needed by network workflow during cache loading.
+    test_db.init_core().await;
 
     // Genesis
     let dummy_genesis_boxes = vec![BoxData::dummy()
