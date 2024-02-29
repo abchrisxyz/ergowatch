@@ -2,17 +2,14 @@ mod db_utils;
 
 use db_utils::TestDB;
 
-use ew::framework::store::PgMigrator;
-use ew::framework::store::Revision;
-use ew::framework::QueryHandler;
-use tokio::sync::mpsc;
-use tokio_postgres::Client;
-
 use ew::constants::GENESIS_TIMESTAMP;
 use ew::constants::ZERO_HEADER;
 use ew::core::types::AddressID;
 use ew::core::types::Timestamp;
+use ew::framework::store::PgMigrator;
+use ew::framework::store::Revision;
 use ew::framework::EventHandling;
+use ew::framework::QueryHandler;
 use ew::framework::QuerySender;
 use ew::framework::QueryWrapper;
 use ew::framework::Querying;
@@ -24,6 +21,8 @@ use ew::workers::erg_diffs::types::DiffRecord;
 use ew::workers::erg_diffs::types::SupplyDiff;
 use ew::workers::exchanges::CexWorkFlow;
 use ew::workers::exchanges::SupplyRecord;
+use tokio::sync::mpsc;
+use tokio_postgres::Client;
 
 const TS_10K: Timestamp = 1563159993440; // timestamp of block 10000
 
