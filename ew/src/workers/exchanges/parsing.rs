@@ -15,6 +15,8 @@ use super::types::Batch;
 use super::types::DepositAddressConflict;
 use super::types::DepositAddressRecord;
 use super::types::ExchangeID;
+use super::types::InterBlockDepositConflict;
+use super::types::IntraBlockDepositConflict;
 use super::types::SupplyRecord;
 
 pub struct ParserCache {
@@ -128,15 +130,23 @@ impl Parser {
             })
             .collect();
 
-        // Convert inter-block conflicting addresses
+        // Convert inter- and intra-block conflicting addresses into conflicts
         let deposit_conflicts = spottings
             .inter_conflicts
             .into_iter()
-            .map(|(address_id, first_cex_id)| DepositAddressConflict {
-                address_id: address_id,
-                first_cex_id: Some(first_cex_id),
-                conflict_spot_height: stamped_data.height,
+            .map(|(address_id, first_cex_id)| {
+                DepositAddressConflict::Inter(InterBlockDepositConflict {
+                    address_id: address_id,
+                    first_cex_id: first_cex_id,
+                    conflict_spot_height: stamped_data.height,
+                })
             })
+            .chain(spottings.intra_conflicts.into_iter().map(|address_id| {
+                DepositAddressConflict::Intra(IntraBlockDepositConflict {
+                    address_id: address_id,
+                    conflict_spot_height: stamped_data.height,
+                })
+            }))
             .collect();
 
         stamped_data.wrap(Batch {

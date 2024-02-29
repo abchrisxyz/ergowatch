@@ -41,19 +41,41 @@ pub struct DepositAddressRecord {
     pub spot_height: Height,
 }
 
-pub struct DepositAddressConflict {
+/// A deposit address linked to multiple exchanges across different blocks.
+pub struct InterBlockDepositConflict {
     pub address_id: AddressID,
-    pub first_cex_id: Option<ExchangeID>,
+    pub first_cex_id: ExchangeID,
     pub conflict_spot_height: Height,
 }
 
+/// A deposit address linked to multiple exchanges within the block it was first spotted as deposit.
+pub struct IntraBlockDepositConflict {
+    pub address_id: AddressID,
+    pub conflict_spot_height: Height,
+}
+
+/// A deposit address linked to multiple exchanges (false positive).
+pub enum DepositAddressConflict {
+    Inter(InterBlockDepositConflict),
+    Intra(IntraBlockDepositConflict),
+}
+
 impl DepositAddressConflict {
+    /// Converts a conflict into a conflict record by including a deposit spot height.
     pub fn to_record(&self, deposit_spot_height: Height) -> DepositAddressConflictRecord {
-        DepositAddressConflictRecord {
-            address_id: self.address_id,
-            first_cex_id: self.first_cex_id,
-            deposit_spot_height,
-            conflict_spot_height: self.conflict_spot_height,
+        match self {
+            Self::Inter(conflict) => DepositAddressConflictRecord {
+                address_id: conflict.address_id,
+                first_cex_id: Some(conflict.first_cex_id),
+                deposit_spot_height,
+                conflict_spot_height: conflict.conflict_spot_height,
+            },
+            Self::Intra(conflict) => DepositAddressConflictRecord {
+                address_id: conflict.address_id,
+                first_cex_id: None,
+                deposit_spot_height,
+                conflict_spot_height: conflict.conflict_spot_height,
+            },
         }
     }
 }

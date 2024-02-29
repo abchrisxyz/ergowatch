@@ -21,6 +21,7 @@ use crate::framework::StampedData;
 
 use super::parsing::ParserCache;
 use super::types::Batch;
+use super::types::DepositAddressConflict;
 use super::types::DepositAddressConflictRecord;
 use super::types::DepositAddressRecord;
 use super::types::SupplyDiff;
@@ -64,11 +65,20 @@ impl BatchStore for SpecStore {
 
         // Deposit conflicts
         for conflict in &batch.deposit_conflicts {
-            let address_spot_height = deposit_addresses::get_one(pgtx, conflict.address_id)
-                .await
-                .spot_height;
-            deposit_addresses::delete_one(pgtx, conflict.address_id).await;
-            deposit_conflicts::insert(pgtx, &conflict.to_record(address_spot_height)).await;
+            // Retrieve height at which this address was first spotted as a deposit.
+            let address_spot_height = match conflict {
+                // Inter-block conflicts have always been spotted as a deposit in an earlier block
+                DepositAddressConflict::Inter(conflict) => {
+                    deposit_addresses::get_one(pgtx, conflict.address_id)
+                        .await
+                        .spot_height
+                }
+                // Intra-block confllicts are always spotted in current block
+                DepositAddressConflict::Intra(_) => stamped_batch.height,
+            };
+            let record = &conflict.to_record(address_spot_height);
+            deposit_addresses::delete_one(pgtx, record.address_id).await;
+            deposit_conflicts::insert(pgtx, &record).await;
         }
     }
 
