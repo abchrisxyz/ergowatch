@@ -32,7 +32,7 @@ pub const SCHEMA: StoreDef = StoreDef {
     schema_name: "exchanges",
     worker_id: WORKER_ID,
     sql: include_str!("store/schema.sql"),
-    revision: &Revision { major: 1, minor: 3 },
+    revision: &Revision { major: 1, minor: 4 },
 };
 
 pub(super) type Store = PgStore<SpecStore>;
@@ -350,6 +350,50 @@ pub(super) mod migrations {
                     AddressID(9336381),
                     XEGGEX,
                     "9hphYTmicjazd45pz2ovoHVPz5LTq9EvXoEK9JMGsfWuMtX6eDu",
+                ),
+            )
+            .await;
+
+            // Get new store height from last supply record
+            let post_mig_height = supply::get_latest(pgtx).await.map(|r| r.height);
+
+            // Determine migration effect to return
+            if post_mig_height == pre_mig_height {
+                MigrationEffect::None
+            } else {
+                match post_mig_height {
+                    Some(h) => MigrationEffect::Trimmed(h),
+                    None => MigrationEffect::Reset,
+                }
+            }
+        }
+    }
+
+    /// Migration for revision 1.4
+    #[derive(Debug)]
+    pub struct Mig1_4 {}
+
+    #[async_trait]
+    impl Migration for Mig1_4 {
+        fn description(&self) -> &'static str {
+            "Adding new Coinex address"
+        }
+
+        fn revision(&self) -> Revision {
+            Revision::new(1, 4)
+        }
+
+        async fn run(&self, pgtx: &Transaction<'_>) -> MigrationEffect {
+            // Get current store height from last supply record
+            let pre_mig_height = supply::get_latest(pgtx).await.map(|r| r.height);
+
+            // Main exchange address
+            add_main_address(
+                pgtx,
+                MainAddressRecord::new(
+                    AddressID(9356241),
+                    COINEX,
+                    "9haE48wKvgYzc3WdBXRU9ERw2ZWWkGzJT8jGHcXvzQggftiQQdC",
                 ),
             )
             .await;

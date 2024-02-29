@@ -5,9 +5,7 @@ mod types;
 /// Makes migrations available for testing
 pub mod testing {
     use super::store;
-    pub use store::migrations::Mig1_1;
-    pub use store::migrations::Mig1_2;
-    pub use store::migrations::Mig1_3;
+    pub use store::migrations::*;
     pub use store::SCHEMA;
 }
 

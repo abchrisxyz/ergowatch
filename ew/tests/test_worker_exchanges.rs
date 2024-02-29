@@ -914,6 +914,9 @@ async fn test_migrations() {
     migrator
         .apply(&ew::workers::exchanges::testing::Mig1_3 {})
         .await;
+    migrator
+        .apply(&ew::workers::exchanges::testing::Mig1_4 {})
+        .await;
 
     // Check revision
     let rev = test_db
@@ -921,7 +924,7 @@ async fn test_migrations() {
         .await
         .expect("revsion should be set");
     assert_eq!(rev.major, 1);
-    assert_eq!(rev.minor, 3);
+    assert_eq!(rev.minor, 4);
 }
 
 async fn insert_exchange(client: &Client, id: i32, name: &str, text_id: &str) {

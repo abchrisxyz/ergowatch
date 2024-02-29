@@ -75,6 +75,7 @@ insert into exchanges.main_addresses (cex_id, address_id, address) values
 	(1, 9120481, '9iL1tEz6ENBLtaiMaEppnsrj9HjvnRaLdRyqiBPeCW6SyUtEaxM'),
 	(1, 9186521, '9h4WD9zRk7efQYM9jUYy3hrReJmYMYGen4yVeEw1SWGTuM6XNXv'),
 	(1, 9213581, '9fTyfkM1NWdBJvpM3rAq2SNdJ9yfvUqjM3MBStNS2Aq5fGE9Jgg'),
+	(1, 9356241, '9haE48wKvgYzc3WdBXRU9ERw2ZWWkGzJT8jGHcXvzQggftiQQdC'),
 			
 	-- Gate - confirmed
 	(2, 872431, '9iKFBBrryPhBYVGDKHuZQW7SuLfuTdUJtTPzecbQ5pQQzD4VykC'),
