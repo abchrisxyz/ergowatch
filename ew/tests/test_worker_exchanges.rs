@@ -712,6 +712,167 @@ async fn test_intra_block_conflict() {
 }
 
 #[tokio::test]
+async fn test_inter_block_conflict() {
+    let _guard = set_tracing_subscriber(false);
+    let addr_a = AddressID(8581);
+    let test_db = TestDB::new("exchanges_inter_block_conflict").await;
+    test_db.init_core().await;
+
+    // Init dummy workflow to initialize test db so we can fill in mock data
+    let _ = CexWorkFlow::new(&test_db.pgconf).await;
+
+    // Define 2 fake CEX's in the test db
+    let cex1_address = AddressID(9101);
+    let cex1_id: i32 = 10000;
+    insert_exchange(&test_db.client, cex1_id, "Exchange 1", "cex_1").await;
+    insert_main_address(&test_db.client, cex1_id, &cex1_address).await;
+    let cex2_address = AddressID(9102);
+    let cex2_id: i32 = 20000;
+    insert_exchange(&test_db.client, cex1_id, "Exchange 2", "cex_2").await;
+    insert_main_address(&test_db.client, cex2_id, &cex2_address).await;
+
+    // Genesis
+    let genesis_data = StampedData {
+        height: 0,
+        timestamp: GENESIS_TIMESTAMP,
+        header_id: ZERO_HEADER.to_owned(),
+        parent_id: "".to_owned(),
+        data: DiffData {
+            diff_records: vec![],
+        },
+    };
+
+    // Block 1 - create some out of thin air
+    let data_1 = genesis_data.wrap_as_child(DiffData {
+        diff_records: vec![DiffRecord::new(addr_a, 1, 0, 7_000_000_000)],
+    });
+
+    // Block 2 - a sends to cex1 --> spotted as deposit
+    let data_2 = data_1.wrap_as_child(DiffData {
+        diff_records: vec![
+            DiffRecord::new(addr_a, 2, 0, -2_000_000_000),
+            DiffRecord::new(cex1_address, 2, 0, 2_000_000_000),
+        ],
+    });
+
+    // Block 3 - a sends to cex2 --> inter-block conflict
+    let data_3 = data_2.wrap_as_child(DiffData {
+        diff_records: vec![
+            DiffRecord::new(addr_a, 3, 0, -3_000_000_000),
+            DiffRecord::new(cex2_address, 3, 0, 3_000_000_000),
+        ],
+    });
+
+    // Block 4 - a receives some
+    let data_4 = data_3.wrap_as_child(DiffData {
+        diff_records: vec![DiffRecord::new(addr_a, 4, 0, 10_000_000_000)],
+    });
+
+    // Prepare erg.balance_diffs table
+    test_db
+        .init_schema(include_str!("../src/workers/erg_diffs/store/schema.sql"))
+        .await;
+    insert_balance_diffs(&test_db.client, &data_1.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_2.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_3.data.diff_records).await;
+    insert_balance_diffs(&test_db.client, &data_4.data.diff_records).await;
+
+    // Configure workflow
+    let mut workflow = CexWorkFlow::new(&test_db.pgconf).await;
+    let mut query_handler = ew::workers::erg_diffs::QueryWorker::new(&test_db.pgconf).await;
+    workflow.set_query_sender(query_handler.connect());
+
+    // Spawn query handler.
+    tokio::spawn(async move {
+        query_handler.start().await;
+    });
+
+    // Process blocks prior to conflict
+    workflow.include_block(&genesis_data).await;
+    workflow.include_block(&data_1).await;
+    workflow.include_block(&data_2).await;
+
+    // Check db state before conflict
+    let supply_records = get_supply_records(&test_db.client).await;
+    assert_eq!(supply_records.len(), 3);
+    assert_eq!(
+        supply_records[0],
+        SupplyRecord {
+            height: 0,
+            main: 0,
+            deposits: 0
+        }
+    );
+    assert_eq!(
+        supply_records[1],
+        SupplyRecord {
+            height: 1,
+            main: 0,
+            deposits: 7_000_000_000,
+        }
+    );
+    assert_eq!(
+        supply_records[2],
+        SupplyRecord {
+            height: 2,
+            main: 2_000_000_000,
+            deposits: 5_000_000_000,
+        }
+    );
+
+    // Process remaining blocks
+    workflow.include_block(&data_3).await;
+    workflow.include_block(&data_4).await;
+
+    // Check db state after conflict
+    let supply_records = get_supply_records(&test_db.client).await;
+    assert_eq!(supply_records.len(), 5);
+    assert_eq!(
+        supply_records[0],
+        SupplyRecord {
+            height: 0,
+            main: 0,
+            deposits: 0
+        }
+    );
+    assert_eq!(
+        supply_records[1],
+        SupplyRecord {
+            height: 1,
+            main: 0,
+            deposits: 0,
+        }
+    );
+    assert_eq!(
+        supply_records[2],
+        SupplyRecord {
+            height: 2,
+            main: 2_000_000_000,
+            deposits: 0,
+        }
+    );
+    assert_eq!(
+        supply_records[3],
+        SupplyRecord {
+            height: 3,
+            main: 5_000_000_000,
+            deposits: 0,
+        }
+    );
+    assert_eq!(
+        supply_records[4],
+        SupplyRecord {
+            height: 4,
+            main: 5_000_000_000,
+            deposits: 0,
+        }
+    );
+
+    let deposit_conflicts = get_deposit_conflicts(&test_db.client).await;
+    assert_eq!(deposit_conflicts, vec![addr_a]);
+}
+
+#[tokio::test]
 async fn test_migrations() {
     let _guard = set_tracing_subscriber(false);
     // Actual first xeggex address

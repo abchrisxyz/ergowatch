@@ -63,6 +63,11 @@ impl ParserCache {
                 ),
             }
         }
+
+        // Remove new conflicts from cached deposit addresses
+        for (address_id, _first_cex_id) in &spottings.inter_conflicts {
+            self.deposit_addresses.remove(address_id);
+        }
     }
 }
 
