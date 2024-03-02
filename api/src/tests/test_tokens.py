@@ -65,6 +65,7 @@ def client():
             yield client
 
 
+@pytest.mark.skip(reason="ew doesn't store token details")
 class TestDetails:
     def test_dummy_token(self, client):
         url = f"/tokens/{TOKEN_A}"
@@ -98,6 +99,7 @@ class TestDetails:
         assert response.status_code == 404
 
 
+@pytest.mark.skip(reason="ew doesn't store token details")
 class TestSupply:
     def test_supply(self, client):
         url = f"/tokens/{TOKEN_A}/supply"

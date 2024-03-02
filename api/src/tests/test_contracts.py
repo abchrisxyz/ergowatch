@@ -10,36 +10,35 @@ TOKEN_A = "tokenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 TOKEN_B = "tokenbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 TOKEN_X = "validxtokenxidxofxnonxexistingxtokenxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
-ADDR = {
-    "9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 1,
-    "9addr2xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 2,
-    "9addr3xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 3,
-    "1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 4,
-    "9contract2xshorterthan51chars": 5,
-    "9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx": 6,
-    "4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 7,
-    "4biscontractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 8,
-    "5contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 9,
-}
+ASSET_ID_A = 1000
+ASSET_ID_B = 2000
 
-ADDR_SQL = (
-    "insert into core.addresses (id, address, spot_height, p2pk, miner) values "
-    + ",".join(
-        [
-            f"({i+1}, '{addr}', 1, {'contract' in addr}, False)"
-            for i, addr in enumerate(ADDR)
-        ]
-    )
-    + ";"
-)
+ADDR = {
+    "9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 11,
+    "9addr2xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 21,
+    "9addr3xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 31,
+    "1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 43,
+    "9contract2xshorterthan51chars": 53,
+    "9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx": 63,
+    "4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 73,
+    "4biscontractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 83,
+    "5contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 93,
+}
 
 
 @pytest.fixture(scope="module")
 def client():
+    schema_paths = [
+        "ew/src/core/store/schema.sql",
+        "ew/src/workers/erg/store/schema.sql",
+        "ew/src/workers/tokens/store/schema.sql",
+    ]
     sql = f"""
-        {ADDR_SQL}
+        insert into core.tokens (asset_id, spot_height, token_id) values
+        ({ASSET_ID_A}, 1, '{TOKEN_A}'),
+        ({ASSET_ID_B}, 1, '{TOKEN_B}');
 
-        insert into adr.erg (address_id, value, mean_age_timestamp) values
+        insert into erg.balances (address_id, nano, mean_age_timestamp) values
         ({ADDR['9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},   1000000, 0),
         ({ADDR['9addr2xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},   2000000, 0),
         ({ADDR['9addr3xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},   3000000, 0),
@@ -49,21 +48,21 @@ def client():
         ({ADDR['4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},  4000000, 0),
         ({ADDR['5contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},  5000000, 0);
 
-        insert into adr.tokens (address_id, token_id, value) values
-        ({ADDR['9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}',   1000000),
-        ({ADDR['9addr2xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}',   2000000),
-        ({ADDR['9addr3xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}',   3000000),
-        ({ADDR['1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}',   1000000),
-        ({ADDR['9contract2xshorterthan51chars']}, '{TOKEN_A}',                         2000000),
-        ({ADDR['9contract2xshorterthan51chars']}, '{TOKEN_B}',                         2000000),
-        ({ADDR['9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}', 3000000),
-        ({ADDR['9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_B}', 3000000),
-        ({ADDR['4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}',  4000000),
-        ({ADDR['4biscontractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}',  4000000),
-        ({ADDR['5contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{TOKEN_A}',  5000000);
+        insert into tokens.balances (address_id, asset_id, value) values
+        ({ADDR['9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{ASSET_ID_A}',   1000000),
+        ({ADDR['9addr2xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{ASSET_ID_A}',   2000000),
+        ({ADDR['9addr3xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{ASSET_ID_A}',   3000000),
+        ({ADDR['1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{ASSET_ID_A}',   1000000),
+        ({ADDR['9contract2xshorterthan51chars']}, '{ASSET_ID_A}',                         2000000),
+        ({ADDR['9contract2xshorterthan51chars']}, '{ASSET_ID_B}',                         2000000),
+        ({ADDR['9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{ASSET_ID_A}', 3000000),
+        ({ADDR['9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{ASSET_ID_B}', 3000000),
+        ({ADDR['4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{ASSET_ID_A}',  4000000),
+        ({ADDR['4biscontractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{ASSET_ID_A}',  4000000),
+        ({ADDR['5contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']}, '{ASSET_ID_A}',  5000000);
         
     """
-    with MockDB(sql=sql) as db_name:
+    with MockDB(schema_paths=schema_paths, sql=sql) as db_name:
         with TestClient(app) as client:
             yield client
 

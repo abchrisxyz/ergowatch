@@ -28,21 +28,22 @@ async def get_p2pk_address_count(
     """
     query = f"""
         select count(*) as cnt
-        from adr.erg b
-        join core.addresses a on a.id = b.address_id
-        where a.address like '9%' and length(address) = 51
+        from {'erg' if token_id is None else 'tokens'}.balances 
+        where address_id % 10 = 1
     """
     args = []
+    value_col = "nano" if token_id is None else "value"
     if token_id is not None:
         args.append(token_id)
-        query = query.replace("adr.erg", "adr.tokens")
-        query += f" and token_id = $1"
+        query += (
+            f" and asset_id = (select asset_id from core.tokens where token_id = $1)"
+        )
     if bal_ge is not None:
         args.append(bal_ge)
-        query += f" and value >= ${len(args)}"
+        query += f" and {value_col} >= ${len(args)}"
     if bal_lt is not None:
         args.append(bal_lt)
-        query += f" and value < ${len(args)}"
+        query += f" and {value_col} < ${len(args)}"
 
     async with request.app.state.db.acquire() as conn:
         res = await conn.fetchrow(query, *args)

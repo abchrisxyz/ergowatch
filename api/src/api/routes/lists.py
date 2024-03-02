@@ -32,16 +32,16 @@ async def rich_list(
     ),
 ):
     """
-    Get addresses with largest balance.
+    Get addresses with largest balance. Does not include (re-)emission addresses.
     """
     if token_id is None:
         query = f"""
             select a.address
-                , b.value as balance
-            from adr.erg b
+                , b.nano as balance
+            from erg.balances b
             join core.addresses a on a.id = b.address_id 
-            where a.address <> '2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU'
-            order by b.value desc
+            where b.address_id not in (13, 5965233, 5993503)
+            order by b.nano desc
             limit $1;
         """
         args = [limit]
@@ -49,11 +49,11 @@ async def rich_list(
         query = """
             select a.address
                 , b.value as balance
-            from adr.tokens b
+            from tokens.balances b
             join core.addresses a on a.id = b.address_id
-            where b.token_id = $2
+            where b.asset_id = (select asset_id from core.tokens where token_id = $2)
             order by b.value desc
-            limit $1;  
+            limit $1;
         """
         args = [limit, token_id]
 
@@ -61,4 +61,4 @@ async def rich_list(
         rows = await conn.fetch(query, *args)
     if not rows:
         raise HTTPException(status_code=404, detail=TOKEN_404)
-    return rows
+    return [AddressBalance(**r) for r in rows]

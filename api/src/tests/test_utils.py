@@ -9,13 +9,14 @@ from ..api.constants import GENESIS_TIMESTAMP
 
 @pytest.fixture(scope="module")
 def client():
+    schema_paths = ["ew/src/workers/timestamps/store/schema.sql"]
     sql = f"""
-        insert into core.headers (height, id, parent_id, timestamp, difficulty, vote1, vote2, vote3) values 
-        (10, 'header10', 'header09', 1567123456789, 111222333, 0, 0, 0),
-        (20, 'header20', 'header19', 1568123456789, 111122233, 0, 0, 0),
-        (30, 'header30', 'header29', 1569123456789, 111222333, 0, 0, 0);
+        insert into timestamps.timestamps (height, timestamp) values 
+        (10, 1567123456789),
+        (20, 1568123456789),
+        (30, 1569123456789);
     """
-    with MockDB(sql=sql) as _:
+    with MockDB(schema_paths=schema_paths, sql=sql) as _:
         with TestClient(app) as client:
             yield client
 

@@ -5,51 +5,64 @@ from fastapi.testclient import TestClient
 from ..main import app
 from .db import MockDB
 
-TOKEN_A = "tokenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-TOKEN_B = "tokenbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-TOKEN_X = "validxtokenxidxofxnonxexistingxtokenxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+ADDR_ID_1 = 1001
+ADDR_ID_2 = 2002
+ADDR_1 = "addr1"
+ADDR_2 = "addr2"
+
+TOKEN_A = "token1"
+TOKEN_B = "token2"
+TOKEN_X = "badtoken"
+ASSET_ID_A = 1000
+ASSET_ID_B = 2000
 
 
 @pytest.fixture(scope="module")
 def client():
-    coinex_main = "9fowPvQ2GXdmhD2bN54EL9dRnio3kBQGyrD3fkbHwuTXD6z1wBU"
+    schema_paths = [
+        "ew/src/core/store/schema.sql",
+        "ew/src/workers/erg_diffs/store/schema.sql",
+        "ew/src/workers/erg/store/schema.sql",
+        "ew/src/workers/tokens/store/schema.sql",
+        "ew/src/workers/timestamps/store/schema.sql",
+    ]
     sql = f"""
-        insert into core.addresses (id, address, spot_height, p2pk, miner) values
-        (1, 'addr1', 10, True, False),
-        (2, 'addr2', 20, True, False),
-        (3, '{coinex_main}', 30, True, False);
+        insert into core.addresses (id, spot_height, address) values
+        ({ADDR_ID_1}, 10, '{ADDR_1}'),
+        ({ADDR_ID_2}, 20, '{ADDR_2}');
 
-        insert into adr.erg_diffs (address_id, height, tx_id, value) values
-        (1, 10, 'tx_1',   5000),
-        (1, 20, 'tx_2',  -2000),
-        (2, 20, 'tx_2',   2000),
-        (1, 30, 'tx_3',   1000);
+        insert into core.tokens (asset_id, spot_height, token_id) values
+        ({ASSET_ID_A}, 100, '{TOKEN_A}'),
+        ({ASSET_ID_B}, 200, '{TOKEN_B}');
 
-        insert into adr.erg (address_id, value, mean_age_timestamp) values
-        (1, 4000, 0),
-        (2, 2000, 0);
+        insert into erg.balance_diffs (address_id, height, tx_idx, nano) values
+        ({ADDR_ID_1}, 10, 0,   5000),
+        ({ADDR_ID_1}, 20, 0,  -2000),
+        ({ADDR_ID_2}, 20, 0,   2000),
+        ({ADDR_ID_1}, 30, 0,   1000);
 
-        insert into adr.tokens_diffs (address_id, token_id, height, tx_id, value) values
-        (1, '{TOKEN_A}', 10, 'tx_1',   500),
-        (1, '{TOKEN_B}', 10, 'tx_1',   800),
-        (1, '{TOKEN_A}', 20, 'tx_2',  -200),
-        (2, '{TOKEN_A}', 20, 'tx_2',   200),
-        (1, '{TOKEN_A}', 30, 'tx_3',   100);
+        insert into erg.balances (address_id, nano, mean_age_timestamp) values
+        ({ADDR_ID_1}, 4000, 0),
+        ({ADDR_ID_2}, 2000, 0);
 
-        insert into adr.tokens (address_id, token_id, value) values
-        (1, '{TOKEN_A}', 400),
-        (1, '{TOKEN_B}', 800),
-        (2, '{TOKEN_A}', 200);
+        insert into tokens.balance_diffs (address_id, asset_id, height, tx_idx, value) values
+        ({ADDR_ID_1}, '{ASSET_ID_A}', 10, 0,   500),
+        ({ADDR_ID_1}, '{ASSET_ID_B}', 10, 0,   800),
+        ({ADDR_ID_1}, '{ASSET_ID_A}', 20, 0,  -200),
+        ({ADDR_ID_2}, '{ASSET_ID_A}', 20, 0,   200),
+        ({ADDR_ID_1}, '{ASSET_ID_A}', 30, 0,   100);
 
-        insert into core.headers (height, id, parent_id, timestamp, difficulty, vote1, vote2, vote3) values 
-        (10, 'header10', 'header09', 1567123456789, 111222333, 0, 0, 0),
-        (20, 'header20', 'header19', 1568123456789, 111122233, 0, 0, 0),
-        (30, 'header30', 'header29', 1569123456789, 111222333, 0, 0, 0);
+        insert into tokens.balances (address_id, asset_id, value) values
+        ({ADDR_ID_1}, '{ASSET_ID_A}', 400),
+        ({ADDR_ID_1}, '{ASSET_ID_B}', 800),
+        ({ADDR_ID_2}, '{ASSET_ID_A}', 200);
 
-        insert into cex.main_addresses (address_id, cex_id) values
-        (3, 1);
+        insert into timestamps.timestamps (height, timestamp) values 
+        (10, 1567123456789),
+        (20, 1568123456789),
+        (30, 1569123456789);
     """
-    with MockDB(sql=sql) as _:
+    with MockDB(schema_paths=schema_paths, sql=sql) as _:
         with TestClient(app) as client:
             yield client
 
@@ -221,7 +234,7 @@ class TestBalanceAtTimestamp:
 class TestBalanceHistory:
     def test_default(self, client):
         url = "/addresses/addr1/balance/history"
-        response = client.get("/addresses/addr1/balance/history")
+        response = client.get(url)
         assert response.status_code == 200
         assert response.json() == {
             "heights": [
@@ -514,30 +527,3 @@ class TestBalanceHistory:
         response = client.get(url)
         assert response.status_code == 404
         assert response.json()["detail"] == "No balance found"
-
-
-class TestTags:
-    def test_predefined_tags(self, client):
-        treasury = "4L1ktFSzm3SH1UioDuUf5hyaraHird4D2dEACwQ1qHGjSKtA6KaNvSzRCZXZGf9jkfNAEC1SrYaZmCuvb2BKiXk5zW9xuvrXFT7FdNe2KqbymiZvo5UQLAm5jQY8ZBRhTZ4AFtZa1UF5nd4aofwPiL7YkJuyiL5hDHMZL1ZnyL746tHmRYMjAhCgE7d698dRhkdSeVy"
-        url = f"/addresses/{treasury}/tags"
-        response = client.get(url)
-        assert response.status_code == 200
-        assert response.json() == ["ef-treasury"]
-
-    def test_exchange_tags(self, client):
-        coinex_main = "9fowPvQ2GXdmhD2bN54EL9dRnio3kBQGyrD3fkbHwuTXD6z1wBU"
-        url = f"/addresses/{coinex_main}/tags"
-        response = client.get(url)
-        assert response.status_code == 200
-        assert response.json() == ["exchange", "exchange-main", "exchange-coinex"]
-
-    def test_unknown_address(self, client):
-        url = f"/addresses/unknown/tags"
-        response = client.get(url)
-        assert response.status_code == 200
-        assert response.json() == []
-
-    def test_nonvallid_address(self, client):
-        url = f"/addresses/not_good/tags"
-        response = client.get(url)
-        assert response.status_code == 422

@@ -7,6 +7,7 @@ from ..models import TokenID
 
 contracts_router = r = APIRouter()
 
+
 # @r.get("/count", response_model=int)
 @r.get("/count")
 async def get_contract_address_count(
@@ -26,23 +27,24 @@ async def get_contract_address_count(
     """
     Current contract addresses count.
     """
-    query = """
+    query = f"""
         select count(*) as cnt
-        from adr.erg b
-        join core.addresses a on a.id = b.address_id
-        where (a.address not like '9%' or length(a.address) <> 51)
+        from {'erg' if token_id is None else 'tokens'}.balances
+        where address_id % 10 <> 1
     """
     args = []
+    value_col = "nano" if token_id is None else "value"
     if token_id is not None:
         args.append(token_id)
-        query = query.replace("adr.erg", "adr.tokens")
-        query += f" and token_id = $1"
+        query += (
+            f" and asset_id = (select asset_id from core.tokens where token_id = $1)"
+        )
     if bal_ge is not None:
         args.append(bal_ge)
-        query += f" and value >= ${len(args)}"
+        query += f" and {value_col} >= ${len(args)}"
     if bal_lt is not None:
         args.append(bal_lt)
-        query += f" and value < ${len(args)}"
+        query += f" and {value_col} < ${len(args)}"
 
     async with request.app.state.db.acquire() as conn:
         row = await conn.fetchrow(query, *args)
@@ -59,19 +61,18 @@ async def supply_in_contracts(
     """
     Current supply in contract addresses. Excludes coinbase address.
     """
-    query = """
-        select sum(b.value) as value
-        from adr.erg b
-        join core.addresses a on a.id = b.address_id
-        where a.address <> '2Z4YBkDsDvQj8BX7xiySFewjitqp2ge9c99jfes2whbtKitZTxdBYqbrVZUvZvKv6aqn9by4kp3LE1c26LCyosFnVnm6b6U1JYvWpYmL2ZnixJbXLjWAWuBThV1D6dLpqZJYQHYDznJCk49g5TUiS4q8khpag2aNmHwREV7JSsypHdHLgJT7MGaw51aJfNubyzSKxZ4AJXFS27EfXwyCLzW1K6GVqwkJtCoPvrcLqmqwacAWJPkmh78nke9H4oT88XmSbRt2n9aWZjosiZCafZ4osUDxmZcc5QVEeTWn8drSraY3eFKe8Mu9MSCcVU' 
-            and a.address <> '4L1ktFSzm3SH1UioDuUf5hyaraHird4D2dEACwQ1qHGjSKtA6KaNvSzRCZXZGf9jkfNAEC1SrYaZmCuvb2BKiXk5zW9xuvrXFT7FdNe2KqbymiZvo5UQLAm5jQY8ZBRhTZ4AFtZa1UF5nd4aofwPiL7YkJuyiL5hDHMZL1ZnyL746tHmRYMjAhCgE7d698dRhkdSeVy'
-            and (a.address not like '9%' or length(a.address) <> 51)
+    value_col = "nano" if token_id is None else "value"
+    query = f"""
+        select sum({value_col}) as value
+        from {'erg' if token_id is None else 'tokens'}.balances
+        where address_id not in (13, 33) and address_id % 10 <> 1
     """
     args = []
     if token_id is not None:
         args.append(token_id)
-        query = query.replace("adr.erg", "adr.tokens")
-        query += f" and token_id = $1"
+        query += (
+            f" and asset_id = (select asset_id from core.tokens where token_id = $1)"
+        )
 
     async with request.app.state.db.acquire() as conn:
         row = await conn.fetchrow(query, *args)

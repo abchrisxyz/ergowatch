@@ -34,17 +34,17 @@ async def address_balance(
     """
     args = [address]
     query = """
-        select value
-        from adr.erg
+        select nano as value
+        from erg.balances
         where address_id = core.address_id($1);
     """
     if token_id is not None:
         args.append(token_id)
         query = """
             select value
-            from adr.tokens
+            from tokens.balances
             where address_id = core.address_id($1)
-                and token_id = $2;
+                and asset_id = (select asset_id from core.tokens where token_id = $2);
         """
     async with request.app.state.db.acquire() as conn:
         row = await conn.fetchrow(query, *args)
@@ -62,18 +62,18 @@ async def address_balance_at_height(
 ):
     opt_args = []
     query = """
-        select sum(value) as value
-        from adr.erg_diffs
+        select sum(nano) as value
+        from erg.balance_diffs
         where address_id = core.address_id($1) and height <= $2
     """
     if token_id is not None:
         opt_args = [token_id]
         query = """
             select sum(value) as value
-            from adr.tokens_diffs
+            from tokens.balance_diffs
             where address_id = core.address_id($1)
                 and height <= $2
-                and token_id = $3
+                and asset_id = (select asset_id from core.tokens where token_id = $3)
         """
     async with request.app.state.db.acquire() as conn:
         row = await conn.fetchrow(query, address, height, *opt_args)
@@ -92,20 +92,20 @@ async def address_balance_at_timestamp(
 ):
     opt_args = []
     query = """
-        select sum(d.value) as value
-        from adr.erg_diffs d
-        join core.headers h on h.height = d.height
-        where d.address_id = core.address_id($1) and h.timestamp <= $2
+        select sum(d.nano) as value
+        from erg.balance_diffs d
+        join timestamps.timestamps t on t.height = d.height
+        where d.address_id = core.address_id($1) and t.timestamp <= $2
     """
     if token_id is not None:
         opt_args = [token_id]
         query = """
             select sum(value) as value
-            from adr.tokens_diffs d
-            join core.headers h on h.height = d.height
+            from tokens.balance_diffs d
+            join timestamps.timestamps t on t.height = d.height
             where address_id = core.address_id($1)
-                and h.timestamp <= $2
-                and token_id = $3
+                and t.timestamp <= $2
+                and asset_id = (select asset_id from core.tokens where token_id = $3)
         """
     async with request.app.state.db.acquire() as conn:
         row = await conn.fetchrow(query, address, timestamp, *opt_args)
@@ -133,12 +133,12 @@ async def address_balance_history(
     """
     query = f"""
         select d.height
-            {', h.timestamp' if timestamps else ''}
-            , sum(d.value) over (order by d.height) as balance
-        from adr.{'erg' if token_id is None else 'tokens'}_diffs d
-        join core.headers h on h.height = d.height
+            {', t.timestamp' if timestamps else ''}
+            , sum(d.{'nano' if token_id is None else 'value'}) over (order by d.height) as balance
+        from {'erg' if token_id is None else 'tokens'}.balance_diffs d
+        join timestamps.timestamps t on t.height = d.height
         where d.address_id = core.address_id($1)
-            {'' if token_id is None else 'and token_id = $4'}
+            {'' if token_id is None else 'and asset_id = (select asset_id from core.tokens where token_id = $4)'}
         order by 1 {'desc' if desc else ''}
         limit $2 offset $3;
     """
@@ -161,43 +161,3 @@ async def address_balance_history(
             }
     else:
         return rows
-
-
-@r.get("/{address}/tags", response_model=List[str])
-async def address_tags(
-    request: Request,
-    address: Address,
-):
-    """
-    Returns all tags assotiated with `address` (e.g. exchange address, known contract, etc.)
-    """
-    if address in TAGS:
-        return TAGS[address]
-    tags = []
-    # Exchange deposit address
-    query = """
-        select c.text_id
-        from cex.deposit_addresses a
-        join cex.cexs c on c.id = a.cex_id
-        where a.address_id = core.address_id($1);
-    """
-    async with request.app.state.db.acquire() as conn:
-        row = await conn.fetchrow(query, address)
-    if row is not None:
-        tags.append(f"exchange")
-        tags.append(f"exchange-deposit")
-        tags.append(f"exchange-{row['text_id']}")
-    # Exchange main address
-    query = """
-        select c.text_id
-        from cex.main_addresses a
-        join cex.cexs c on c.id = a.cex_id
-        where a.address_id = core.address_id($1);
-    """
-    async with request.app.state.db.acquire() as conn:
-        row = await conn.fetchrow(query, address)
-    if row is not None:
-        tags.append(f"exchange")
-        tags.append(f"exchange-main")
-        tags.append(f"exchange-{row['text_id']}")
-    return tags

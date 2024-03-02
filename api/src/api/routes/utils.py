@@ -17,7 +17,7 @@ async def height_to_timestamp(
     """
     query = """
         select timestamp
-        from core.headers
+        from timestamps.timestamps
         where height = $1;
     """
     async with request.app.state.db.acquire() as conn:
@@ -37,7 +37,7 @@ async def timestamp_to_height(
     """
     query = """
         select height
-        from core.headers
+        from timestamps.timestamps
         where timestamp <= $1
         order by timestamp desc
         limit 1;

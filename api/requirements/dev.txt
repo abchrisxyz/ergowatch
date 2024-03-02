@@ -1,5 +1,8 @@
+-r base.txt
+black
 httpx
-psycopg>=3.0.8
+psycopg[binary]
 pytest
 pytest-asyncio
 pytest-order
+

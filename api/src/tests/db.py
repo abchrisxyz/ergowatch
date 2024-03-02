@@ -2,11 +2,12 @@ import os
 from pathlib import Path
 import platform
 import asyncio
+from typing import List
 
 import psycopg as pg
 from psycopg.sql import Identifier, SQL
 
-from local import DB_HOST, DB_PORT, DB_USER, DB_PASS
+from .local import DB_HOST, DB_PORT, DB_USER, DB_PASS
 
 # Fix warnings on Windows
 # https://github.com/encode/httpx/issues/1287
@@ -38,13 +39,27 @@ def conn_str(dbname: str) -> str:
     return f"host={DB_HOST} port={DB_PORT} dbname={dbname} user={DB_USER} password={DB_PASS}"
 
 
+# Absolute path of ergowatch directory
+ROOT = Path(__file__).parent.parent.parent.parent.absolute()
+
+
 class MockDB:
-    def __init__(self, set_constraints: bool = True, sql: str = None):
+    """
+    Test db.
+
+    schema_paths: Path's of schema files to load, relative to top-level ergowatch directory.
+    """
+
+    def __init__(
+        self,
+        schema_paths: List[Path] = [],
+        set_constraints: bool = True,
+        sql: str = None,
+    ):
         self._dbname: str = TEST_DB_NAME
-        with open(SCHEMA_PATH) as f:
-            self._sql = f.read()
-        if set_constraints:
-            with open(CONSTRAINTS_PATH) as f:
+        self._sql = ""
+        for schema_path in schema_paths:
+            with open(ROOT / schema_path) as f:
                 self._sql += f.read()
         if sql is not None:
             self._sql += sql

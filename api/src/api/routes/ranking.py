@@ -8,7 +8,7 @@ from pydantic import constr
 ranking_router = r = APIRouter()
 
 
-P2PKAddress = constr(regex="^9[a-zA-Z0-9]{50}$")
+P2PKAddress = constr(pattern="^9[a-zA-Z0-9]{50}$")
 
 
 class AddressRank(BaseModel):
@@ -18,9 +18,9 @@ class AddressRank(BaseModel):
 
 
 class RankResponse(BaseModel):
-    above: None | AddressRank
+    above: None | AddressRank = None
     target: None | AddressRank
-    under: None | AddressRank
+    under: None | AddressRank = None
 
 
 @r.get("/{p2pk_address}", response_model=RankResponse, name="P2PK address rank")
@@ -34,50 +34,55 @@ async def p2pk_address_rank(
     """
     query = f"""
         with ranked_p2pk as (
-            select rank() over (order by b.value desc)
-                , a.address
-                , b.value
-            from adr.erg b
-            join core.addresses a on a.id = b.address_id
-            where a.address like '9%'
-                and length(a.address) = 51
+            select rank() over (order by nano desc)
+                , address_id
+                , nano
+            from erg.balances
+            where address_id % 10 = 1 -- p2pk's only
         ), target as (
             select rank
-                , address
-                , value
+                , address_id
+                , nano
             from ranked_p2pk
-            where address = $1
+            where address_id = core.address_id($1)
+        ), neighbours as (
+            -- Target address
+            select 'target' as label
+                , rank
+                , nano
+                , address_id
+            from target
+            union
+            -- First higher ranked
+            select * from (
+                select 'above' as label
+                    , p.rank
+                    , p.nano
+                    , p.address_id
+                from ranked_p2pk p, target t
+                where p.rank < t.rank
+                order by p.rank desc, p.address_id
+                limit 1
+            ) above
+            union
+            -- First lower ranked
+            select * from (
+                select 'under' as label
+                    , p.rank
+                    , p.nano
+                    , p.address_id
+                from ranked_p2pk p, target t
+                where p.rank > t.rank
+                order by p.rank, p.address_id
+                limit 1
+            ) under
         )
-        -- Target address
-        select 'target' as label
-            , rank
-            , value
-            , address
-        from target
-        union
-        -- First higher ranked
-        select * from (
-            select 'above' as label
-                , p.rank
-                , p.value
-                , p.address
-            from ranked_p2pk p, target t
-            where p.rank < t.rank
-            order by p.rank desc, p.address
-            limit 1
-        ) above
-        union
-        -- First lower ranked
-        select * from (
-            select 'under' as label
-                , p.rank
-                , p.value
-                , p.address
-            from ranked_p2pk p, target t
-            where p.rank > t.rank
-            order by p.rank, p.address
-            limit 1
-        ) under
+        select n.label
+            , n.rank
+            , n.nano
+            , a.address
+        from neighbours n
+        join core.addresses a on a.id = n.address_id
     """
     async with request.app.state.db.acquire() as conn:
         rows = await conn.fetch(query, p2pk_address)
@@ -87,7 +92,7 @@ async def p2pk_address_rank(
             row["label"]: {
                 "rank": row["rank"],
                 "address": row["address"],
-                "balance": row["value"],
+                "balance": row["nano"],
             }
             for row in rows
         }

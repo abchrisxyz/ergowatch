@@ -1,4 +1,3 @@
-import os
 import pytest
 from fastapi.testclient import TestClient
 
@@ -6,37 +5,37 @@ from ..main import app
 from .db import MockDB
 
 ADDR = {
-    "9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 1,
-    "9addr2axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 2,
-    "9addr2bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 3,
-    "9addr4xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 4,
-    "9addr5axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 5,
-    "9addr5bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 6,
-    "9addr7xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 7,
-    "1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 8,
-    "9contract2xshorterthan51chars": 9,
-    "9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx": 10,
-    "4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 11,
+    "9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 11,
+    "9addr2axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 21,
+    "9addr2bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 31,
+    "9addr4xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 41,
+    "9addr5axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 51,
+    "9addr5bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 61,
+    "9addr7xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 71,
+    "1contract1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 83,
+    "9contract2xshorterthan51chars": 93,
+    "9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx": 103,
+    "4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 113,
 }
 
 ADDR_SQL = (
-    "insert into core.addresses (id, address, spot_height, p2pk, miner) values "
-    + ",".join(
-        [
-            f"({i+1}, '{addr}', 1, {'contract' in addr}, False)"
-            for i, addr in enumerate(ADDR)
-        ]
-    )
+    "insert into core.addresses (id, spot_height, address) values "
+    + ",".join([f"({aid}, 1, '{addr}')" for (addr, aid) in ADDR.items()])
     + ";"
 )
 
 
 @pytest.fixture(scope="module")
 def client():
+    schema_paths = [
+        "ew/src/core/store/schema.sql",
+        "ew/src/workers/erg/store/schema.sql",
+        "ew/src/workers/tokens/store/schema.sql",
+    ]
     sql = f"""
         {ADDR_SQL}
 
-        insert into adr.erg (address_id, value, mean_age_timestamp) values
+        insert into erg.balances (address_id, nano, mean_age_timestamp) values
         ({ADDR['9addr1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       5000000, 0),
         ({ADDR['9addr2axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       4000000, 0),
         ({ADDR['9addr2bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},       4000000, 0),
@@ -49,7 +48,7 @@ def client():
         ({ADDR['9contract3xlongerthan51charsxxxxxxxxxxxxxxxxxxxxxxxxx']}, 30000000000, 0),
         ({ADDR['4contractxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']},      4000000, 0);
     """
-    with MockDB(sql=sql) as db_name:
+    with MockDB(schema_paths=schema_paths, sql=sql) as db_name:
         with TestClient(app) as client:
             yield client
 

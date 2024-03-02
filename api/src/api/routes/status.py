@@ -20,7 +20,7 @@ class Repairs(BaseModel):
 
 @r.get("/sync_height", response_model=Status)
 async def sync_height(request: Request):
-    query = "select height from core.headers order by 1 desc limit 1;"
+    query = "select max(height) as height from core.headers;"
     async with request.app.state.db.acquire() as conn:
         row = await conn.fetchrow(query)
         return {
