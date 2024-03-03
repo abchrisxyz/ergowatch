@@ -66,6 +66,10 @@ insert into exchanges.main_addresses (cex_id, address_id, address) values
 	-- Coinex
 	(1, 2857451, '9fowPvQ2GXdmhD2bN54EL9dRnio3kBQGyrD3fkbHwuTXD6z1wBU'),
 	(1,  712861, '9fPiW45mZwoTxSwTLLXaZcdekqi72emebENmScyTGsjryzrntUe'),
+	-- https://explorer.ergoplatform.com/en/transactions/cb8cdbd507fbec52a3e4509258d7e2163d3e8ecfac04977307d8b168668acded
+	-- 9fPiW sends 2.9M to what looks like a deposit address 9gwU.
+	-- 9gwU sends the 2.9M to Gate's 9iKFB which then sends it to 9i51m.
+	-- Looks like Coinex sent funds to Gate during a security incident.
 	(1, 8980751, '9i51m3reWk99iw8WF6PgxbUT6ZFKhzJ1PmD11vEuGu125hRaKAH'),
 	(1, 9075411, '9fNqgokdacnYykMZmtqjTnCbBJG9mhkifghV6Pmn6taBihUoG33'),
 	(1, 9081471, '9f3iGnXcebxzv4avYCUTt6dekgPMV1t5hpHdcJ4mAfX94yAiGFv'),
