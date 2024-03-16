@@ -17,7 +17,8 @@ insert into exchanges.exchanges (id, name, text_id) values
 	(5, 'TradeOgre', 'tradeogre'),
 	(6, 'Huobi', 'huobi'),
 	(7, 'Xeggex', 'xeggex'),
-	(8, 'SevenSeas', 'sevenseas');
+	(8, 'SevenSeas', 'sevenseas'),
+	(9, 'NonKYC', 'nonkyc');
 
 -- Known main addresses for each CEX
 -- New Coinex main: 9i51m3reWk99iw8WF6PgxbUT6ZFKhzJ1PmD11vEuGu125hRaKAH
@@ -133,7 +134,10 @@ insert into exchanges.main_addresses (cex_id, address_id, address) values
 	(7, 9336381, '9hphYTmicjazd45pz2ovoHVPz5LTq9EvXoEK9JMGsfWuMtX6eDu'),
 	
 	-- Seven Seas
-	(8, 8327441, '9hYpa8qu3GihemMA1c4RVZuRGqcmBQKChgokFm6a81R3mFafqgi');
+	(8, 8327441, '9hYpa8qu3GihemMA1c4RVZuRGqcmBQKChgokFm6a81R3mFafqgi'),
+
+	-- NonKYC.io
+	(9, 8951841, '9hmS5u1Khhc4PFERTA2dGzSkDuwUrrENQEUAveF6gHj8xCi9qy3');
 
 
 insert into exchanges.deposit_addresses_ignored (address_id) values

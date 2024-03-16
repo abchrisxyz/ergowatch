@@ -32,7 +32,7 @@ pub const SCHEMA: StoreDef = StoreDef {
     schema_name: "exchanges",
     worker_id: WORKER_ID,
     sql: include_str!("store/schema.sql"),
-    revision: &Revision { major: 1, minor: 5 },
+    revision: &Revision { major: 1, minor: 6 },
 };
 
 pub(super) type Store = PgStore<SpecStore>;
@@ -183,6 +183,7 @@ pub(super) mod migrations {
     const KUCOIN: ExchangeID = 3;
     const XEGGEX: ExchangeID = 7;
     const SEVENSEAS: ExchangeID = 8;
+    const NONKYC: ExchangeID = 9;
 
     /// Migration for revision 1.1
     #[derive(Debug)]
@@ -450,6 +451,61 @@ pub(super) mod migrations {
                     AddressID(8327441),
                     SEVENSEAS,
                     "9hYpa8qu3GihemMA1c4RVZuRGqcmBQKChgokFm6a81R3mFafqgi",
+                ),
+            )
+            .await;
+
+            // Get new store height from last supply record
+            let post_mig_height = supply::get_latest(pgtx).await.map(|r| r.height);
+
+            // Determine migration effect to return
+            if post_mig_height == pre_mig_height {
+                MigrationEffect::None
+            } else {
+                match post_mig_height {
+                    Some(h) => MigrationEffect::Trimmed(h),
+                    None => MigrationEffect::Reset,
+                }
+            }
+        }
+    }
+
+    /// Migration for revision 1.6
+    #[derive(Debug)]
+    pub struct Mig1_6 {}
+
+    #[async_trait]
+    impl Migration for Mig1_6 {
+        fn description(&self) -> &'static str {
+            "Adding nonkyc to tracked exchanges"
+        }
+
+        fn revision(&self) -> Revision {
+            Revision::new(1, 6)
+        }
+
+        async fn run(&self, pgtx: &Transaction<'_>) -> MigrationEffect {
+            // Get current store height from last supply record
+            let pre_mig_height = supply::get_latest(pgtx).await.map(|r| r.height);
+
+            // Insert new exchange
+            exchanges::insert(
+                pgtx,
+                &ExchangeRecord {
+                    id: NONKYC,
+                    text_id: "nonkyc".to_owned(),
+                    name: "NonKYC".to_owned(),
+                },
+            )
+            .await;
+
+            // Main exchange address
+            add_main_address(
+                pgtx,
+                MainAddressRecord::new(
+                    AddressID(8951841),
+                    NONKYC,
+                    "9hmS5u1Khhc4PFERTA2dGzSkDuwUrrENQEUAveF6gHj8xCi9qy3",
                 ),
             )
             .await;
