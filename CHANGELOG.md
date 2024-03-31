@@ -1,8 +1,8 @@
 # Changelog
 
-## v1.1.0 - 2023-04-01
+## [v1.1.0](https://github.com/abchrisxyz/ergowatch/tree/v1.1.0) - 2023-04-01
 
-### New Features
+### Added
 - Add api endpoint for SigmaUSD state. See [docs](https://api.ergo.watch/docs).
 
 ## v1.0.0 - 2023-03-27
@@ -43,7 +43,7 @@ API endoints in use by third parties were mainained but some lesser used endpoin
 
 ## v0.5.2 - 2022-12-23
 
-### New Features
+### Added
 - Added `ergusd` flag to `/metrics` api to include ERG/USD data.
 - Added relative change summary for supply distribution and composition.
 - Added `/metrics/overview` endpoint.
@@ -64,7 +64,7 @@ API endoints in use by third parties were mainained but some lesser used endpoin
 
 ## v0.5.1 - 2022-11-24
 
-### New Features
+### Added
 - Added `/repairs` endpoint exposing repair sessions info
 
 ### Changed
@@ -74,7 +74,7 @@ API endoints in use by third parties were mainained but some lesser used endpoin
 
 BREAKING CHANGES - requires a full db resync
 
-### New features
+### Added
 
 - Added -r option to resume interrupted repair sessions.
 - Tracking new exchanges (TradeOgre and Huobi)
@@ -112,7 +112,7 @@ BREAKING CHANGES - requires a full db resync
 
 BREAKING CHANGES - requires a full db resync. Intermediate release to fix indexing issues.
 
-### New features
+### Added
 - [Issue 55](https://github.com/abchrisxyz/ergowatch/issues/55) - Added height <--> timestamp conversion utils
 - [Issue 57](https://github.com/abchrisxyz/ergowatch/issues/57) - Track address-level mean supply age
 
@@ -123,7 +123,7 @@ BREAKING CHANGES - requires a full db resync. Intermediate release to fix indexi
 
 BREAKING CHANGES - requires a full db resync
 
-### New features
+### Added
 - [Issue 49](https://github.com/abchrisxyz/ergowatch/issues/49) - Block difficulty is stored to db.
 - [Issue 50](https://github.com/abchrisxyz/ergowatch/issues/50) - Box sizes are stored to db.
 - [Issue 51](https://github.com/abchrisxyz/ergowatch/issues/51) - Block extensions are stored to db.
@@ -135,7 +135,7 @@ BREAKING CHANGES - requires a full db resync
 
 ## v0.3.0 - 2022-06-13
 
-### New features
+### Added
 - [Issue 15](https://github.com/abchrisxyz/ergowatch/issues/15) - Added rich lists endpoint.
 - [Issue 28](https://github.com/abchrisxyz/ergowatch/issues/28) - Added exchange supply API's.
 - [Issue 41](https://github.com/abchrisxyz/ergowatch/issues/41) - Added address labels endpoint.
@@ -164,7 +164,7 @@ BREAKING CHANGES - requires a full db resync
 
 ## v0.2.0 - 2022-04-05
 
-### New features
+### Added
 - [Issue 13](https://github.com/abchrisxyz/ergowatch/issues/13) - Made node poll interval configurable.
 - [Issue 16](https://github.com/abchrisxyz/ergowatch/issues/17) - Added token details endpoint.
 - [Issue 17](https://github.com/abchrisxyz/ergowatch/issues/17) - Added sync status API.
