@@ -95,7 +95,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="ErgoWatch",
-    version="1.0.0",
+    version="1.1.0",
     description=description,
     openapi_tags=tags_metadata,
     root_path=root_path,

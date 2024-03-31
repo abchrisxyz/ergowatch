@@ -1,35 +1,45 @@
 # Changelog
 
+## v1.1.0 - 2023-04-01
+
+### New Features
+- Add api endpoint for SigmaUSD state. See [docs](https://api.ergo.watch/docs).
+
+## v1.0.0 - 2023-03-27
+
+Full rewrite of the stack.
+We now have `ew`, replacing `watcher`, and a trimmed down FastAPI api server.
+
+`ew` still writes data to a PostgreSQL database but schema's are different from v0.x.
+
+API endoints in use by third parties were mainained but some lesser used endpoints had to be dropped.
+
 ## v0.5.7 - 2023-05-21
 
 ### Fixed
 - [Issue 75](https://github.com/abchrisxyz/ergowatch/issues/75) - Add new main Kucoin address
 - [Issue 76](https://github.com/abchrisxyz/ergowatch/issues/76) - Fix issue with multiple deposit address conflicts
----
+
 
 ## v0.5.6 - 2023-04-09
 
 ### Fixed
 - Handle duplicate data-inputs
----
 
 ## v0.5.5 - 2023-04-03
 
 ### Fixed
 - Remove default values from FastAPI path parameters
----
 
 ## v0.5.4 - 2023-01-31
 
 ### Fixed
 - Handle invalid UTF-8 bytes during EIP-4 token rendering
----
 
 ## v0.5.3 - 2023-01-24
 
 ### Fixed
 - Disable age calculation in fork handling until [Issue 73](https://github.com/abchrisxyz/ergowatch/issues/73) is resolved
----
 
 ## v0.5.2 - 2022-12-23
 
@@ -51,7 +61,6 @@
 - Fixed early supply age records with unhandled zero timestamps.
 - Fixed contracts supply age bias.
 - Made `/metrics/exchanges/supply` behave as other `/metrics` endpoints.
----
 
 ## v0.5.1 - 2022-11-24
 
@@ -60,7 +69,6 @@
 
 ### Changed
 - Removed hard-coded API response CORS headers. 
----
 
 ## v0.5.0 - 2022-11-02
 
@@ -86,14 +94,12 @@ BREAKING CHANGES - requires a full db resync
 
 ### Fixed
 - Fixed panics on repair conflicts.
----
 
 ## v0.4.3 - 2022-09-26
 
 ### Fixed
 
 - [Issue 70](https://github.com/abchrisxyz/ergowatch/issues/70) - Fixed cex address detection issue with airdrops
----
 
 ## v0.4.2 - 2022-09-01
 
@@ -101,7 +107,6 @@ BREAKING CHANGES - requires a full db resync
 
 - [Issue 65](https://github.com/abchrisxyz/ergowatch/issues/65) - Fixed division by zero during rollbacks
 - Fixed deadlock when pausing repair events
----
 
 ## v0.4.1 - 2022-08-29
 
@@ -113,7 +118,6 @@ BREAKING CHANGES - requires a full db resync. Intermediate release to fix indexi
 
 ### Fixed
 - [Issue 64](https://github.com/abchrisxyz/ergowatch/issues/64) - Work around b-tree index limitations
----
 
 ## v0.4.0 - 2022-07-08
 
@@ -128,7 +132,6 @@ BREAKING CHANGES - requires a full db resync
 ### Fixed
 
 - Faster balance diff processing.
----
 
 ## v0.3.0 - 2022-06-13
 
@@ -148,19 +151,16 @@ BREAKING CHANGES - requires a full db resync
 ### Housekeeping
 - [Issue 34](https://github.com/abchrisxyz/ergowatch/issues/34) - Bootstrapping `work_mem` is now configurable.
 - [Issue 26](https://github.com/abchrisxyz/ergowatch/issues/26) - Added terms of service.
----
 
 ## v0.2.2 - 2022-05-04
 
 ### Fixed
 - [Issue 27](https://github.com/abchrisxyz/ergowatch/issues/27) - Handle non-consecutive duplicated assets.
 
-
 ## v0.2.1 - 2022-04-25
 
 ### Fixed
 - [Issue 24](https://github.com/abchrisxyz/ergowatch/issues/24) - Prevent panics from register parsing.
----
 
 ## v0.2.0 - 2022-04-05
 
