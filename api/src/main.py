@@ -14,6 +14,7 @@ try:
     from api.routes.exchanges import exchanges_router
     from api.routes.lists import lists_router
     from api.routes.utils import utils_router
+    from api.routes.sigmausd import sigmausd_router
 except ImportError:
     # When running pytest
     from .api.routes.addresses import addresses_router
@@ -25,6 +26,7 @@ except ImportError:
     from .api.routes.exchanges import exchanges_router
     from .api.routes.lists import lists_router
     from .api.routes.utils import utils_router
+    from .api.routes.sigmausd import sigmausd_router
 
 root_path = ""
 if "FASTAPI_ROOT_PATH" in os.environ:
@@ -115,3 +117,4 @@ app.include_router(p2pk_router, prefix="/p2pk", tags=["p2pk"])
 # app.include_router(tokens_router, prefix="/tokens", tags=["tokens"])
 app.include_router(utils_router, prefix="/utils", tags=["utils"])
 app.include_router(ranking_router, prefix="/ranking", tags=["misc"])
+app.include_router(sigmausd_router, prefix="/sigmausd", tags=["misc"])
