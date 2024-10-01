@@ -208,7 +208,7 @@ impl StoreDef {
             let mut pgtx = client.transaction().await.unwrap();
             pgtx.batch_execute(self.sql).await.unwrap();
             revisions::insert(&mut pgtx, &self).await;
-            headers::insert_initial(&mut pgtx, &self).await;
+            headers::insert_initial(&mut pgtx, &self.schema_name, &self.worker_id).await;
             pgtx.commit().await.unwrap();
         }
     }
@@ -328,8 +328,8 @@ mod headers {
     }
 
     /// Insert initial header.
-    pub(super) async fn insert_initial(pgtx: &Transaction<'_>, store: &StoreDef) {
-        tracing::trace!("insert initial for {store}");
+    pub(super) async fn insert_initial(pgtx: &Transaction<'_>, schema: &str, worker_id: &str) {
+        tracing::trace!("insert initial for {schema}/{worker_id}");
         let h = Header::initial();
         let sql = "
             insert into ew.headers (schema_name, worker_id, height, timestamp, header_id, parent_id)
@@ -340,8 +340,8 @@ mod headers {
         pgtx.execute(
             sql,
             &[
-                &store.schema_name,
-                &store.worker_id,
+                &schema,
+                &worker_id,
                 &h.height,
                 &h.timestamp,
                 &h.header_id,
@@ -382,6 +382,12 @@ mod headers {
             .await
             .unwrap();
         assert_eq!(n_modified, 1);
+    }
+
+    pub(super) async fn delete(pgtx: &Transaction<'_>, schema: &str, worker_id: &str) {
+        let sql = "delete from ew.headers where schema_name = $1 and worker_id = $2;";
+        let n_deleted = pgtx.execute(sql, &[&schema, &worker_id]).await.unwrap();
+        assert_eq!(n_deleted, 1);
     }
 }
 
@@ -500,12 +506,14 @@ pub trait Migration: std::fmt::Debug {
     async fn run(&self, pgtx: &Transaction<'_>) -> MigrationEffect;
 }
 
+/// Describes migration effect on store height and modifies `ew.headers` table accordingly.
 pub enum MigrationEffect {
     /// No content changes.
     None,
     /// Store got rolled back to height.
     Trimmed(Height),
     /// Store got emptied and needs to sync from scratch.
+    /// Will cause store header to be removed from `ew.headers` table.
     Reset,
 }
 
@@ -585,8 +593,9 @@ impl PgMigrator {
                 headers::update(&pgtx, self.schema, self.worker_id, &header).await;
             }
             MigrationEffect::Reset => {
-                // reset
-                todo!()
+                // Reset worker by resetting its header
+                headers::delete(&pgtx, self.schema, self.worker_id).await;
+                headers::insert_initial(&pgtx, self.schema, self.worker_id).await;
             }
         };
 

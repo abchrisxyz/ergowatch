@@ -92,6 +92,28 @@ impl TestDB {
             .unwrap();
     }
 
+    #[allow(dead_code)] // not used by all tests
+    pub async fn set_worker_header(&self, schema: &str, worker_id: &str, header: &Header) {
+        tracing::trace!("setting header for worker {worker_id}: {header:?}");
+        let stmt = "
+            insert into ew.headers (schema_name, worker_id, height, timestamp, header_id, parent_id)
+            values ($1, $2, $3, $4, $5, $6);";
+        self.client
+            .execute(
+                stmt,
+                &[
+                    &schema,
+                    &worker_id,
+                    &header.height,
+                    &header.timestamp,
+                    &header.header_id,
+                    &header.parent_id,
+                ],
+            )
+            .await
+            .unwrap();
+    }
+
     pub async fn get_revision(&self, schema_name: &str, worker_id: &str) -> Option<Revision> {
         let sql =
             "select major, minor from ew.revisions where schema_name = $1 and worker_id = $2;";

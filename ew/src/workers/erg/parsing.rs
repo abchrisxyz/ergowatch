@@ -136,6 +136,13 @@ impl Parser {
                 .filter(|bc| matches!(bc.new, Bal::Spent))
                 .map(|bc| bc.address_id)
                 .collect(),
+            // Extract new addresses from balance changes
+            new_addresses: balance_changes
+                .iter()
+                .filter(|bc| matches!(bc.old, Bal::Spent))
+                .filter(|bc| matches!(bc.new, Bal::Unspent(_)))
+                .map(|bc| bc.address_id)
+                .collect(),
             // Extract balance records from balance changes
             balance_records: balance_changes
                 .into_iter()

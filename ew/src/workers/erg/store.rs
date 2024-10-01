@@ -21,11 +21,11 @@ mod balances;
 mod composition;
 mod counts;
 
-pub(super) const SCHEMA: StoreDef = StoreDef {
+pub const SCHEMA: StoreDef = StoreDef {
     schema_name: "erg",
     worker_id: WORKER_ID,
     sql: include_str!("store/schema.sql"),
-    revision: &Revision { major: 1, minor: 0 },
+    revision: &Revision { major: 1, minor: 1 },
 };
 
 pub(super) type Store = PgStore<SpecStore>;
@@ -51,20 +51,14 @@ impl BatchStore for SpecStore {
         */
         // Before modifying any balances, log current state to allow rollbacks.
         let height = stamped_batch.height;
-        let new_addresses = batch
-            .balance_records
-            .iter()
-            .filter(|r| r.mean_age_timestamp == stamped_batch.timestamp)
-            .map(|r| r.address_id)
-            .collect();
         let modified_addresses = batch
             .balance_records
             .iter()
-            .filter(|r| r.mean_age_timestamp != stamped_batch.timestamp)
+            // .filter(|r| r.mean_age_timestamp != stamped_batch.timestamp)
             .map(|r| r.address_id)
             .collect();
         // Log addresses that will get created
-        balances::logs::log_new_balances(pgtx, height, &new_addresses).await;
+        balances::logs::log_new_balances(pgtx, height, &batch.new_addresses).await;
         // Log current balance of addresses that will get modified
         balances::logs::log_existing_balances(pgtx, height, &modified_addresses).await;
         // Log current balance of addresses that will get spent
@@ -118,5 +112,90 @@ impl Store {
             map.insert(r.address_id, r);
         }
         map
+    }
+}
+
+pub(super) mod migrations {
+    use async_trait::async_trait;
+    use tokio_postgres::Transaction;
+
+    use crate::core::types::Height;
+    use crate::framework::store;
+    use crate::framework::store::Migration;
+    use crate::framework::store::MigrationEffect;
+    use crate::framework::store::Revision;
+
+    /// Migration for revision 1.1
+    #[derive(Debug)]
+    pub struct Mig1_1 {}
+
+    #[async_trait]
+    impl Migration for Mig1_1 {
+        fn description(&self) -> &'static str {
+            "Fix rollback issue"
+        }
+
+        fn revision(&self) -> Revision {
+            Revision::new(1, 1)
+        }
+
+        async fn run(&self, pgtx: &Transaction<'_>) -> MigrationEffect {
+            // Check if erg worker is lagging behind others.
+            // If it is, then it is likely we ran into the rollback issue
+            // of v1.1.0 and the erg worker state is now corrupt.
+            // To fix it, reset all erg worker state so that the workers starts
+            // from scratch.
+
+            // Read current height of erg worker
+            // let h = Store::get_height(pgtx).await;
+            let current_height: Height = match pgtx
+                .query_opt(
+                    "select height from ew.headers where worker_id = 'erg';",
+                    &[],
+                )
+                .await
+                .unwrap()
+            {
+                Some(row) => row.get(0),
+                None => {
+                    return MigrationEffect::None;
+                }
+            };
+
+            // Read height of upstream worker (erg_diffs)
+            let upstream_height: Height = pgtx
+                .query_one(
+                    "select height from ew.headers where worker_id = 'erg_diffs';",
+                    &[],
+                )
+                .await
+                .map(|row| row.get(0))
+                .unwrap();
+
+            if upstream_height - current_height > 10 {
+                // Too far behind upstream worker.
+                // Consider we got hit by the rollback issue and reset the whole erg store.
+                let tables = vec![
+                    "erg.balances",
+                    "erg._log_balances_previous_state_at",
+                    "erg._log_balances_created_at",
+                    "erg.address_counts_by_balance_p2pk",
+                    "erg.address_counts_by_balance_contracts",
+                    "erg.address_counts_by_balance_miners",
+                    "erg.address_counts_by_balance_p2pk_summary",
+                    "erg.address_counts_by_balance_contracts_summary",
+                    "erg.address_counts_by_balance_miners_summary",
+                    "erg.supply_composition",
+                ];
+                for table in tables {
+                    tracing::debug!("truncating table {table}");
+                    let stmt = format!("truncate table {table};");
+                    pgtx.execute(&stmt, &[]).await.unwrap();
+                }
+                MigrationEffect::Reset
+            } else {
+                MigrationEffect::None
+            }
+        }
     }
 }

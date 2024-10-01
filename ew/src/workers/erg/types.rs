@@ -7,8 +7,10 @@ use crate::core::types::Timestamp;
 
 pub struct Batch {
     pub balance_records: Vec<BalanceRecord>,
-    /// Address id's who's balance became zero
+    /// Address id's whose balance became zero
     pub spent_addresses: Vec<AddressID>,
+    /// Address id's whose balance was zero and is isn't anymore
+    pub new_addresses: Vec<AddressID>,
     /// Address counts
     pub address_counts: AddressCounts,
     /// Supply composition (supply on different address types)
