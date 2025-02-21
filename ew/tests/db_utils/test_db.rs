@@ -114,6 +114,7 @@ impl TestDB {
             .unwrap();
     }
 
+    #[allow(dead_code)]
     pub async fn get_revision(&self, schema_name: &str, worker_id: &str) -> Option<Revision> {
         let sql =
             "select major, minor from ew.revisions where schema_name = $1 and worker_id = $2;";
@@ -126,6 +127,7 @@ impl TestDB {
 
     /// Set revision for given schema.
     /// Assumes no revision is set already.
+    #[allow(dead_code)]
     pub async fn set_revision(&self, schema_name: &str, worker_id: &str, revision: &Revision) {
         let sql = "
             insert into ew.revisions (schema_name, worker_id, major, minor)

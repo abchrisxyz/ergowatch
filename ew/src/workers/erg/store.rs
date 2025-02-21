@@ -120,7 +120,6 @@ pub(super) mod migrations {
     use tokio_postgres::Transaction;
 
     use crate::core::types::Height;
-    use crate::framework::store;
     use crate::framework::store::Migration;
     use crate::framework::store::MigrationEffect;
     use crate::framework::store::Revision;

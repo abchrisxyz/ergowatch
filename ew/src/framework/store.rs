@@ -304,7 +304,6 @@ mod revisions {
 /// Access ew.headers table
 mod headers {
     use super::Header;
-    use super::StoreDef;
     use tokio_postgres::Client;
     use tokio_postgres::Transaction;
 

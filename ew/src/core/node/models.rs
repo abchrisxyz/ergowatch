@@ -138,10 +138,10 @@ pub struct ExtensionField {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "test-utilities", derive(Clone))]
 pub struct ADProofs {
-    pub header_id: HeaderID,
-    pub proof_bytes: String,
-    pub digest: Digest32,
-    pub size: i32,
+    pub _header_id: HeaderID,
+    pub _proof_bytes: String,
+    pub _digest: Digest32,
+    pub _size: i32,
 }
 
 #[cfg(test)]
