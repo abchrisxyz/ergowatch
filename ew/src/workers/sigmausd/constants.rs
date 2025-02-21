@@ -38,6 +38,3 @@ pub const DEFAULT_RSV_PRICE: i64 = 1000000; // 0.001 ERG
 ///
 /// Token ID: 011d3364de07e5a26f0c4eef0852cddb387039a921b7154ef3cab22c6eda887f
 pub const ORACLE_NFT: AssetID = 932;
-
-/// Oracle epoch preparation address id
-pub const ORACLE_EPOCH_PREP_ADDRESS_ID: AddressID = AddressID(153537_3);

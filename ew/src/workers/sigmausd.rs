@@ -9,6 +9,7 @@ use crate::config::PostgresConfig;
 use crate::core::types::CoreData;
 use crate::core::types::Header;
 use crate::core::types::Height;
+use crate::framework::store::PgMigrator;
 use crate::framework::EventHandling;
 use crate::framework::StampedData;
 use constants::CONTRACT_CREATION_HEIGHT;
@@ -31,6 +32,10 @@ impl EventHandling for SigmaUSD {
     type D = ();
 
     async fn new(pgconf: &PostgresConfig) -> Self {
+        // Ensure migrations are applied
+        let mut migrator = PgMigrator::new(pgconf, &store::SCHEMA).await;
+        migrator.apply(&store::migrations::Mig1_1 {}).await;
+
         let store = Store::new(pgconf, &store::SCHEMA).await;
         let cache = store::load_parser_cache(store.get_client()).await;
         let parser = Parser::new(cache);

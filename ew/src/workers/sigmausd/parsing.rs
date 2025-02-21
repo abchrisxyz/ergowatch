@@ -5,7 +5,6 @@ use super::constants::BANK_NFT;
 use super::constants::CONTRACT_ADDRESS_ID;
 use super::constants::CONTRACT_CREATION_HEIGHT;
 use super::constants::NETWORK_FEE_ADDRESS_ID;
-use super::constants::ORACLE_EPOCH_PREP_ADDRESS_ID;
 use super::constants::ORACLE_NFT;
 use super::constants::RC_ASSET_ID;
 use super::constants::SC_ASSET_ID;
@@ -149,11 +148,20 @@ fn tx_has_bank_box(tx: &Transaction) -> bool {
     })
 }
 
+/// Determine if transaction produces an oracle prep box.
 fn tx_has_oracle_prep_box(tx: &Transaction) -> bool {
-    tx.outputs.iter().any(|o| {
-        o.address_id == ORACLE_EPOCH_PREP_ADDRESS_ID
-            && o.assets.iter().any(|a| a.asset_id == ORACLE_NFT)
-    })
+    // Can't rely on fixed prep box address, as subject to change (contract updates)
+    // Instead, go with following ruleset:
+    //  - prep box must hold oracle NFT (others can too at times)
+    //  - prep box must have R4 and R5 set, not R6.
+    //  - prep box is minted in a tx collecting data inputs
+    !tx.data_inputs.is_empty()
+        && tx.outputs.iter().any(|o| {
+            o.assets.iter().any(|a| a.asset_id == ORACLE_NFT)
+                && o.additional_registers.has_r4()
+                && o.additional_registers.has_r5()
+                && !o.additional_registers.has_r6()
+        })
 }
 
 /// Build a bank transaction from a tx known to contain a bank box
@@ -405,7 +413,6 @@ fn extract_oracle_posting(tx: &Transaction, height: Height) -> OraclePosting {
     let prep_boxes: Vec<&BoxData> = tx
         .outputs
         .iter()
-        .filter(|o| o.address_id == ORACLE_EPOCH_PREP_ADDRESS_ID)
         .filter(|o| o.assets.iter().any(|a| a.asset_id == ORACLE_NFT))
         .collect();
     assert_eq!(prep_boxes.len(), 1);
@@ -969,15 +976,15 @@ mod tests {
     #[test]
     fn test_extract_event_oracle_posting() {
         // Actual prep tx would be spending a live epoch box,
-        // but we don't rely on that so can just a dummy.
+        // but we don't rely on that so can just use a dummy.
         let dummy_input = BoxData::dummy();
         let prep_output = BoxData::dummy()
-            .address_id(ORACLE_EPOCH_PREP_ADDRESS_ID)
             .add_asset(ORACLE_NFT, 1)
-            .set_registers(r#"{"R4": "05baafd2a302"}"#);
+            .set_registers(r#"{"R4": "05baafd2a302", "R5": "04bca7b201"}"#);
 
         let tx = Transaction::dummy()
             .add_input(dummy_input)
+            .add_data_input(BoxData::dummy())
             .add_output(prep_output);
 
         let height = 600;

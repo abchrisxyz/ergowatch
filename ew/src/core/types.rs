@@ -424,9 +424,34 @@ impl Registers {
         Self(json)
     }
 
+    /// Check if R4 is set
+    pub fn has_r4(&self) -> bool {
+        self.check_register("R4")
+    }
+
+    /// Check if R5 is set
+    pub fn has_r5(&self) -> bool {
+        self.check_register("R5")
+    }
+
+    /// Check if R6 is set
+    pub fn has_r6(&self) -> bool {
+        self.check_register("R6")
+    }
+
     /// Rendered R4 register
     pub fn r4(&self) -> Option<Register> {
         self.render_register("R4", 4)
+    }
+
+    fn check_register(&self, key: &str) -> bool {
+        match &self.0 {
+            serde_json::Value::Null => false,
+            serde_json::Value::Object(map) => map.get(key).is_some(),
+            _ => {
+                panic!("Non map object for additional registers: {:?}", &self.0);
+            }
+        }
     }
 
     fn render_register(&self, key: &str, id: i16) -> Option<Register> {

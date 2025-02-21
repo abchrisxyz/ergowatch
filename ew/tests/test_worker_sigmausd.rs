@@ -12,7 +12,6 @@ use ew::framework::EventHandling;
 use ew::workers::sigmausd::constants::BANK_NFT;
 use ew::workers::sigmausd::constants::CONTRACT_ADDRESS_ID;
 use ew::workers::sigmausd::constants::CONTRACT_CREATION_HEIGHT;
-use ew::workers::sigmausd::constants::ORACLE_EPOCH_PREP_ADDRESS_ID;
 use ew::workers::sigmausd::constants::ORACLE_NFT;
 use ew::workers::sigmausd::constants::SC_ASSET_ID;
 use ew::workers::sigmausd::SigmaUSD;
@@ -165,12 +164,14 @@ async fn test_rollback() {
         )
         // Oracle posting
         .add_tx(
-            Transaction::dummy().add_input(BoxData::dummy()).add_output(
-                BoxData::dummy()
-                    .address_id(ORACLE_EPOCH_PREP_ADDRESS_ID)
-                    .add_asset(ORACLE_NFT, 1)
-                    .set_registers(r#"{"R4": "05baafd2a302"}"#),
-            ),
+            Transaction::dummy()
+                .add_input(BoxData::dummy())
+                .add_data_input(BoxData::dummy())
+                .add_output(
+                    BoxData::dummy()
+                        .add_asset(ORACLE_NFT, 1)
+                        .set_registers(r#"{"R4": "05baafd2a302", "R5": "04bca7b201"}"#),
+                ),
         );
 
     // Register core header for block 1 to allow worker to restore it

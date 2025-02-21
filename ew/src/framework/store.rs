@@ -238,7 +238,7 @@ impl fmt::Display for StoreDef {
     }
 }
 
-/// Access ew.ervisions table
+/// Access ew.revisions table
 mod revisions {
     use tokio_postgres::Client;
     use tokio_postgres::Transaction;
@@ -294,6 +294,19 @@ mod revisions {
             where schema_name = $3 and worker_id = $4;";
         assert_eq!(
             pgtx.execute(sql, &[&rev.major, &rev.minor, &schema_name, &worker_id])
+                .await
+                .unwrap(),
+            1
+        );
+    }
+
+    pub(super) async fn delete(pgtx: &Transaction<'_>, schema_name: &str, worker_id: &str) {
+        tracing::trace!("delete {schema_name}");
+        let sql = "
+            delete from ew.revisions
+            where schema_name = $1 and worker_id = $2;";
+        assert_eq!(
+            pgtx.execute(sql, &[&schema_name, &worker_id])
                 .await
                 .unwrap(),
             1
@@ -384,6 +397,7 @@ mod headers {
     }
 
     pub(super) async fn delete(pgtx: &Transaction<'_>, schema: &str, worker_id: &str) {
+        tracing::debug!("deleting record from ew.headers for {schema}-{worker_id}");
         let sql = "delete from ew.headers where schema_name = $1 and worker_id = $2;";
         let n_deleted = pgtx.execute(sql, &[&schema, &worker_id]).await.unwrap();
         assert_eq!(n_deleted, 1);
@@ -514,6 +528,8 @@ pub enum MigrationEffect {
     /// Store got emptied and needs to sync from scratch.
     /// Will cause store header to be removed from `ew.headers` table.
     Reset,
+    /// Remove all traces from store. As if running for the first time.
+    Purge,
 }
 
 /// Applies migrations to a PgStore.
@@ -596,11 +612,17 @@ impl PgMigrator {
                 headers::delete(&pgtx, self.schema, self.worker_id).await;
                 headers::insert_initial(&pgtx, self.schema, self.worker_id).await;
             }
+            MigrationEffect::Purge => {
+                headers::delete(&pgtx, self.schema, self.worker_id).await;
+                revisions::delete(&pgtx, self.schema, self.worker_id).await;
+            }
         };
 
         // Update store's revision
-        self.revision = mig.revision();
-        revisions::update(&pgtx, self.schema, self.worker_id, &self.revision).await;
+        if !matches!(effect, MigrationEffect::Purge) {
+            self.revision = mig.revision();
+            revisions::update(&pgtx, self.schema, self.worker_id, &self.revision).await;
+        }
 
         // Commit db transaction
         pgtx.commit().await.unwrap();

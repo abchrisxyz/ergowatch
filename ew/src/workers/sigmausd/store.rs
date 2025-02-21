@@ -23,7 +23,7 @@ pub(super) const SCHEMA: StoreDef = StoreDef {
     schema_name: super::WORKER_ID,
     worker_id: super::WORKER_ID,
     sql: include_str!("store/schema.sql"),
-    revision: &Revision { major: 1, minor: 0 },
+    revision: &Revision { major: 1, minor: 1 },
 };
 
 pub(super) struct SpecStore {}
@@ -94,5 +94,38 @@ pub(super) async fn load_parser_cache(client: &Client) -> ParserCache {
         bank_transaction_count: bank_transactions::get_count(client).await,
         last_history_record: history::get_latest(client).await,
         last_ohlc_group: ohlcs::get_latest_group(client).await,
+    }
+}
+
+pub(super) mod migrations {
+    use async_trait::async_trait;
+    use tokio_postgres::Transaction;
+
+    use crate::framework::store::Migration;
+    use crate::framework::store::MigrationEffect;
+    use crate::framework::store::Revision;
+
+    /// Migration for revision 1.1
+    #[derive(Debug)]
+    pub struct Mig1_1 {}
+
+    #[async_trait]
+    impl Migration for Mig1_1 {
+        fn description(&self) -> &'static str {
+            "Fix sigmausd oracle prep box update"
+        }
+
+        fn revision(&self) -> Revision {
+            Revision::new(1, 1)
+        }
+
+        async fn run(&self, pgtx: &Transaction<'_>) -> MigrationEffect {
+            // Remove sigmausd schema
+            pgtx.execute("drop schema if exists sigmausd cascade;", &[])
+                .await
+                .unwrap();
+
+            MigrationEffect::Purge
+        }
     }
 }
