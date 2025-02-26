@@ -1,8 +1,15 @@
 # Changelog
 
-## [v1.1.1](https://github.com/abchrisxyz/ergowatch/tree/v1.1.0) - 2024-10-01
+## [v1.1.2](https://github.com/abchrisxyz/ergowatch/tree/v1.1.2) - 2025-02-26
 
 ### Fixed
+
+- Fixes sigmausd tracker not detecting oracle v1 contract update
+
+## [v1.1.1](https://github.com/abchrisxyz/ergowatch/tree/v1.1.1) - 2024-10-01
+
+### Fixed
+
 - Fixes an issue with handling of erg balance rollbacks when an address is spent and resupplied within same block. If your instance was hit by this issue, running v.1.1.1 will detect it and reset the `erg` worker.
  
 ## [v1.1.0](https://github.com/abchrisxyz/ergowatch/tree/v1.1.0) - 2024-04-01
