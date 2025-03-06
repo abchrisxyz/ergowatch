@@ -14,6 +14,7 @@ use super::types::DailyOHLC;
 use super::types::Event;
 use super::types::HistoryRecord;
 use super::types::MonthlyOHLC;
+use super::types::NoopBankTransaction;
 use super::types::OraclePosting;
 use super::types::ServiceStats;
 use super::types::WeeklyOHLC;
@@ -130,16 +131,22 @@ fn extract_event(
 ) -> Option<Event> {
     // Look for presence of bank box in outputs
     if tx_has_bank_box(tx) {
-        return Some(Event::BankTx(extract_bank_tx(
-            tx,
-            height,
-            timestamp,
-            bank_tx_count,
-        )));
+        let bank_tx = extract_bank_tx(tx, height, timestamp, bank_tx_count);
+        if bank_tx.reserves_diff == 0 {
+            Some(Event::NoopBankTx(NoopBankTransaction {
+                height: bank_tx.height,
+                tx_idx: tx.index,
+                tx_id: tx.id.clone(),
+                box_id: bank_tx.box_id,
+            }))
+        } else {
+            Some(Event::BankTx(bank_tx))
+        }
     } else if tx_has_oracle_prep_box(tx) {
-        return Some(Event::Oracle(extract_oracle_posting(tx, height)));
+        Some(Event::Oracle(extract_oracle_posting(tx, height)))
+    } else {
+        None
     }
-    None
 }
 
 fn tx_has_bank_box(tx: &Transaction) -> bool {
@@ -258,20 +265,18 @@ fn extract_bank_tx(
     let circ_sc_diff = -*sc_diffs.get(&CONTRACT_ADDRESS_ID).unwrap_or(&0);
     let circ_rc_diff = -*rc_diffs.get(&CONTRACT_ADDRESS_ID).unwrap_or(&0);
 
-    // Assuming all bank txs change reserves
-    assert!(reserves_diff != 0);
-
-    if reserves_diff > 0 {
+    let (service_fee, service_address_id) = if reserves_diff > 0 {
         // Minting tx
         assert!(circ_sc_diff > 0 || circ_rc_diff > 0);
-    } else {
+        extract_service_from_minting_tx_diffs(&erg_diffs, &sc_diffs, &rc_diffs, &tx.id)
+    } else if reserves_diff < 0 {
         // Redeeming tx
-        assert!(circ_sc_diff < 0 || circ_rc_diff < 0)
-    }
-
-    let (service_fee, service_address_id) = match reserves_diff > 0 {
-        true => extract_service_from_minting_tx_diffs(&erg_diffs, &sc_diffs, &rc_diffs, &tx.id),
-        false => extract_service_from_redeeming_tx_diffs(&erg_diffs, &tx),
+        assert!(circ_sc_diff < 0 || circ_rc_diff < 0);
+        extract_service_from_redeeming_tx_diffs(&erg_diffs, &tx)
+    } else {
+        // No-op, possible bank update
+        assert!(circ_rc_diff == 0 && circ_rc_diff == 0);
+        (0, None)
     };
 
     // Now build the event
@@ -459,6 +464,9 @@ fn generate_history_records(events: &Vec<Event>, last: &HistoryRecord) -> Vec<Hi
                     assert_eq!(bank_tx.circ_sc_diff, 0);
                     new.rc_net += bank_tx.reserves_diff;
                 }
+            }
+            Event::NoopBankTx(_) => {
+                continue;
             }
         }
         records.push(new);

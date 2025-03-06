@@ -15,6 +15,7 @@ use super::Batch;
 
 mod bank_transactions;
 mod history;
+mod noop_bank_transactions;
 mod ohlcs;
 mod oracle_postings;
 mod services;
@@ -23,7 +24,7 @@ pub(super) const SCHEMA: StoreDef = StoreDef {
     schema_name: super::WORKER_ID,
     worker_id: super::WORKER_ID,
     sql: include_str!("store/schema.sql"),
-    revision: &Revision { major: 1, minor: 1 },
+    revision: &Revision { major: 1, minor: 2 },
 };
 
 pub(super) struct SpecStore {}
@@ -45,6 +46,7 @@ impl BatchStore for SpecStore {
             match event {
                 Event::Oracle(op) => oracle_postings::insert(&pgtx, op).await,
                 Event::BankTx(btx) => bank_transactions::insert(&pgtx, btx).await,
+                Event::NoopBankTx(ntx) => noop_bank_transactions::insert(&pgtx, ntx).await,
             }
         }
 
@@ -72,6 +74,7 @@ impl BatchStore for SpecStore {
 
         // Delete bank txs at h
         bank_transactions::detele_at(&pgtx, height).await;
+        noop_bank_transactions::detele_at(&pgtx, height).await;
 
         // Delete oracle postings at h
         oracle_postings::delete_at(&pgtx, height).await;
@@ -126,6 +129,39 @@ pub(super) mod migrations {
                 .unwrap();
 
             MigrationEffect::Purge
+        }
+    }
+
+    /// Migration for revision 1.1
+    #[derive(Debug)]
+    pub struct Mig1_2 {}
+
+    #[async_trait]
+    impl Migration for Mig1_2 {
+        fn description(&self) -> &'static str {
+            "Handle no-op bank transactions"
+        }
+
+        fn revision(&self) -> Revision {
+            Revision::new(1, 2)
+        }
+
+        async fn run(&self, pgtx: &Transaction<'_>) -> MigrationEffect {
+            // Remove sigmausd schema
+            pgtx.execute(
+                "
+                create table sigmausd.noop_bank_transactions (
+                    height integer not null,
+                    tx_idx integer not null,
+                    tx_id text primary key,
+                    box_id text not null
+                );",
+                &[],
+            )
+            .await
+            .unwrap();
+
+            MigrationEffect::None
         }
     }
 }

@@ -35,6 +35,7 @@ impl EventHandling for SigmaUSD {
         // Ensure migrations are applied
         let mut migrator = PgMigrator::new(pgconf, &store::SCHEMA).await;
         migrator.apply(&store::migrations::Mig1_1 {}).await;
+        migrator.apply(&store::migrations::Mig1_2 {}).await;
 
         let store = Store::new(pgconf, &store::SCHEMA).await;
         let cache = store::load_parser_cache(store.get_client()).await;

@@ -2,6 +2,7 @@ use rust_decimal::Decimal;
 
 use crate::core::types::AddressID;
 use crate::core::types::BoxID;
+use crate::core::types::Digest32;
 use crate::core::types::Height;
 use crate::core::types::NanoERG;
 use crate::core::types::Timestamp;
@@ -25,6 +26,8 @@ pub enum Event {
     // InitialBankTx(BankTransaction),
     /// New bank transaction
     BankTx(BankTransaction),
+    /// Tx involving bank box but not affecting balances
+    NoopBankTx(NoopBankTransaction),
 }
 
 pub struct BankTransaction {
@@ -42,6 +45,13 @@ pub struct BankTransaction {
 pub struct OraclePosting {
     pub height: Height,
     pub datapoint: i64,
+    pub box_id: BoxID,
+}
+
+pub struct NoopBankTransaction {
+    pub height: Height,
+    pub tx_idx: i32,
+    pub tx_id: Digest32,
     pub box_id: BoxID,
 }
 

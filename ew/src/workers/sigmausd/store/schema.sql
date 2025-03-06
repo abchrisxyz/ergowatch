@@ -33,6 +33,15 @@ create table sigmausd.oracle_postings (
     box_id text not null
 );
 
+-- Transaction involving the bank box without affecting its balances.
+-- Example: https://explorer.ergoplatform.com/en/transactions/fb7947eb2627d85661f07cdf9489c0e82a6027d0ad4aaee679e2775347b3e441
+create table sigmausd.noop_bank_transactions (
+    height integer not null,
+    tx_idx integer not null,
+    tx_id text primary key,
+    box_id text not null
+);
+
 /*
     Combined bank and oracle history.
     Reserve state (circ SC, circ RC, reserves) and oracle price

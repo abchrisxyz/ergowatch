@@ -172,6 +172,24 @@ async fn test_rollback() {
                         .add_asset(ORACLE_NFT, 1)
                         .set_registers(r#"{"R4": "05baafd2a302", "R5": "04bca7b201"}"#),
                 ),
+        )
+        // Noop
+        .add_tx(
+            Transaction::dummy()
+                .add_input(
+                    BoxData::dummy()
+                        .address_id(CONTRACT_ADDRESS_ID)
+                        .value(1000_000_000_000)
+                        .add_asset(BANK_NFT, 1)
+                        .add_asset(SC_ASSET_ID, 500_00),
+                )
+                .add_output(
+                    BoxData::dummy()
+                        .address_id(CONTRACT_ADDRESS_ID)
+                        .value(1000_000_000_000)
+                        .add_asset(BANK_NFT, 1)
+                        .add_asset(SC_ASSET_ID, 500_00),
+                ),
         );
 
     // Register core header for block 1 to allow worker to restore it
