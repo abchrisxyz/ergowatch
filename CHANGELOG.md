@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.1.3](https://github.com/abchrisxyz/ergowatch/tree/v1.1.3) - 2025-03-07
+
+### Fixed
+
+- Fixes sigmausd tracker wrong assumption that all transactions modify bank balances
+
 ## [v1.1.2](https://github.com/abchrisxyz/ergowatch/tree/v1.1.2) - 2025-02-26
 
 ### Fixed
