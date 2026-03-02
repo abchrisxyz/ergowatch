@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.1.4](https://github.com/abchrisxyz/ergowatch/tree/v1.1.4) - 2026-03-02
+
+### Fixed
+
+- Add missing main address for Coinex
+- Decrease Coingecko poll rate to 1 minute to avoid hitting rate limits
+
 ## [v1.1.3](https://github.com/abchrisxyz/ergowatch/tree/v1.1.3) - 2025-03-07
 
 ### Fixed
