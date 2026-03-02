@@ -28,7 +28,7 @@ use types::ProvisionalBlockRecord;
 
 const WORKER_ID: &'static str = "coingecko";
 
-const TEN_SECONDS: tokio::time::Duration = Duration::from_secs(10);
+const SIXTY_SECONDS: tokio::time::Duration = Duration::from_secs(60);
 
 type SharedCache = Arc<RwLock<Cache>>;
 type SharedStore = Arc<Mutex<Store>>;
@@ -74,7 +74,7 @@ impl Worker {
                     tracing::info!("got a ctrl-c message");
                     return;
                 },
-                _ = tokio::time::sleep(TEN_SECONDS), if throttle => {
+                _ = tokio::time::sleep(SIXTY_SECONDS), if throttle => {
                     tracing::trace!("throttling off");
                     throttle = false;
                 }
