@@ -56,6 +56,7 @@ impl EventHandling for CexWorkFlow {
         migrator.apply(&store::migrations::Mig1_4 {}).await;
         migrator.apply(&store::migrations::Mig1_5 {}).await;
         migrator.apply(&store::migrations::Mig1_6 {}).await;
+        migrator.apply(&store::migrations::Mig1_7 {}).await;
 
         // Create store
         let store = Store::new(pgconf, &store::SCHEMA).await;
