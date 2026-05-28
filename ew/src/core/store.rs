@@ -2,6 +2,7 @@ mod addresses;
 mod boxes;
 mod headers;
 mod meta;
+mod schema;
 mod tokens;
 
 use lru::LruCache;
@@ -23,7 +24,7 @@ use super::types::Registers;
 use super::types::TokenID;
 use super::types::Transaction;
 use crate::config::PostgresConfig;
-use crate::utils::Schema;
+use schema::Schema;
 
 #[derive(Debug)]
 pub(super) struct Store {
@@ -306,16 +307,19 @@ impl Store {
     /// Roll back block with given `header`.
     ///
     /// Must be the last included block.
-    /// Returna headwe representing previous block in store.
+    /// Returns header representing previous block in store.
     pub(super) async fn roll_back(&mut self, header: &Header) -> Header {
         assert_eq!(&self.header, header);
 
         let pgtx = self.client.transaction().await.unwrap();
 
-        // Delete main chain header at height h
-        headers::delete_main_at(&pgtx, header.height).await;
+        // Mark header as not main.
+        // Important to keep the header as downstream workers may need to retrieve it
+        // for their own rollbacks.
+        // Perhaps better to refactor this function to something like headers::mark_as_not_main(header_id)
+        headers::roll_back_main_chain_header(&pgtx, header).await;
 
-        // Delete boxes registered ar height h
+        // Delete boxes registered at height h
         boxes::delete_at(&pgtx, header.height).await;
 
         // Delete addresses spotted at height h

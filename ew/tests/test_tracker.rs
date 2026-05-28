@@ -1,7 +1,10 @@
 // cargo test --test '*' -- --test-threads=1
 mod common;
+mod db_utils;
 
-use ew::config::PostgresConfig;
+use common::blocks::TestBlock;
+use db_utils::TestDB;
+
 use ew::core::types::AddressID;
 use ew::core::types::Block;
 use ew::core::types::CoreData;
@@ -12,7 +15,6 @@ use ew::framework::Event;
 use ew::framework::Source;
 use pretty_assertions::assert_eq;
 use tokio;
-use tokio_postgres::NoTls;
 
 use common::blocks::TestBlock as TB;
 use common::node_mockup::TestNode;
@@ -38,29 +40,6 @@ async fn sleep_some(guard: &Option<tracing::subscriber::DefaultGuard>) {
     if guard.is_some() {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
-}
-
-/// Prepare a test db and return corresponfing config.
-async fn prep_db(db_name: &str) -> PostgresConfig {
-    tracing::info!("Preparing test db: {}", db_name);
-    // Connection string to main test db - see docker-compose-test.yml
-    let pg_uri: &str = "postgresql://test:test@localhost:5433/test_db";
-    let (client, connection) = tokio_postgres::connect(pg_uri, NoTls).await.unwrap();
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("connection error: {}", e);
-        }
-    });
-
-    // Fresh empty db
-    let stmt = format!("drop database if exists {};", db_name);
-    client.execute(&stmt, &[]).await.unwrap();
-    let stmt = format!("create database {};", db_name);
-    client.execute(&stmt, &[]).await.unwrap();
-
-    // Connection string to new db
-    let uri = format!("postgresql://test:test@localhost:5433/{}", db_name);
-    PostgresConfig::new(&uri)
 }
 
 /// Event wrapper to provide testing helper.
@@ -140,10 +119,13 @@ async fn test_straight_chain_single_cursor() {
     // Start a fake node to be queried by the tracker
     let mock_node = TestNode::run(&block_ids).await;
 
+    // Prepare empty db
+    let test_db = TestDB::new("test_tracker_1").await;
+
     // Configure tracker
     let node = Node::new("test-node", mock_node.url());
     let monitor = Monitor::new();
-    let mut tracker = Tracker::new(node, prep_db("test_tracker_1").await, monitor.sender()).await;
+    let mut tracker = Tracker::new(node, test_db.pgconf.clone(), monitor.sender()).await;
     let mut rx = tracker.subscribe(Header::initial(), "C1").await;
 
     // Start tracker
@@ -177,7 +159,7 @@ async fn test_straight_chain_three_cursors() {
     let mock_node = TestNode::run(&block_ids).await;
 
     // Prepare empty db
-    let pgconf = prep_db("test_tracker_2").await;
+    let test_db = TestDB::new("test_tracker_2").await;
 
     // Monitor
     let monitor = Monitor::new();
@@ -186,7 +168,7 @@ async fn test_straight_chain_three_cursors() {
     {
         // Configure tracker
         let node = Node::new("test-node", mock_node.url());
-        let mut tracker = Tracker::new(node, pgconf.clone(), monitor.sender()).await;
+        let mut tracker = Tracker::new(node, test_db.pgconf.clone(), monitor.sender()).await;
         // Cursor is at genesis
         let mut rx = tracker.subscribe(Header::initial(), "dummy").await;
 
@@ -203,7 +185,7 @@ async fn test_straight_chain_three_cursors() {
 
     // Now configure a new tracker with 3 cursors, using the same db.
     let node = Node::new("test-node", mock_node.url());
-    let mut tracker = Tracker::new(node, pgconf, monitor.sender()).await;
+    let mut tracker = Tracker::new(node, test_db.pgconf.clone(), monitor.sender()).await;
     // First cursor is on last block
     let mut rx_a = tracker.subscribe(TB::from_id("5").header(), "A").await;
     // Second cursor starts from scratch
@@ -251,10 +233,13 @@ async fn test_fork_handling_not_a_child() {
     // Start a fake node to be queried by the tracker
     let mock_node = TestNode::run(&block_ids).await;
 
+    // Prepare empty db
+    let test_db = TestDB::new("test_tracker_3").await;
+
     // Configure tracker
     let node = Node::new("test-node", mock_node.url());
     let monitor = Monitor::new();
-    let mut tracker = Tracker::new(node, prep_db("test_tracker_3").await, monitor.sender()).await;
+    let mut tracker = Tracker::new(node, test_db.pgconf.clone(), monitor.sender()).await;
     // Assuming we've included 1, 2 and 3bis so far
     // Next block will be 4, which isn't a child of 3bis
     let mut rx = tracker.subscribe(TB::from_id("3bis").header(), "C1").await;
@@ -288,11 +273,14 @@ async fn test_fork_handling_same_height() {
     // Start a fake node to be queried by the tracker
     let mut mock_node = TestNode::run(&block_ids).await;
 
+    // Prepare empty db
+    let test_db = TestDB::new("test_tracker_4").await;
+
     // Configure tracker
     let monitor = Monitor::new();
     let mut tracker = Tracker::new(
         Node::new("test-node", &mock_node.url()),
-        prep_db("test_tracker_4").await,
+        test_db.pgconf.clone(),
         monitor.sender(),
     )
     .await;
@@ -353,4 +341,102 @@ async fn test_fork_handling_same_height() {
     // It is the first token ever encountered, so asset id must be 1
     assert_eq!(block3b.transactions[0].outputs[2].assets[0].asset_id, 1);
     assert_eq!(block3.transactions[0].outputs[2].assets[0].asset_id, 1);
+
+    // Check rolled back header was saved to rolled_back_headers table
+    let rb = TB::from_id("3bis");
+    let qry = "
+            select height
+                , timestamp
+                , header_id
+                , parent_id
+            from core.rolled_back_headers
+            where header_id = $1
+            order by height desc
+            limit 1;";
+    let h = test_db
+        .client
+        .query_one(qry, &[&rb.header_id()])
+        .await
+        .map(|row| Header {
+            height: row.get(0),
+            timestamp: row.get(1),
+            header_id: row.get(2),
+            parent_id: row.get(3),
+        })
+        .unwrap();
+    assert_eq!(h.height, rb.height());
+    assert_eq!(h.header_id, rb.header_id());
+}
+
+/// Check migration 1.1 runs fine
+/// Based of test_straight_chain_single_cursor but starting
+/// a database that has core schema at rev 1.0
+#[tokio::test]
+async fn test_mig1_1() {
+    let _guard = set_tracing_subscriber(false);
+    let block_ids = ["1", "2", "3", "4", "5"];
+
+    // Start a fake node to be queried by the tracker
+    let mock_node = TestNode::run(&block_ids).await;
+
+    // Setup db with old schema
+    let test_db = TestDB::new("test_core_migration_1_1").await;
+    test_db
+        .init_schema(include_str!("../src/core/store/schema.1.0.sql"))
+        .await;
+    let rev = test_db.get_core_revision().await;
+    assert_eq!(rev.major, 1);
+    assert_eq!(rev.minor, 0);
+
+    // Have at least one header in old schema
+    let initial_header = Header::initial();
+    let block_1_header = TestBlock::from_id("1").header();
+    let stmt = "
+        insert into core.headers (height, timestamp, header_id, parent_id, main_chain)
+        values
+            ($1, $2, $3, $4, TRUE),
+            ($5, $6, $7, $8, TRUE);
+        ";
+    test_db
+        .client
+        .execute(
+            stmt,
+            &[
+                // initial
+                &initial_header.height,
+                &initial_header.timestamp,
+                &initial_header.header_id,
+                &initial_header.parent_id,
+                // block 1
+                &block_1_header.height,
+                &block_1_header.timestamp,
+                &block_1_header.header_id,
+                &block_1_header.parent_id,
+            ],
+        )
+        .await
+        .unwrap();
+
+    // Also prefill at least 1 genesis box, otherwise tracker will add them and fail because
+    // core.headers is already at header 1 (there's an assertion checking tracker height
+    // when it handles genesis boxes).
+    let stmt = "
+        insert into core.boxes (box_id, height, creation_height, address_id, value, size, assets, registers)
+        values (
+            'b69575e11c5c43400bfead5976ee0d6245a1168396b2e2a4f384691f275d501c',
+            0, 0, 1, 93409132500000000, 123,
+            null, '{}'
+        );
+        ";
+    test_db.client.execute(stmt, &[]).await.unwrap();
+
+    // Configure tracker
+    let node = Node::new("test-node", mock_node.url());
+    let monitor = Monitor::new();
+    let _tracker = Tracker::new(node, test_db.pgconf.clone(), monitor.sender()).await;
+
+    // At this point, the tracker will have applied any migrations to its store.
+    let rev = test_db.get_core_revision().await;
+    assert_eq!(rev.major, 1);
+    assert_eq!(rev.minor, 1);
 }

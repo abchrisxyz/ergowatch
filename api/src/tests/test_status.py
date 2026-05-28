@@ -10,10 +10,10 @@ from .db import MockDB
 def client():
     schema_paths = ["ew/src/core/store/schema.sql"]
     sql = f"""
-        insert into core.headers (height, timestamp, header_id, parent_id, main_chain) values 
-        (10, 1567123456789, 'header10', 'header09', True),
-        (20, 1568123456789, 'header20', 'header19', True),
-        (30, 1569123456789, 'header30', 'header29', True);
+        insert into core.headers (height, timestamp, header_id, parent_id) values
+        (10, 1567123456789, 'header10', 'header09'),
+        (20, 1568123456789, 'header20', 'header19'),
+        (30, 1569123456789, 'header30', 'header29');
     """
     with MockDB(schema_paths, sql=sql) as _:
         with TestClient(app) as client:

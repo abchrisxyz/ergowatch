@@ -5,25 +5,15 @@ create table core._rev (
 	rev_minor integer not null,
 	check(singleton = 1)
 );
-insert into core._rev (rev_major, rev_minor) values (1, 1);
+insert into core._rev (rev_major, rev_minor) values (1, 0);
 
--- Main chain headers
 create table core.headers (
     height integer primary key,
     timestamp bigint not null,
     header_id text not null,
-	parent_id text not null
-);
--- Some queries retrieve headers by id
-create index on core.headers(header_id);
-
--- Keep rolled back headers in separate table.
--- Need to be available for downstream workers rolling back after core.
-create table core.rolled_back_headers (
-    height integer not null,
-    timestamp bigint not null,
-    header_id text primary key,
-    parent_id text not null
+	parent_id text not null,
+	-- Flag set to false for rolled back blocks.
+	main_chain bool not null
 );
 
 -- Composite type representing a token balance

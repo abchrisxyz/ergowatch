@@ -111,9 +111,20 @@ impl<B: BatchStore> PgStore<B> {
         tracing::trace!("rolling back height {height}");
         assert_eq!(self.header.height, height);
 
-        let parent_header = core_headers::get(&self.client, &self.header.parent_id)
-            .await
-            .unwrap();
+        // Get parent header from main chain or try rolled back headers in case core already rolled back.
+        let parent_id = &self.header.parent_id;
+        let parent_header = match core_headers::get_main_chain(&self.client, &parent_id).await {
+            Some(header) => {
+                tracing::debug!("found parent header with id {parent_id} on main chain");
+                header
+            }
+            None => {
+                tracing::debug!("parent header with id {parent_id} not found on main chain");
+                core_headers::get_rolled_back(&self.client, &parent_id)
+                    .await
+                    .unwrap()
+            }
+        };
 
         // Start db tx
         let pgtx = self.client.transaction().await.unwrap();
@@ -412,8 +423,8 @@ mod core_headers {
     use tokio_postgres::Client;
     use tokio_postgres::Transaction;
 
-    /// Get header with given `header_id`
-    pub async fn get(client: &Client, header_id: &str) -> Option<Header> {
+    /// Get main chain header with given `header_id`
+    pub async fn get_main_chain(client: &Client, header_id: &str) -> Option<Header> {
         tracing::trace!("get {header_id}");
         let qry = "
             select height
@@ -421,6 +432,30 @@ mod core_headers {
                 , header_id
                 , parent_id
             from core.headers
+            where header_id = $1
+            order by height desc
+            limit 1;";
+        client
+            .query_opt(qry, &[&header_id])
+            .await
+            .unwrap()
+            .map(|row| Header {
+                height: row.get(0),
+                timestamp: row.get(1),
+                header_id: row.get(2),
+                parent_id: row.get(3),
+            })
+    }
+
+    /// Get rolled back header with given `header_id`
+    pub async fn get_rolled_back(client: &Client, header_id: &str) -> Option<Header> {
+        tracing::trace!("get {header_id}");
+        let qry = "
+            select height
+                , timestamp
+                , header_id
+                , parent_id
+            from core.rolled_back_headers
             where header_id = $1
             order by height desc
             limit 1;";
@@ -445,8 +480,7 @@ mod core_headers {
                 , header_id
                 , parent_id
             from core.headers
-            where height = $1
-                and main_chain;";
+            where height = $1;";
         pgtx.query_opt(qry, &[&height])
             .await
             .unwrap()
@@ -468,8 +502,7 @@ mod core_headers {
                 , parent_id
             from core.headers
             where height >= $1
-                and height <= $2
-                and main_chain;
+                and height <= $2;
         ";
         client
             .query(qry, &[&block_range.first_height, &block_range.last_height])
@@ -488,13 +521,14 @@ mod core_headers {
     pub async fn is_main_chain(client: &Client, header: &Header) -> bool {
         tracing::trace!("is_main_chain {header:?}");
         let qry = "
-            select main_chain
+            select height
             from core.headers
             where header_id = $1;";
-        match client.query_opt(qry, &[&header.header_id]).await.unwrap() {
-            Some(row) => row.get(0),
-            None => false,
-        }
+        client
+            .query_opt(qry, &[&header.header_id])
+            .await
+            .unwrap()
+            .is_some()
     }
 }
 
