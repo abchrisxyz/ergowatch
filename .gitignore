@@ -16,3 +16,7 @@ explorer-backend/[0-9]*
 .vscode
 *.code-workspace
 *.sublime*
+
+# Local justfiles
+local.just*
+*.local.just*

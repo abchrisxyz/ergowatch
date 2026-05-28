@@ -1,5 +1,6 @@
-# show recipes
-@list:
+import? 'local.just'
+
+@default:
   just --list
 
 # Start the docker compose test environment
