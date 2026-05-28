@@ -330,7 +330,7 @@ async fn test_fork_handling_same_height() {
     messages[6].assert_includes_block(TB::from_id("4"));
     messages[7].assert_includes_block(TB::from_id("5"));
 
-    // Chech address and asset id's in blocks 3 and 3 bis.
+    // Check address and asset id's in blocks 3 and 3 bis.
     // Both have an extra output with different new addresses and assets.
     // Because of the rollback, they should all end up with the same
     // address_id and asset_id. This is what we verify here.
