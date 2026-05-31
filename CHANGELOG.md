@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.1.5](https://github.com/abchrisxyz/ergowatch/tree/v1.1.5) - 2026-05-31
+
+### Fixed
+
+- Prevent race condition between core and worker rollbacks
+
 ## [v1.1.4](https://github.com/abchrisxyz/ergowatch/tree/v1.1.4) - 2026-03-02
 
 ### Fixed
