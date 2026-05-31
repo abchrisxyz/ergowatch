@@ -134,15 +134,17 @@ pub struct ExtensionField {
     pub value: String,
 }
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "test-utilities", derive(Clone))]
-pub struct ADProofs {
-    pub _header_id: HeaderID,
-    pub _proof_bytes: String,
-    pub _digest: Digest32,
-    pub _size: i32,
-}
+// Keeping for possible later use
+//
+// #[derive(Deserialize, Debug)]
+// #[serde(rename_all = "camelCase")]
+// #[cfg_attr(feature = "test-utilities", derive(Clone))]
+// pub struct ADProofs {
+//     pub _header_id: HeaderID,
+//     pub _proof_bytes: String,
+//     pub _digest: Digest32,
+//     pub _size: i32,
+// }
 
 #[cfg(test)]
 impl Block {
